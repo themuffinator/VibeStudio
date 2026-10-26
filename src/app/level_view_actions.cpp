@@ -5,6 +5,7 @@
 #include "app/studio_layout.h"
 #include "app/studio_icons.h"
 #include "app/ui_primitives.h"
+#include "core/level_camera_texture.h"
 #include "core/level_shapes.h"
 #include "core/level_view_filters.h"
 #include <QAction>
@@ -112,7 +113,7 @@ QWidget* ApplicationShell::buildLevelAuthoringBar()
 		 QStringLiteral("map.regionSave"), QStringLiteral("map.regionCompile"), {},
 		 QStringLiteral("map.findObject"), QStringLiteral("map.goToCoordinates"), QStringLiteral("map.centerOnSelection"), QStringLiteral("map.zoomToFit")});
 	group(QStringLiteral("levelTransformTools"), tr("Transform"), QStringLiteral("move"), tr("Move, resize, rotate and repeat the selection with exact values."),
-		{QStringLiteral("map.moveSelection"), QStringLiteral("map.resizeSelection"), QStringLiteral("map.rotatePrecisely"),
+		{QStringLiteral("map.moveSelection"), QStringLiteral("map.resizeSelection"), QStringLiteral("map.scaleSelection"), QStringLiteral("map.rotatePrecisely"),
 		 QStringLiteral("map.duplicateWithOffset"), QStringLiteral("map.duplicateUnique"), QStringLiteral("map.snapToGrid"), QStringLiteral("map.roundToGrid"), QStringLiteral("map.dropToFloor"), {},
 		 QStringLiteral("map.rotateLeft"), QStringLiteral("map.rotateRight"), QStringLiteral("map.rollClockwise"), QStringLiteral("map.rollCounterclockwise"),
 		 QStringLiteral("map.pitchClockwise"), QStringLiteral("map.pitchCounterclockwise"), QStringLiteral("map.flipHorizontal"), QStringLiteral("map.flipVertical"), {},
@@ -123,7 +124,9 @@ QWidget* ApplicationShell::buildLevelAuthoringBar()
 		 QStringLiteral("map.textureLock"), QStringLiteral("map.textureScaleLock")});
 	group(QStringLiteral("levelGeometryTools"), tr("Geometry"), QStringLiteral("cube"), tr("Clip, hollow, merge and refine brush or patch geometry."),
 		{QStringLiteral("map.clipTool"), QStringLiteral("map.clipSelection"), QStringLiteral("map.hollowSelection"), QStringLiteral("map.hollowTouching"),
-		 QStringLiteral("map.makeRoom"), QStringLiteral("map.carve"),
+		 QStringLiteral("map.makeRoom"), QStringLiteral("map.makeRoomOptions"), QStringLiteral("map.csgTool"), QStringLiteral("map.csgShrink"),
+		 QStringLiteral("map.csgExpand"), QStringLiteral("map.csgHollowDiagonal"), QStringLiteral("map.csgHollowWrap"),
+		 QStringLiteral("map.csgHollowExtrude"), QStringLiteral("map.csgHollowPull"), QStringLiteral("map.carve"),
 		 QStringLiteral("map.mergeBrushes"), QStringLiteral("map.wrapMerge"), QStringLiteral("map.wrapMergePoints"), QStringLiteral("map.intersect"), QStringLiteral("map.editBrushComponents"), {},
 		 QStringLiteral("map.vertexTool"), QStringLiteral("map.edgeTool"), QStringLiteral("map.faceTool"),
 		 QStringLiteral("map.componentMoveTool"), QStringLiteral("map.componentRotateTool"), QStringLiteral("map.componentScaleTool"), QStringLiteral("map.componentShearTool"), QStringLiteral("map.componentPivotTool"),
@@ -140,7 +143,34 @@ QWidget* ApplicationShell::buildLevelAuthoringBar()
 		 QStringLiteral("map.alignWallTextures")});
 	group(QStringLiteral("levelSurfaceToolsMenu"), tr("Surfaces"), QStringLiteral("image"), tr("Paint, sample and align map materials."),
 		{QStringLiteral("map.paintMaterial"), QStringLiteral("map.sampleMaterial"), QStringLiteral("map.applyTexture"),
-		 QStringLiteral("map.alignSurfaces"), QStringLiteral("map.replaceTexture"), QStringLiteral("map.revealMaterial")});
+		 QStringLiteral("map.alignSurfaces"), QStringLiteral("map.replaceTexture"), QStringLiteral("map.revealMaterial"), {},
+		 QStringLiteral("map.surfaceReset"), QStringLiteral("map.surfaceRadiantReset"), QStringLiteral("map.resetTextures")});
+	// The camera's texture moves and flips, and the fixed-step texture turns,
+	// submenus of Surfaces.
+	if (auto* surfaces = bar->findChild<QToolButton*>(QStringLiteral("levelSurfaceToolsMenu")); surfaces && surfaces->defaultAction()
+		&& surfaces->defaultAction()->menu()) {
+		QMenu* moves = new QMenu(tr("Move Textures from Camera"), surfaces->defaultAction()->menu());
+		moves->setObjectName(QStringLiteral("levelCameraTextureToolsMenu"));
+		moves->setIcon(studioIcon(QStringLiteral("image")));
+		moves->setToolTipsVisible(true);
+		QMenu* turns = new QMenu(tr("Rotate Textures"), surfaces->defaultAction()->menu());
+		turns->setObjectName(QStringLiteral("levelRotateTextureToolsMenu"));
+		turns->setIcon(studioIcon(QStringLiteral("rotate")));
+		turns->setToolTipsVisible(true);
+		for (const LevelCameraTextureCommand& command : levelCameraTextureCommands()) {
+			const bool turn = levelCameraTextureRotates(command);
+			if ((command.flip && command.direction == LevelCameraTextureDirection::Right)
+				|| (command.direction == LevelCameraTextureDirection::Counterclockwise && command.step == LevelCameraTextureStep::Grid)) {
+				(turn ? turns : moves)->addSeparator();
+			}
+			if (QAction* action = m_commands->action(command.commandId)) {
+				(turn ? turns : moves)->addAction(action);
+			}
+		}
+		surfaces->defaultAction()->menu()->addSeparator();
+		surfaces->defaultAction()->menu()->addMenu(moves);
+		surfaces->defaultAction()->menu()->addMenu(turns);
+	}
 	// The patch row and column commands, a submenu of Geometry.
 	if (auto* geometry = bar->findChild<QToolButton*>(QStringLiteral("levelGeometryTools")); geometry && geometry->defaultAction()
 		&& geometry->defaultAction()->menu()) {

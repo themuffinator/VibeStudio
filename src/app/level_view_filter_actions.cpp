@@ -13,13 +13,20 @@
 #include "app/application_shell.h"
 #include "app/studio_actions.h"
 #include "core/level_view_filters.h"
+#include "core/package_staging.h"
 
 #include <QAction>
 #include <QCheckBox>
+#include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
 #include <QIcon>
+#include <QLabel>
 #include <QSet>
 #include <QSignalBlocker>
 #include <QStatusBar>
+#include <QThread>
+#include <QToolButton>
 
 #include <functional>
 
@@ -127,6 +134,160 @@ void ApplicationShell::resetLevelViewFilters()
 {
 	applyLevelViewFilterState({});
 	statusBar()->showMessage(tr("Every kind of object is shown again; the map is unchanged."), 4000);
+}
+
+// The material kinds (Translucent, Liquids, Clip and its parts, Bot Clip, Sky
+// and Nodraw) read a Quake III map's shaders from the package the camera reads
+// its materials from, staged edits included. The scan runs on a worker keyed
+// by packageViewKey(), so opening another package, staging a shader edit or
+// pressing Reload reads again, and a newer request cancels an older one.
+const LevelViewFilterMaterials& ApplicationShell::currentLevelFilterMaterials() const
+{
+	static const LevelViewFilterMaterials none;
+	return m_levelFilterMaterials ? *m_levelFilterMaterials : none;
+}
+
+void ApplicationShell::refreshLevelViewFilterMaterials()
+{
+	const auto applyMaterials = [this]() {
+		// Counts, every plan view and the camera follow the new shaders.
+		applyLevelViewFilters();
+		synchronizeLevelPlanViews();
+		refreshLevelMapObjectHiddenMarks();
+		if (levelMap3DShowing()) {
+			refreshLevelMap3D();
+		}
+		refreshLevelViewFilters();
+	};
+	if (m_levelMapDocument.format != LevelMapFormat::Quake3Map) {
+		// Quake and Quake II faces carry their own flags; what was read stays
+		// for the next Quake III map from the same package.
+		if (!m_levelFilterMaterialsPendingKey.isEmpty()) {
+			++m_levelFilterMaterialsSerial;
+			if (m_levelFilterMaterialsCancel) {
+				*m_levelFilterMaterialsCancel = true;
+			}
+			m_levelFilterMaterialsCancel.reset();
+			m_levelFilterMaterialsPendingKey.clear();
+		}
+		refreshLevelViewFilterMaterialStatus();
+		return;
+	}
+	const QString key = packageViewKey();
+	if (key == m_levelFilterMaterialsKey || key == m_levelFilterMaterialsPendingKey) {
+		return;
+	}
+	if (m_levelFilterMaterialsCancel) {
+		*m_levelFilterMaterialsCancel = true;
+	}
+	const quint64 serial = ++m_levelFilterMaterialsSerial;
+	std::shared_ptr<const PackageArchiveReader> archive =
+		m_packageStaging.isLoaded() ? std::make_shared<PackageStagingArchive>(m_packageStaging) : m_packageArchive.snapshotReader();
+	if (!archive && m_packageArchive.isOpen()) {
+		archive = std::make_shared<const PackageArchive>(m_packageArchive);
+	}
+	if (!archive) {
+		// No package: the material kinds go by texture names.
+		const bool had = m_levelFilterMaterials != nullptr;
+		m_levelFilterMaterials.reset();
+		m_levelFilterMaterialsKey = key;
+		m_levelFilterMaterialsPendingKey.clear();
+		m_levelFilterMaterialsCancel.reset();
+		refreshLevelViewFilterMaterialStatus();
+		if (had) {
+			applyMaterials();
+		}
+		return;
+	}
+	m_levelFilterMaterialsPendingKey = key;
+	auto cancel = std::make_shared<std::atomic_bool>(false);
+	m_levelFilterMaterialsCancel = cancel;
+	auto result = std::make_shared<LevelViewFilterMaterials>();
+	QThread* worker = QThread::create([archive, cancel, result] { *result = scanLevelViewFilterMaterials(*archive, [cancel] { return cancel->load(); }); });
+	connect(worker, &QThread::finished, this, [this, serial, key, result, applyMaterials]() {
+		if (serial != m_levelFilterMaterialsSerial) {
+			return; // A newer read replaced this one.
+		}
+		m_levelFilterMaterialsPendingKey.clear();
+		m_levelFilterMaterialsCancel.reset();
+		if (result->cancelled) {
+			refreshLevelViewFilterMaterialStatus();
+			return;
+		}
+		m_levelFilterMaterials = result;
+		m_levelFilterMaterialsKey = key;
+		refreshLevelViewFilterMaterialStatus();
+		applyMaterials();
+	});
+	connect(worker, &QThread::finished, worker, &QObject::deleteLater);
+	// The scan holds no pointer to the shell; closing it or the application
+	// stops the scan between scripts and waits for it.
+	connect(this, &QObject::destroyed, worker, [worker, cancel] {
+		*cancel = true;
+		worker->wait();
+	});
+	connect(qApp, &QCoreApplication::aboutToQuit, worker, [worker, cancel] {
+		*cancel = true;
+		worker->wait();
+	});
+	refreshLevelViewFilterMaterialStatus();
+	worker->start();
+}
+
+void ApplicationShell::reloadLevelViewFilterMaterials()
+{
+	// The same counter the camera's Reload advances, so both read the package
+	// again.
+	++m_levelPreviewReload;
+	refreshLevelViewFilterMaterials();
+	if (levelMap3DShowing()) {
+		refreshLevelMap3D();
+	}
+	statusBar()->showMessage(tr("Reading the shader scripts again for the material filters; the map is unchanged."), 4000);
+}
+
+void ApplicationShell::refreshLevelViewFilterMaterialStatus()
+{
+	QLabel* label = m_levelFilterMaterialStatus;
+	if (!label) {
+		return;
+	}
+	const bool quake3 = m_levelMapDocument.format == LevelMapFormat::Quake3Map;
+	label->setVisible(quake3);
+	if (m_levelFilterMaterialReload) {
+		m_levelFilterMaterialReload->setVisible(quake3);
+		m_levelFilterMaterialReload->setEnabled(m_levelFilterMaterialsPendingKey.isEmpty());
+	}
+	if (!quake3) {
+		return;
+	}
+	const LevelViewFilterMaterials& materials = currentLevelFilterMaterials();
+	const QString source = QDir::toNativeSeparators(materials.sourcePath);
+	const QString name = QFileInfo(materials.sourcePath).fileName().isEmpty() ? source : QFileInfo(materials.sourcePath).fileName();
+	const int shaders = materials.scriptedShaderCount;
+	QString text;
+	if (!m_levelFilterMaterialsPendingKey.isEmpty()) {
+		text = tr("Reading the package's shader scripts for the material filters…");
+	} else if (!m_levelFilterMaterials) {
+		text = tr("Open the game's package or folder to read its shader scripts. Until then Translucent finds nothing on this map and Liquids, Clip, Sky and Nodraw go by texture names.");
+	} else if (shaders == 0) {
+		text = tr("%1 has no shader scripts, so Translucent finds nothing on this map and Liquids, Clip, Sky and Nodraw go by texture names.").arg(name);
+	} else {
+		text = tr("%n shader(s) from %1 decide Translucent, Liquids, Clip, Sky and Nodraw; textures the package does not hold go by name.", nullptr, shaders)
+				   .arg(name);
+		if (!materials.complete) {
+			text += QLatin1Char(' ') + tr("Some scripts could not be read.");
+		}
+	}
+	label->setText(text);
+	QString tip = source;
+	if (!materials.warnings.isEmpty()) {
+		tip += QLatin1Char('\n') + materials.warnings.mid(0, 8).join(QLatin1Char('\n'));
+	}
+	label->setToolTip(tip);
+	label->setAccessibleDescription(text);
+	label->setProperty("shaderCount", shaders);
+	label->setProperty("reading", !m_levelFilterMaterialsPendingKey.isEmpty());
 }
 
 } // namespace vibestudio

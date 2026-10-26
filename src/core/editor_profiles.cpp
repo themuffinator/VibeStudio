@@ -1,4 +1,5 @@
 #include "core/editor_profiles.h"
+#include "core/level_camera_texture.h"
 
 #include "core/studio_semantics.h"
 
@@ -119,7 +120,11 @@ EditorProfileDescriptor attachControls(EditorProfileDescriptor descriptor, const
 			}
 		}
 		const QString label = labels.value(commandKey(key.commandId), key.commandId);
-		EditorProfileBinding binding = shellBinding(key.commandId, label, key.keys.join(QStringLiteral("; ")), QCoreApplication::translate("VibeStudioEditorProfiles", "Levels"), QStringLiteral("level-editor"));
+		// The camera's texture moves and flips share the nudge and flip keys,
+		// taking them only while faces are picked (core/level_camera_texture.h),
+		// so they are bound on a surface of their own.
+		const QString surface = levelCameraTextureCommandForId(key.commandId) ? QStringLiteral("level-camera-faces") : QStringLiteral("level-editor");
+		EditorProfileBinding binding = shellBinding(key.commandId, label, key.keys.join(QStringLiteral("; ")), QCoreApplication::translate("VibeStudioEditorProfiles", "Levels"), surface);
 		binding.clearsKeys = key.keys.isEmpty();
 		descriptor.bindings.push_back(binding);
 	}
@@ -295,7 +300,6 @@ static QVector<EditorProfileDescriptor> buildEditorProfileDescriptors()
 				shellBinding(QStringLiteral("project.open"), QCoreApplication::translate("VibeStudioEditorProfiles", "Open Project"), QStringLiteral("Ctrl+Shift+O"), QCoreApplication::translate("VibeStudioEditorProfiles", "Project")),
 				shellBinding(QStringLiteral("compiler.run"), QCoreApplication::translate("VibeStudioEditorProfiles", "Run Compiler Profile"), QStringLiteral("Ctrl+B"), QCoreApplication::translate("VibeStudioEditorProfiles", "Compiler")),
 				shellBinding(QStringLiteral("build.run-pipeline"), QCoreApplication::translate("VibeStudioEditorProfiles", "Run Build Pipeline"), QStringLiteral("Ctrl+Shift+B"), QCoreApplication::translate("VibeStudioEditorProfiles", "Build")),
-				binding(QStringLiteral("editor.filters.toggle-caulk"), QCoreApplication::translate("VibeStudioEditorProfiles", "Toggle Caulk Filter"), QString(), QString(), QCoreApplication::translate("VibeStudioEditorProfiles", "Map Editor"), QStringLiteral("level-editor")),
 				shellBinding(QStringLiteral("map.paste-to-camera"), QCoreApplication::translate("VibeStudioEditorProfiles", "Paste to Camera"), QStringLiteral("Shift+V"), QCoreApplication::translate("VibeStudioEditorProfiles", "Map Editor"), QStringLiteral("level-editor")),
 				binding(QStringLiteral("editor.texture.fit"), QCoreApplication::translate("VibeStudioEditorProfiles", "Fit Texture"), QStringLiteral("Ctrl+F"), QString(), QCoreApplication::translate("VibeStudioEditorProfiles", "Texture Tools"), QStringLiteral("texture-tools")),
 				binding(QStringLiteral("compiler.vibemap3.plan"), QCoreApplication::translate("VibeStudioEditorProfiles", "Plan VibeMap3 Build"), QString(), QString(), QCoreApplication::translate("VibeStudioEditorProfiles", "Compiler"), QStringLiteral("compiler")),

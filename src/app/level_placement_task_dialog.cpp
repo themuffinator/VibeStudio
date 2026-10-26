@@ -111,6 +111,9 @@ LevelPlacementResult LevelPlacementTaskDialog::prepare(QWidget* parent, const Le
 	case LevelPlacementOperation::Resize:
 		dialog.setWindowTitle(tr("Resize Selection"));
 		break;
+	case LevelPlacementOperation::Scale:
+		dialog.setWindowTitle(tr("Scale Selection"));
+		break;
 	case LevelPlacementOperation::Snap:
 		dialog.setWindowTitle(tr("Snap Selection to Grid"));
 		break;

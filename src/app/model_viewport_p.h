@@ -83,6 +83,7 @@ struct ModelViewport::GeometryKey {
 	double frameBlend = 0;
 	bool textured = false;
 	bool highContrast = false;
+	bool polygonEdges = false;
 	bool editMoveActive = false;
 	bool editTagEmpty = true;
 	QString editJoint;
@@ -114,6 +115,9 @@ struct ModelViewport::GpuGeometry {
 	// normals) and its dot product with the first corner; and drawability.
 	QVector<std::array<float, 4>> planes;
 	QBitArray valid;
+	// With polygon edges on, per triangle: bit e set when the edge opposite
+	// corner e is a polygon diagonal, which no outline draws. Empty otherwise.
+	QVector<quint8> innerEdges;
 	// Bounding sphere of the drawable corners, for orthographic depth.
 	ModelVec3 centre;
 	double radius = 1.0;
@@ -151,6 +155,7 @@ struct ModelViewport::RasterWork {
 	ModelVec3 center, eye, moveOffset;
 	bool perspective = false, backfaceCulling = true, textured = false, wireframe = false, highContrast = false;
 	bool showEdges = false;
+	bool polygonEdges = false;
 	bool moving = false, editMoveActive = false, editTagEmpty = true;
 	bool resizingSelection = false;
 	ResizeBox resizeFrom, resizeTo;

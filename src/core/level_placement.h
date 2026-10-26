@@ -17,7 +17,7 @@
 #include <functional>
 
 namespace vibestudio {
-enum class LevelPlacementOperation { Snap, Duplicate, Paste, Mirror, SelectConnectedDoom, Move, Rotate, Resize, AddBrush, AddEntity, AddThing, TransformComponents, WrapMerge, Sweep, ExtractLinkedGroups, Repeat, Copy, Cut, SelectRegion, SelectObjects, Visibility, ConnectEntities, SelectTextured, DeleteObjects, RemoveComponents, RoundToGrid, CreateEntity, MoveToCamera, RepeatTransforms };
+enum class LevelPlacementOperation { Snap, Duplicate, Paste, Mirror, SelectConnectedDoom, Move, Rotate, Resize, AddBrush, AddEntity, AddThing, TransformComponents, WrapMerge, Sweep, ExtractLinkedGroups, Repeat, Copy, Cut, SelectRegion, SelectObjects, Visibility, ConnectEntities, SelectTextured, DeleteObjects, RemoveComponents, RoundToGrid, CreateEntity, MoveToCamera, RepeatTransforms, Scale };
 enum class LevelPlacementPhase { Preparing, Parsing, Transforming, Inserting, Finalizing, Complete, Building, Arraying, Extracting, Repeating, Copying, Cutting, Selecting, SelectingObjects, Visibility, Connecting, Deleting };
 
 struct LevelPlacementRequest {
@@ -36,6 +36,8 @@ struct LevelPlacementRequest {
 	LevelMapVec3 mirrorPivot;
 	LevelMapRotationRequest rotation;
 	LevelMapVec3 mins, maxs;
+	// Scale: factors about a pivot (core/level_map.h scaleLevelMapSelection).
+	LevelMapScaleRequest scale;
 	bool snapMoveDelta = false;
 	LevelBrushPrimitiveRequest primitive;
 	QString className;

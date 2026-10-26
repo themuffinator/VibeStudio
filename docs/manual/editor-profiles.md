@@ -409,9 +409,11 @@ ID `netradiant-custom`. 3D camera beside a 2D view, 16-unit grid. 3D camera: fir
 | Maximize or Restore Active View | <kbd>F12</kbd> |
 | Frame Selection | <kbd>&#96;</kbd> |
 | Level Camera | <kbd>End</kbd> |
+| Next Camera Mode / Previous Camera Mode | <kbd>Shift</kbd>+<kbd>]</kbd> / <kbd>Shift</kbd>+<kbd>[</kbd> |
 | Carve | <kbd>Shift</kbd>+<kbd>U</kbd> |
 | Round Selection to Grid | <kbd>Ctrl</kbd>+<kbd>G</kbd> |
 | Repeat Transforms | <kbd>Ctrl</kbd>+<kbd>R</kbd> |
+| Rotate Selection… / Scale Selection… | <kbd>Shift</kbd>+<kbd>R</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> |
 | Move to Camera | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> |
 | Connect Entities | <kbd>Ctrl</kbd>+<kbd>K</kbd> |
 | KillConnect Entities (Quake, Nexuiz or Xonotic context) | <kbd>Shift</kbd>+<kbd>K</kbd> |

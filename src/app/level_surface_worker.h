@@ -34,6 +34,9 @@ struct LevelSurfaceWork {
 	bool startStroke = false;
 	bool finishStroke = false;
 	bool stagingIndexed = false;
+	// Reset Textures (prepareLevelTextureReset) instead of adjustments or paste.
+	bool resetTextures = false;
+	LevelTextureResetRequest reset;
 };
 struct LevelSurfaceResult {
 	LevelMapDocument document;
@@ -52,6 +55,8 @@ struct LevelSurfaceResult {
 	int edgeOnFaces = 0;
 	bool cancelled = false;
 	bool pasted = false;
+	bool reset = false;
+	int renamed = 0;
 	std::shared_ptr<const LevelSurfaceStroke> stroke;
 	std::shared_ptr<const PackageArchiveReader> resolvedArchive;
 	QSize sourceTextureSize;

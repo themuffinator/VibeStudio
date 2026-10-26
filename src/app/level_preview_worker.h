@@ -21,6 +21,8 @@ struct LevelPreviewRequest {
 	QString assetKey;
 	QString sourceKey;
 	quint64 loadSerial = 0;
+	// Faces the view filters hide one at a time; LevelMapPreviewMeshOptions.
+	QSet<QPair<int, int>> hiddenFaces;
 };
 struct LevelPreviewResult {
 	LevelPreviewAssets assets;

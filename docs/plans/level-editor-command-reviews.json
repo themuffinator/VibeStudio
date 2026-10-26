@@ -1468,7 +1468,7 @@
     {
       "id": "nrc:ArbitraryRotation",
       "status": "Partial",
-      "workflow": "**Rotate Selection\u2026** previews a rotation by any angle about one axis, around the selection centre, world origin or typed pivot, with texture lock and Valve 220 policy, as one undo step. In component mode it opens **Transform Components\u2026**. `map rotate --axis --degrees --pivot` and `map transform-components --operation rotate` share the services.",
+      "workflow": "**Rotate Selection\u2026** opens with Shift+R in the NetRadiant Custom profile, and also from the Edit menu, the Transform menus, the Tools tab and the palette. It is a modeless window with **About X**, **About Y** and **About Z** angles, turned as one Euler rotation (X, then Y, then Z) about the selection centre, world origin or a typed pivot. Texture lock, Valve 220 policy and a background preview apply. **Apply** commits one undo step and keeps the window open on the refreshed selection; **OK** applies and closes. In component mode the same window turns the picked components through the Affine component transform. Repeat Transforms repeats the whole Euler turn. `map rotate --euler x,y,z` (or `--axis`/`--degrees`) shares the service, and `map transform-components --operation rotate` turns components about one axis.",
       "gui": [
         "map.rotate-precisely",
         "map.transform-components"
@@ -1477,22 +1477,27 @@
         "map rotate",
         "map transform-components"
       ],
-      "limitation": "One axis per rotation; there is no combined X/Y/Z entry, and the modal dialog closes after Rotate rather than staying open for repeated Apply. No palette entry or NRC Shift+R binding. Native physical input and macOS/Linux acceptance remain open. Remaining work: Add X/Y/Z angle fields applied as one Euler XYZ rotation, an Apply button that keeps the dialog open against the refreshed selection, a palette entry and an NRC Shift+R binding.",
+      "limitation": "Doom maps turn about Z only. With components picked, the pivot fields still show the object selection's centre, although the component pivot or centre is used. The CLI has no Euler route for picked components or for seeding Repeat Transforms. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_rotation_actions.cpp",
+        "src/core/level_map.cpp",
+        "src/core/level_repeat.cpp",
+        "src/app/level_transform_dialog.cpp",
         "src/app/level_rotation_dialog.cpp",
-        "src/app/level_component_transform_actions.cpp",
-        "src/core/level_placement.cpp",
-        "src/tests/level_rotation_smoke_test.cpp",
-        "src/tests/level_rotation_ui_smoke_test.cpp",
-        "src/tests/level_component_transform_ui_smoke_test.cpp"
+        "src/app/level_rotation_actions.cpp",
+        "src/app/level_placement_actions.cpp",
+        "src/cli/cli.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/tests/level_arbitrary_transform_smoke_test.cpp",
+        "src/tests/level_arbitrary_transform_ui_smoke_test.cpp",
+        "src/tests/level_rotation_ui_smoke_test.cpp"
       ]
     },
     {
       "id": "nrc:ArbitraryScale",
       "status": "Partial",
-      "workflow": "**Resize Selection\u2026** fits objects to typed width, depth and height, keeping the lower corner, centre or upper corner fixed, with Texture Scale Lock; `map resize --size` or `--mins/--maxs` does the same. In component mode, **Transform Components\u2026** and `map transform-components --operation scale --factors` scale picks by factors.",
+      "workflow": "**Scale Selection\u2026** opens with Ctrl+Shift+S in the NetRadiant Custom profile; Save Map As keeps Ctrl+Alt+S, so the keys do not clash. It is a modeless window with **X factor**, **Y factor** and **Z factor** about the selection centre, world origin or a typed pivot. Negative factors mirror with winding repair (point faces swap two points, patches reverse their columns) and reflect headings as Flip does. Texture Scale Lock and Valve 220 policy apply, and a background preview checks the result. Apply keeps the window open on the refreshed selection and OK applies and closes, each one undo step recorded for Repeat Transforms. In component mode it scales the picked components. `map resize --factors x,y,z [--pivot x,y,z]` shares `scaleLevelMapSelection`. **Resize Selection\u2026** and `map resize --size`/`--mins --maxs` still fit exact sizes.",
       "gui": [
+        "map.scale-selection",
         "map.resize-selection",
         "map.transform-components"
       ],
@@ -1500,16 +1505,18 @@
         "map resize",
         "map transform-components"
       ],
-      "limitation": "Object scaling takes target sizes, not factors, and only positive sizes, so it cannot mirror; the modal dialog closes after one apply. No palette entry or NRC Ctrl+Shift+S binding, which other contexts use for Save As. Native physical input and macOS/Linux acceptance remain open. Remaining work: Add a factor mode to the resize service and dialog (X/Y/Z factors about the selection centre or pivot, negative factors as mirrors with winding repair), `map resize --factors x,y,z`, a palette entry and an NRC Ctrl+Shift+S binding that avoids the Save As clash.",
+      "limitation": "Doom maps scale in the top view only, so the Z factor must be 1. Factors are limited to \u00b132768 for objects and \u00b11024 for picked components. With components picked, the pivot fields still show the object selection's centre. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/application_shell.cpp",
         "src/core/level_map.cpp",
         "src/core/level_placement.cpp",
-        "src/core/level_component_transform.cpp",
-        "src/app/level_component_transform_actions.cpp",
-        "src/tests/level_transform_smoke_test.cpp",
-        "src/tests/level_camera_resize_shell_smoke_test.cpp",
-        "src/tests/level_component_transform_cli_smoke_test.cpp"
+        "src/app/level_transform_dialog.cpp",
+        "src/app/level_scale_dialog.cpp",
+        "src/app/level_rotation_actions.cpp",
+        "src/app/level_placement_actions.cpp",
+        "src/cli/cli.cpp",
+        "src/core/studio_semantics.cpp",
+        "src/tests/level_arbitrary_transform_smoke_test.cpp",
+        "src/tests/level_arbitrary_transform_ui_smoke_test.cpp"
       ]
     },
     {
@@ -1820,44 +1827,66 @@
     {
       "id": "nrc:CSGTool",
       "status": "Partial",
-      "workflow": "The Tools tab **Brush** section and the Geometry menu offer **Hollow\u2026** (overlapping walls), **Hollow Touching\u2026** (walls that meet without overlapping) and **Make Room** (walls outside). Each is one undo step, and the first two ask for a thickness. `map hollow --mode overlap|touch|room` and `map extrude-faces` cover them from the CLI.",
+      "workflow": "**CSG Tool** (Geometry menu or the command palette) opens the **CSG Tool** section of the Levels **Tools** tab, after **Brush**, with the thickness ready to type. The section holds a thickness (**Use Grid** copies the grid), a **Faces** choice (all but the picked faces, only the picked faces, all but those facing the 2D view, all but those facing the camera), **Caulk hidden faces** and **Keep inner brush**. Every change is saved. **Shrink Brushes**, **Expand Brushes**, **Hollow with Diagonal Joints**, **Hollow by Wrapping**, **Hollow by Extruding Faces** and **Hollow by Pulling Faces** use those options; each is one undo step, and hidden or locked brushes are left alone. `map hollow --mode diagonal|extrude|wrap|pull` with `--keep-inner`, `--exclude-face`, `--only-face` and `--exclude-facing`, plus `map shrink-brushes` and `map expand-brushes`, do the same from the CLI. The older **Hollow\u2026**, **Hollow Touching\u2026** and **Make Room** stay.",
       "gui": [
+        "map.csg-tool",
+        "map.csg-shrink",
+        "map.csg-expand",
+        "map.csg-hollow-diagonal",
+        "map.csg-hollow-wrap",
+        "map.csg-hollow-extrude",
+        "map.csg-hollow-pull",
         "map.hollow-selection",
         "map.hollow-touching",
-        "map.make-room",
-        "map.extrude-faces"
+        "map.make-room"
       ],
       "cli": [
         "map hollow",
-        "map extrude-faces"
+        "map shrink-brushes",
+        "map expand-brushes"
       ],
-      "limitation": "There is no single tool window. Missing: diagonal-joint and extrude-faces hollows, face policies (exclude, or use only, picked faces; by projection or camera), caulk and keep-inner toggles, and whole-brush Shrink and Expand. Native physical input and macOS/Linux acceptance remain open. Remaining work: Build a CSG Tool panel in the Brush section with thickness, face-policy, caulk and keep-inner options. Add Diagonal and Extrude hollow modes and an all-faces offset (Shrink/Expand) in core, and expose them as `map hollow` options.",
+      "limitation": "The tool is a Tools-tab section, not a floating window. Pull keeps Make Room's filled outer corners (NRC leaves them open). Extrude side faces take the face's own material, or caulk, rather than the texture browser's current material. Caulk follows one rule (room-facing and opening faces keep their materials, or with Keep inner brush the outer faces do) instead of NRC's per-mode differences. Shrink and Expand keep textures in world space and have no texture lock. The saved panel options have no `editor` CLI command; the map commands take them as flags. No default keys, as NRC and TrenchBroom ship none. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
+        "src/core/level_hollow.h",
+        "src/core/level_hollow.cpp",
         "src/core/level_map.cpp",
-        "src/app/application_shell.cpp",
-        "src/app/level_geometry_actions.cpp",
+        "src/app/level_csg_tool_actions.cpp",
         "src/app/level_tools_page.cpp",
-        "src/tests/level_brush_tools_smoke_test.cpp",
-        "src/tests/level_geometry_tools_ui_smoke_test.cpp"
+        "src/cli/level_hollow_options.cpp",
+        "src/cli/cli.cpp",
+        "src/tests/level_csg_tool_smoke_test.cpp",
+        "src/tests/level_csg_tool_ui_smoke_test.cpp",
+        "docs/manual/levels.md",
+        "docs/manual/cli.md"
       ]
     },
     {
       "id": "nrc:CSGroom",
       "status": "Partial",
-      "workflow": "**Make Room** builds walls one grid step thick around the outside of each selected brush, then removes the brush so its volume becomes the room. It is one undo step. `map hollow --mode room --thickness N` does the same from the CLI with any thickness.",
+      "workflow": "**Make Room** (Geometry menu, Tools tab Brush section, palette) builds walls one grid step thick outside each selected brush and removes the brush, so its volume becomes the room. As in NetRadiant Custom, by default every wall face except the room-facing one takes the game's caulk (common/caulk in Quake III, textures/common/caulk for brushDef3, skip in Quake). Faces picked in face mode, in the camera or with Select Textured get no wall and become openings; the walls beside them stop flush, and wall faces in the opening's plane keep its material. It is one undo step. **Make Room Options\u2026** switches either option off or names another caulk material, with an inline check and Restore Defaults. `editor make-room` reads and changes the same saved options. `map hollow --mode room --thickness N` does the same with `--caulk`, `--caulk-texture NAME` and repeated `--open-face face:brushId:faceNumber`; the same flags also work with `--mode overlap` and `--mode touch`.",
       "gui": [
-        "map.make-room"
+        "map.make-room",
+        "map.make-room-options"
       ],
       "cli": [
-        "map hollow"
+        "map hollow",
+        "editor make-room"
       ],
-      "limitation": "Walls keep the source textures instead of caulking their hidden faces, and picked faces cannot be left open as doorways. VibeStudio extends the walls to fill the outer corners, where NRC leaves them open. There is no palette registry entry. Native physical input and macOS/Linux acceptance remain open. Remaining work: Add room options to caulk the non-room faces with the game's caulk shader and to leave picked faces open. Share them between the GUI and `map hollow` flags, and register a palette entry.",
+      "limitation": "VibeStudio fills the outer corners, where NRC leaves them open. Games without a caulk material, such as Quake II, need a named one. The GUI Hollow and Hollow Touching commands do not offer the caulk and open-face options (only the map hollow flags do). Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
+        "src/core/level_hollow.h",
+        "src/core/level_hollow.cpp",
         "src/core/level_map.cpp",
         "src/app/level_geometry_actions.cpp",
+        "src/cli/level_hollow_options.cpp",
         "src/cli/cli.cpp",
+        "src/core/studio_semantics.cpp",
+        "src/tests/level_make_room_smoke_test.cpp",
+        "src/tests/level_make_room_ui_smoke_test.cpp",
         "src/tests/level_brush_tools_smoke_test.cpp",
-        "src/tests/level_geometry_tools_ui_smoke_test.cpp"
+        "src/tests/level_geometry_tools_ui_smoke_test.cpp",
+        "docs/manual/levels.md",
+        "docs/manual/cli.md"
       ]
     },
     {
@@ -2261,35 +2290,40 @@
     {
       "id": "nrc:CameraModeNext",
       "status": "Partial",
-      "workflow": "**3D Wireframe** (map.preview-wireframe) switches between wireframe and shaded drawing. The **Textures** box above the views, also on the **View** tab, switches between flat shading and package textures. Between them they reach three of NRC's four modes.",
+      "workflow": "**View** > **Camera Display** > **Next Camera Mode** steps the camera through Wireframe, Flat Shaded, Textured and Textured with Edges, wrapping after the last. The status bar announces each step as \"Camera mode N of 4: ...\" and the mode is saved. The NetRadiant Custom profile binds Shift+]. The command waits for the camera to be showing and never changes the map.",
       "gui": [
-        "map.preview-wireframe"
+        "map.next-camera-mode"
       ],
       "cli": [],
-      "limitation": "There is no next-mode command and no Shift+] binding. The Levels camera has no textured-plus-wireframe mode, **Textures** has no command id or palette entry, and turning **3D Wireframe** off returns to flat shading even with **Textures** ticked. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Add a Next Camera Mode command that cycles Wireframe, Flat, Textured and Textured with edges (ModelViewport::setShowEdges already exists). Give Textures in Camera a command id, save the chosen mode, announce it in the status bar, and bind Shift+] in the NRC profile.",
+      "limitation": "Doom 3's lighting mode is not part of the cycle, because the camera has no lighting renderer. The NetRadiant baseline profile leaves the key unbound, since NetRadiant has no such command. Shift+] is tested with Qt Test key events; physical keyboards with other layouts, and macOS/Linux acceptance, remain open.",
       "evidence": [
-        "src/app/application_shell.cpp",
-        "src/app/level_preview_actions.cpp",
-        "src/app/model_viewport.h",
-        "src/tests/shell_interaction_smoke_test.cpp",
-        "src/tests/level_materials_ui_smoke_test.cpp"
+        "src/core/level_camera_render.cpp",
+        "src/app/level_camera_render_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/core/level_editor_familiar_controls.cpp",
+        "src/core/studio_semantics.cpp",
+        "src/tests/level_camera_render_smoke_test.cpp",
+        "src/tests/level_camera_render_ui_smoke_test.cpp",
+        "docs/manual/editor-profiles.md"
       ]
     },
     {
       "id": "nrc:CameraModePrev",
       "status": "Partial",
-      "workflow": "**3D Wireframe** (map.preview-wireframe) and the **Textures** box above the views, also on the **View** tab, choose wireframe, flat-shaded or textured drawing directly. There is no step order to go back through.",
+      "workflow": "**View** > **Camera Display** > **Previous Camera Mode** steps back through Textured with Edges, Textured, Flat Shaded and Wireframe, wrapping before the first. It announces the mode in the status bar and saves it. The NetRadiant Custom profile binds Shift+[. The command waits for the camera to be showing and never changes the map.",
       "gui": [
-        "map.preview-wireframe"
+        "map.previous-camera-mode"
       ],
       "cli": [],
-      "limitation": "There is no previous-mode command and no Shift+[ binding. The Levels camera has no textured-plus-wireframe mode, **Textures** has no palette entry, and leaving wireframe always returns to flat shading. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Build this with Next Camera Mode as a Previous Camera Mode command over the same four-mode cycle, with a palette entry, a status message and the Shift+[ binding in the NRC profile.",
+      "limitation": "Doom 3's lighting mode is not part of the cycle. The NetRadiant baseline profile leaves the key unbound. Shift+[ is tested with Qt Test key events only; physical-input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/application_shell.cpp",
-        "src/app/level_preview_actions.cpp",
-        "src/app/model_viewport.h",
-        "src/tests/shell_interaction_smoke_test.cpp",
-        "src/tests/level_materials_ui_smoke_test.cpp"
+        "src/core/level_camera_render.cpp",
+        "src/app/level_camera_render_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/core/studio_semantics.cpp",
+        "src/tests/level_camera_render_smoke_test.cpp",
+        "src/tests/level_camera_render_ui_smoke_test.cpp",
+        "docs/manual/editor-profiles.md"
       ]
     },
     {
@@ -2800,105 +2834,135 @@
     },
     {
       "id": "nrc:FilterAreaportals",
-      "status": "Planned",
-      "workflow": "No areaportal kind in the **Filters** section. Workarounds: **Select All of Type** on the areaportal material then **Hide Selection**, which does not persist as a filter, or unticking **Brush Entities**, which hides Quake II func_areaportal along with every door and trigger. Existing control: None; the Filters section has no Areaportals check box.",
-      "gui": [],
-      "cli": [],
-      "limitation": "No filter kind, command, Alt+3 binding or CLI. Native physical input and macOS/Linux acceptance remain open. Remaining work: Add an areaportals kind matching brushes with any areaportal-textured face or the CONTENTS_AREAPORTAL (0x8000) content bit, plus Quake II func_areaportal entities; translate its title, register a checkable command and add core tests.",
+      "status": "Partial",
+      "workflow": "Toggle **Area Portals** from its check box in the **Filters** section of the Levels **View** tab, **View** > **Filters** > **Area Portals**, the view bar's **Select** > **Filters** menu or command search. The NetRadiant Custom and NetRadiant profiles also use <kbd>Alt+3</kbd>. Switched off, it hides brushes with any areaportal face or the area portal content flag (0x8000), and Quake II func_areaportal entities with their brushes, as NRC's areaportal brush filter does. It applies to every plan view and the camera, which cannot pick hidden objects, and the choice is saved. `map filters` reports the kind's count and objects.",
+      "gui": [
+        "map.filter-areaportals"
+      ],
+      "cli": [
+        "map filters"
+      ],
+      "limitation": "The kind is also offered on Quake maps, which have no area portals. Shaders that make a face an area portal under another name (surfaceparm areaportal) are not read. Objects that are already selected stay selected when the kind is hidden. Doom 3 visportals are reviewed under nrc:FilterVisportals. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
         "src/core/level_view_filters.cpp",
-        "src/app/level_sidebar_panels.cpp",
+        "src/app/level_view_filter_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/cli/level_view_filters.cpp",
+        "src/tests/level_filter_texture_kinds_smoke_test.cpp",
+        "src/tests/level_filter_texture_kinds_ui_smoke_test.cpp",
         "docs/manual/levels.md"
       ]
     },
     {
       "id": "nrc:FilterBotClips",
       "status": "Partial",
-      "workflow": "The **Clip** filter names brushes whose every face texture contains 'clip' or carries clip contents, so botclip brushes hide along with player and weapon clip. To hide bot clip alone, use **Select by Texture\u2026** with common/botclip, or query `texture:botclip` in the **Objects** filter and press Enter, then use **Hide Selection**. `map find` and `map visibility` cover the same steps from the CLI.",
+      "workflow": "On Quake III maps, toggle **Bot Clip** from its check box in the **Filters** section of the Levels **View** tab, **View** > **Filters** or command search. The NetRadiant Custom and NetRadiant profiles also use <kbd>Alt+M</kbd>. Switched off, it hides brushes whose every face is botclip or donotenter, or carries the bot clip (0x400000) or do-not-enter (0x200000) content flag, in every plan view and the camera. On Quake III maps **Clip** no longer takes bot clip, as in NRC. The choice is saved. `map filters` reports its count and objects.",
       "gui": [
-        "map.hide-selection",
-        "map.select-by-texture",
-        "map.select-matching"
+        "map.filter-botclip"
       ],
       "cli": [
-        "map find",
-        "map visibility"
+        "map filters"
       ],
-      "limitation": "There is no separate bot clip kind, donotenter is not matched, and the selection workaround is temporary and one-off. There is no shortcut (NRC binds Alt+M) or CLI filter report, and classification is untested. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Split a 'botclip' filter kind (botclip and donotenter, all faces) out of Clip for Quake III maps. Give it a check box, a bindable toggle (NRC profile Alt+M) and tests.",
+      "limitation": "A brush that mixes botclip and donotenter faces counts, where NRC needs one of them on every face. Quake and Quake II maps disable the kind, and there **Clip** still takes any texture named clip. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
         "src/core/level_view_filters.cpp",
-        "src/app/level_sidebar_panels.cpp",
-        "src/core/level_map.cpp",
-        "src/core/studio_query.cpp",
-        "src/cli/level_visibility.cpp",
-        "src/tests/shell_interaction_smoke_test.cpp",
-        "src/tests/level_visibility_ui_smoke_test.cpp",
+        "src/app/level_view_filter_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/cli/level_view_filters.cpp",
+        "src/tests/level_filter_texture_kinds_smoke_test.cpp",
+        "src/tests/level_filter_texture_kinds_ui_smoke_test.cpp",
         "docs/manual/levels.md"
       ]
     },
     {
       "id": "nrc:FilterCaulk",
-      "status": "Planned",
-      "workflow": "The **Caulk** check box in the **Filters** section of the Levels **View** tab hides brushes whose every face uses a texture named caulk, in the 2D views and camera with a count; the choice persists. Existing control: Levels > View tab > Filters > Caulk check box (levelFilter-caulk).",
-      "gui": [],
-      "cli": [],
-      "limitation": "Caulk faces on otherwise textured brushes stay drawn, and Quake's skip counts as **Hint and Skip** rather than caulk. The NetRadiant Custom profile lists a Toggle Caulk Filter entry (editor.filters.toggle-caulk) with no key or wired command; no palette entry, Alt+6 binding, CLI or automated test. Native physical input and macOS/Linux acceptance remain open. Remaining work: Add per-face hiding of caulk faces in the plan and camera renderers, treat Quake's skip as caulk for Quake 1 maps, wire the NRC profile's editor.filters.toggle-caulk entry to a checkable command bound to Alt+6, and add core and rendering tests.",
+      "status": "Partial",
+      "workflow": "Toggle **Caulk** from its check box in the **Filters** section of the Levels **View** tab, **View** > **Filters** > **Caulk**, the view bar's **Select** > **Filters** menu or command search. The NetRadiant Custom and NetRadiant profiles also use <kbd>Alt+6</kbd>, and the NetRadiant Custom profile's caulk entry is now that command. Switched off, it hides brushes caulked on every face in every view. The camera also leaves out the caulk faces of other brushes, so they are neither drawn nor picked, and the status bar says how many faces went. On Quake maps skip counts as caulk, whole brushes and single faces alike, as NRC's Quake 1 caulk filters do. `map filters` reports the brushes, the kind's `faceCount` and the hidden faces (`filteredFaces`, as face:brushId:faceNumber).",
+      "gui": [
+        "map.filter-caulk"
+      ],
+      "cli": [
+        "map filters"
+      ],
+      "limitation": "The plan views keep the whole outline of a brush with hidden caulk faces, as NRC's 2D wireframes do. Plan-view face component mode, Select Textured and the texture tools still reach hidden caulk faces, while NRC's face selection skips filtered faces. Caulk is recognised by texture name (a name containing caulk, or Quake's skip), not by shader. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
         "src/core/level_view_filters.cpp",
-        "src/app/level_sidebar_panels.cpp",
-        "src/core/editor_profiles.cpp",
-        "src/app/map_viewport.h",
+        "src/core/map_preview_mesh.cpp",
+        "src/app/level_preview_actions.cpp",
+        "src/app/level_view_filter_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/cli/level_view_filters.cpp",
+        "src/tests/level_filter_texture_kinds_smoke_test.cpp",
+        "src/tests/level_filter_texture_kinds_ui_smoke_test.cpp",
         "docs/manual/levels.md"
       ]
     },
     {
       "id": "nrc:FilterClips",
-      "status": "Planned",
-      "workflow": "The **Clip** check box in the **Filters** section of the Levels **View** tab hides brushes whose every face uses a texture named with clip, or carries Quake II player or monster clip bits, in the 2D views and camera with a count; the choice persists. Existing control: Levels > View tab > Filters > Clip check box (levelFilter-clip).",
-      "gui": [],
-      "cli": [],
-      "limitation": "Quake III shaders with surfaceparm playerclip under other names, and clip-shaded patches, are missed; bot clip is folded in rather than separate. No command, palette entry, Alt+7 binding or CLI; no automated test covers the kind. Native physical input and macOS/Linux acceptance remain open. Remaining work: Match surfaceparm playerclip through the material library, include clip-shaded patches, split bot clip into its own kind, register a checkable command bindable to Alt+7 and add core tests.",
+      "status": "Partial",
+      "workflow": "To hide clip brushes and patches:\n- Untick **Clip** in the **Filters** section of the Levels **View** tab.\n- Or choose View > Filters > Clip, or Filter: Clip in command search.\n- Or press Alt+7 in the NetRadiant Custom and NetRadiant profiles.\n\nBrushes made wholly of clip, and clip-shaded patches, leave every view, with a count. The map is unchanged.\n\nOn Quake III maps, surfaceparm playerclip and monsterclip are read from the open package's shaders. **Player Clip**, **Monster Clip** and **Weapon Clip** (weapclip and fullclip) hide one part at a time. Bot clip has its own **Bot Clip** kind (Alt+M), which also reads surfaceparm botclip and donotenter. `map filters --package` reports every part.",
+      "gui": [
+        "map.filter-clip",
+        "map.filter-player-clip",
+        "map.filter-monster-clip",
+        "map.filter-weapon-clip",
+        "map.filter-botclip"
+      ],
+      "cli": [
+        "map filters"
+      ],
+      "limitation": "Weapon Clip goes by texture names only, because Quake III shaders have no weapon clip surfaceparm. Shaders come only from the open package or folder. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
         "src/core/level_view_filters.cpp",
+        "src/app/level_view_filter_actions.cpp",
         "src/app/level_sidebar_panels.cpp",
-        "src/app/map_viewport.h",
-        "src/tests/level_visibility_ui_smoke_test.cpp",
+        "src/core/studio_semantics.cpp",
+        "src/cli/level_view_filters.cpp",
+        "src/tests/level_filter_material_kinds_smoke_test.cpp",
+        "src/tests/level_filter_material_kinds_ui_smoke_test.cpp",
+        "src/tests/level_view_filters_smoke_test.cpp",
         "docs/manual/levels.md"
       ]
     },
     {
       "id": "nrc:FilterClusterportals",
-      "status": "Planned",
-      "workflow": "No clusterportal kind in the **Filters** section. Selecting the material with **Select All of Type** and using **Hide Selection** is the only workaround and does not persist as a filter. Existing control: None; the Filters section has no Clusterportals check box.",
-      "gui": [],
-      "cli": [],
-      "limitation": "No filter kind, command, Alt+9 binding or CLI. Native physical input and macOS/Linux acceptance remain open. Remaining work: Add a Quake III clusterportals kind for brushes whose every face uses common/clusterportal or carries CONTENTS_CLUSTERPORTAL (0x100000); register a checkable command and add core tests.",
+      "status": "Partial",
+      "workflow": "On Quake III maps, toggle **Cluster Portals** from its check box in the **Filters** section of the Levels **View** tab, **View** > **Filters** or command search. The NetRadiant Custom and NetRadiant profiles also use <kbd>Alt+9</kbd>. Switched off, it hides brushes whose every face is clusterportal or carries the cluster portal content flag (0x100000), in every plan view and the camera. The choice is saved. Quake and Quake II maps disable the kind, since Quake II uses that bit for water currents. `map filters` reports its count and objects.",
+      "gui": [
+        "map.filter-clusterportals"
+      ],
+      "cli": [
+        "map filters"
+      ],
+      "limitation": "Matched by texture name and the map's content flags, not by shader surfaceparms. Objects that are already selected stay selected when the kind is hidden. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
         "src/core/level_view_filters.cpp",
-        "src/app/level_sidebar_panels.cpp",
+        "src/app/level_view_filter_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/cli/level_view_filters.cpp",
+        "src/tests/level_filter_texture_kinds_smoke_test.cpp",
+        "src/tests/level_filter_texture_kinds_ui_smoke_test.cpp",
         "docs/manual/levels.md"
       ]
     },
     {
       "id": "nrc:FilterDecals",
       "status": "Partial",
-      "workflow": "There is no Decals filter kind. As a workaround, query `texture:decals/` in the **Objects** filter, press Enter to select the matches and use **Hide Selection**. `map find` lists the same brushes, and `map visibility --mode hide` previews the hide.",
+      "workflow": "On Quake III maps, toggle **Decals** from its check box in the **Filters** section of the Levels **View** tab, **View** > **Filters** or command search. The NetRadiant Custom and NetRadiant profiles also use <kbd>Shift+D</kbd>. Switched off, it hides brushes with any face whose texture path starts with decals/, with or without a leading textures/, in every plan view and the camera. Decal brushes added later are hidden as they appear, and the choice is saved. `map filters` reports its count and objects.",
       "gui": [
-        "map.hide-selection",
-        "map.select-matching"
+        "map.filter-decals"
       ],
       "cli": [
-        "map find",
-        "map visibility"
+        "map filters"
       ],
-      "limitation": "The workaround hides a snapshot temporarily. New decal brushes stay visible, **Show All Hidden** clears it, the query matches decals/ anywhere in a texture path, and there is no toggle, saved state or shortcut (NRC binds Shift+D). Native physical-input and macOS/Linux acceptance remain open. Remaining work: Add a 'decals' filter kind for Quake III maps: brushes with any face under decals/. Give it a View tab check box, a bindable toggle (NRC profile Shift+D) and classification tests.",
+      "limitation": "Decal patches are not filtered; NRC's decal filter covers brushes only too. Quake and Quake II maps disable the kind. Objects that are already selected stay selected when the kind is hidden. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/core/level_map.cpp",
-        "src/core/studio_query.cpp",
         "src/core/level_view_filters.cpp",
-        "src/cli/level_visibility.cpp",
-        "src/tests/shell_interaction_smoke_test.cpp",
-        "src/tests/level_visibility_ui_smoke_test.cpp",
+        "src/app/level_view_filter_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/cli/level_view_filters.cpp",
+        "src/tests/level_filter_texture_kinds_smoke_test.cpp",
+        "src/tests/level_filter_texture_kinds_ui_smoke_test.cpp",
         "docs/manual/levels.md"
       ]
     },
@@ -2975,24 +3039,20 @@
     {
       "id": "nrc:FilterLightgrid",
       "status": "Partial",
-      "workflow": "There is no Lightgrid filter kind. As a workaround, use **Select by Texture\u2026** with common/lightgrid, or type `texture:lightgrid` in the **Objects** filter and press Enter, then use **Hide Selection**. `map find` lists the same brushes, and `map visibility --mode hide` previews the hide without writing the map.",
+      "workflow": "On Quake III maps, toggle **Light Grid** from its check box in the **Filters** section of the Levels **View** tab, **View** > **Filters** or command search. It has no default key, as in NetRadiant Custom. Switched off, it hides brushes whose every face uses a lightgrid texture, in every plan view and the camera. Lightgrid brushes added later are hidden as they appear, and the choice is saved. `map filters` reports its count and objects.",
       "gui": [
-        "map.hide-selection",
-        "map.select-by-texture",
-        "map.select-matching"
+        "map.filter-lightgrid"
       ],
       "cli": [
-        "map find",
-        "map visibility"
+        "map filters"
       ],
-      "limitation": "The workaround hides a snapshot temporarily. Lightgrid brushes added later stay visible, both selection routes take a brush with any lightgrid face rather than all faces, and **Show All Hidden** clears it. There is no one-step toggle or saved filter state. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Add a 'lightgrid' filter kind for Quake III maps: brushes whose every face uses a common/lightgrid texture. Give it a View tab check box, a bindable toggle command and classification tests.",
+      "limitation": "Matched by the texture's own name (lightgrid in any folder). Quake and Quake II maps disable the kind. Objects that are already selected stay selected when the kind is hidden. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/core/level_map.cpp",
-        "src/core/studio_query.cpp",
         "src/core/level_view_filters.cpp",
-        "src/cli/level_visibility.cpp",
-        "src/tests/shell_interaction_smoke_test.cpp",
-        "src/tests/level_visibility_ui_smoke_test.cpp",
+        "src/app/level_view_filter_actions.cpp",
+        "src/cli/level_view_filters.cpp",
+        "src/tests/level_filter_texture_kinds_smoke_test.cpp",
+        "src/tests/level_filter_texture_kinds_ui_smoke_test.cpp",
         "docs/manual/levels.md"
       ]
     },
@@ -3013,16 +3073,23 @@
     },
     {
       "id": "nrc:FilterLiquids",
-      "status": "Planned",
-      "workflow": "The **Liquids** check box in the **Filters** section of the Levels **View** tab hides brushes with any face named with *, water, slime, lava or a liquid folder, or carrying Quake II liquid content bits, in the 2D views and camera with a count; the choice persists. Existing control: Levels > View tab > Filters > Liquids check box (levelFilter-liquids).",
-      "gui": [],
-      "cli": [],
-      "limitation": "Quake III shaders declaring surfaceparm water, lava or slime under other names are missed, and the name rule can catch solid textures such as a lavarock wall. No command, palette entry, Alt+5 binding or CLI; no automated test covers the kind. Native physical input and macOS/Linux acceptance remain open. Remaining work: Resolve Quake III face shaders through the material library and match surfaceparm water/lava/slime ahead of the name heuristic; register a checkable command bindable to Alt+5; add core tests over Quake, Quake II and Quake III fixtures.",
+      "status": "Partial",
+      "workflow": "To hide liquid brushes:\n- Untick **Liquids** in the **Filters** section of the Levels **View** tab.\n- Or choose View > Filters > Liquids, or Filter: Liquids in command search.\n- Or press Alt+5 in the NetRadiant Custom and NetRadiant profiles.\n\nBrushes with any liquid face leave the plan views and the camera, with a count. The choice persists and the map is unchanged.\n\nOn a Quake III map, faces whose shader the open package defines go by surfaceparm water, slime or lava, or the textures/liquids/ prefix. A lavarock wall stays, and a liquid under any name is hidden. Faces the package does not hold keep the name rule. Quake II maps read the liquid content bits, and Quake maps read `*` names. `map filters --package` reports the same matches.",
+      "gui": [
+        "map.filter-liquids"
+      ],
+      "cli": [
+        "map filters"
+      ],
+      "limitation": "Shaders come only from the open package or folder, not from pk3 archives inside it or other game search paths. Faces the package does not resolve still go by name, so a lavarock texture the package does not hold still counts as a liquid. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
         "src/core/level_view_filters.cpp",
+        "src/app/level_view_filter_actions.cpp",
         "src/app/level_sidebar_panels.cpp",
-        "src/app/map_viewport.h",
-        "src/tests/level_visibility_ui_smoke_test.cpp",
+        "src/cli/level_view_filters.cpp",
+        "src/tests/level_filter_material_kinds_smoke_test.cpp",
+        "src/tests/level_filter_material_kinds_ui_smoke_test.cpp",
+        "src/tests/level_view_filters_smoke_test.cpp",
         "docs/manual/levels.md"
       ]
     },
@@ -3107,45 +3174,68 @@
     },
     {
       "id": "nrc:FilterSky",
-      "status": "Planned",
-      "workflow": "The **Sky** check box in the View tab's **Filters** section hides brushes with any face that matches one of these rules: the texture name starts with sky, it lies under skies/, it is skyportal, or the face carries the sky surface flag. It shows a live count and is remembered between sessions. Existing control: Levels > View tab > Filters > Sky check box (levelFilter-sky)",
-      "gui": [],
-      "cli": [],
-      "limitation": "Detection uses texture names and face flags, not skyparms in shader scripts, so Quake III sky shaders with other names are missed and unrelated textures named sky* are caught. There is no command id, palette entry, shortcut or CLI, and classification is untested. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Resolve Quake III sky faces through parsed shader skyparms from the material library, keep the name and flag rules for Quake and Quake II, and add a bindable toggle command and classification tests.",
+      "status": "Partial",
+      "workflow": "To hide sky brushes:\n- Untick **Sky** in the **Filters** section of the Levels **View** tab.\n- Or choose View > Filters > Sky, or Filter: Sky in command search. It has no default key, as in NRC, and can be bound.\n\nBrushes with a sky face leave every view, with a count. The choice persists.\n\nOn a Quake III map, faces whose shader the open package defines, or whose image it holds without a script, are judged by the shader. A face counts as sky only when its shader declares skyParms or surfaceparm sky, so walls named sky* stay. Other faces keep the sky name and SURF_SKY rules, and Quake II maps read SURF_SKY. `map filters --package` reports the same matches.",
+      "gui": [
+        "map.filter-sky"
+      ],
+      "cli": [
+        "map filters"
+      ],
+      "limitation": "Shaders come only from the open package or folder, not from pk3 archives inside it or other game search paths. Without a package, Quake III maps go by sky names. No default key, as in NRC. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
         "src/core/level_view_filters.cpp",
+        "src/app/level_view_filter_actions.cpp",
         "src/app/level_sidebar_panels.cpp",
-        "src/app/map_viewport.cpp",
-        "src/tests/level_visibility_ui_smoke_test.cpp",
+        "src/cli/level_view_filters.cpp",
+        "src/tests/level_filter_material_kinds_smoke_test.cpp",
+        "src/tests/level_filter_material_kinds_ui_smoke_test.cpp",
         "docs/manual/levels.md"
       ]
     },
     {
       "id": "nrc:FilterStructural",
-      "status": "Planned",
-      "workflow": "VibeStudio has no structural filter. The View tab's **World Brushes** filter hides all worldspawn geometry, detail brushes included, and **Detail** does the opposite job. The Objects query cannot test content flags, so structural brushes cannot be selected and hidden that way either. **Make Structural** and **Make Detail** change the flags but do not filter anything. Existing control: None. The closest controls are Levels > View tab > Filters > World Brushes and Detail.",
-      "gui": [],
-      "cli": [],
-      "limitation": "Structural brushes cannot be hidden on their own, and no query or selection command names them. No toggle command, shortcut (NRC binds Ctrl+Shift+D) or CLI exists. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Add a 'structural' filter kind: on Quake II/III maps, brushes without the detail content flag outside func_detail; on Quake maps, worldspawn and brush entities other than func_detail*. Give it a View tab check box, a bindable toggle (NRC profile Ctrl+Shift+D) and classification tests on Quake, Quake II and Quake III fixtures.",
+      "status": "Partial",
+      "workflow": "Toggle **Structural** from its check box in the **Filters** section of the Levels **View** tab, **View** > **Filters** or command search. The NetRadiant Custom and NetRadiant profiles also use <kbd>Ctrl+Shift+D</kbd>. On Quake II and III maps it hides every brush without the detail content flag outside func_detail. On Quake maps it hides worldspawn's brushes and every brush entity except func_detail*, as NRC's filter_entity_not_func_detail does. It is the inverse of **Detail**, so the two kinds never share a brush and together cover every brush. It applies to every plan view and the camera, and the choice is saved. `map filters` reports its count and objects.",
+      "gui": [
+        "map.filter-structural"
+      ],
+      "cli": [
+        "map filters"
+      ],
+      "limitation": "A brush counts as detail when any face carries the detail flag, following VibeStudio's Detail kind; NRC needs every face, so mixed brushes differ. Detail set only in a shader is not read, and patches are not filtered. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
         "src/core/level_view_filters.cpp",
-        "src/app/level_sidebar_panels.cpp",
-        "src/app/level_editing_actions.cpp",
-        "src/core/level_map.cpp",
+        "src/app/level_view_filter_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/cli/level_view_filters.cpp",
+        "src/tests/level_filter_texture_kinds_smoke_test.cpp",
+        "src/tests/level_filter_texture_kinds_ui_smoke_test.cpp",
         "docs/manual/levels.md"
       ]
     },
     {
       "id": "nrc:FilterTranslucent",
-      "status": "Planned",
-      "workflow": "No translucent kind in the **Filters** section. The Materials module already classifies materials as translucent (Quake II SURF_TRANS33/66, Doom 3 coverage) and parses Quake III qer_trans and surfaceparms, but the level filters do not consult it. Existing control: None; the Filters section has no Translucent check box.",
-      "gui": [],
-      "cli": [],
-      "limitation": "No filter kind, command, Alt+4 binding or CLI. Native physical input and macOS/Linux acceptance remain open. Remaining work: Add a translucent kind: Quake II faces with SURF_TRANS33/SURF_TRANS66 (0x10/0x20) and Quake III shaders with qer_trans, alphaFunc or fog resolved through the material library, for brushes and patches; refresh when materials reload; add core tests.",
+      "status": "Partial",
+      "workflow": "To hide see-through brushes and patches:\n- Untick **Translucent** in the **Filters** section of the Levels **View** tab.\n- Or choose View > Filters > Translucent, or Filter: Translucent in command search.\n- Or press Alt+4 in the NetRadiant Custom and NetRadiant profiles.\n\nBrushes with any see-through face, and translucent patches, leave every plan view and the camera. The check box shows a count. The map, selection and undo are unchanged, and the choice persists.\n\nOn a Quake III map, the View tab reads the open package's shader scripts on a worker, staged edits included, and matches qer_trans, qer_alphafunc, a stage's alphaFunc and fog shaders. Quake II maps use SURF_TRANS33/66 and Quake maps use `{` fence textures. A status line says how many shaders were read. **Reload Shaders**, or the camera's **Reload**, reads them again. `map filters <map> --package <path> --off translucent --objects` reports the same matches.",
+      "gui": [
+        "map.filter-translucent"
+      ],
+      "cli": [
+        "map filters"
+      ],
+      "limitation": "Shaders come only from the open package or folder, the same source the camera uses. pk3 archives inside an opened folder and other game search paths are not stacked. Without a package, Translucent finds nothing on a Quake III map. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
         "src/core/level_view_filters.cpp",
-        "src/core/material_model.h",
-        "src/core/material_library.cpp"
+        "src/core/level_view_filters.h",
+        "src/app/level_view_filter_actions.cpp",
+        "src/app/level_sidebar_panels.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/cli/level_view_filters.cpp",
+        "src/tests/level_filter_material_kinds_smoke_test.cpp",
+        "src/tests/level_filter_material_kinds_ui_smoke_test.cpp",
+        "docs/manual/levels.md",
+        "docs/manual/cli.md"
       ]
     },
     {
@@ -6353,23 +6443,24 @@
     {
       "id": "nrc:TextureReset/Cap",
       "status": "Partial",
-      "workflow": "On the **Surfaces** tab, **Natural** resets classic faces to zero shift and rotation at the format's scale (0.5 in Quake III, 1 otherwise). **Align to Face** lays Valve 220 and primitive faces in their own plane and gives patches Radiant's Cap Texture projection. Both act on the Selection or **Picked Faces** as one undo step; `map align-textures --natural U,V` or `--face-aligned U,V` does the same.",
+      "workflow": "**Radiant Texture Reset** resets the picked faces, or the **Surfaces** target, in one pass and one undo step. Classic faces go to zero shift and rotation at the format's default scale (0.5 in Quake III, 1 otherwise). Valve 220 and brush-primitive faces take their plane's own ComputeAxisBase basis (for brush primitives, a unit matrix over it). Patches get Radiant's Cap Texture projection. It is on the **Surfaces** tab (**Radiant Reset**), in the **Surfaces** menu, on the **Tools** tab, in the command palette, and on <kbd>Shift</kbd>+<kbd>N</kbd> in the NetRadiant Custom profile. `map align-textures --radiant-reset U,V` does the same.",
       "gui": [
-        "map.surface-natural",
-        "map.surface-face-aligned"
+        "map.surface-radiant-reset"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "No single reset picks the result per dialect: **Align to Face** refuses sloped classic faces, so a mixed selection needs two passes, and **Natural** gives patches arc-length texturing, not a cap. On faces **Align to Face** keeps the world-axis direction in the plane instead of NRC's ComputeAxisBase basis, so floors and ceilings come out a quarter turn apart. Neither command has a catalogue entry or a Shift+N key in the NetRadiant Custom profile. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Add a Reset Texture surface command that applies Natural to classic faces, a ComputeAxisBase in-plane basis to Valve 220 and primitive faces, and the planar cap to patches in one batch. Register it in the command catalogue, bind Shift+N in the NetRadiant Custom profile, add a `--reset` option to `map align-textures`, and test mixed-dialect selections.",
+      "limitation": "The default scale is the map format's, not a per-game configuration value. With faces picked, only those faces are reset; NetRadiant Custom outside component mode also resets every face of the selected brushes. Native physical-input and macOS/Linux acceptance remain open.",
       "evidence": [
         "src/core/level_surface.cpp",
         "src/core/level_texture_mapping.cpp",
-        "src/core/level_patch_tools.cpp",
-        "src/app/level_surface_tools.cpp",
         "src/app/level_surface_quick_actions.cpp",
-        "src/tests/level_patch_tools_smoke_test.cpp",
-        "src/tests/level_geometry_tools_ui_smoke_test.cpp"
+        "src/app/level_surface_tools.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/core/studio_semantics.cpp",
+        "src/cli/cli.cpp",
+        "src/tests/level_texture_reset_smoke_test.cpp",
+        "src/tests/level_texture_reset_ui_smoke_test.cpp"
       ]
     },
     {
@@ -7337,31 +7428,24 @@
     {
       "id": "nrc:plugin/contrib/bobtoolz/bobToolz-GTK.cpp/Reset Textures...",
       "status": "Partial",
-      "workflow": "**Find and Replace Textures\u2026** swaps one texture for another across the map or the selection. **Select Textured** picks faces using the current material; **Paste Surface** with **Keep materials and flags** copies one face's mapping onto them, and **Surface Alignment** shifts, scales, rotates, fits or resets to natural. CLI: `map replace-texture`, `map select-textured`, `map copy-surface`, `map paste-surface --mapping-only`, `map align-textures`.",
+      "workflow": "**Reset Textures\u2026** (in the **Surfaces** menu, on the **Tools** tab and in the command palette) opens a window. **Apply to** chooses the **Selection** (the **Surfaces** target or the picked faces) or the **Whole map**: every visible, unlocked surface in the open group, with view-filtered objects left alone. **Only faces using** limits the change to one texture, ignoring case and a leading textures/. **Rename to** gives a new texture. **Scale U**, **Scale V**, **Shift U**, **Shift V** and **Rotation** set absolute values for each ticked field, in each face's own format. Patches take only the new name. The reset runs on the surface worker as one undo step. `map align-textures` takes the same through --set-scale-u, --set-scale-v, --set-shift-u, --set-shift-v, --set-rotation, --rename, --only-texture and --whole-map.",
       "gui": [
-        "map.align-surfaces",
-        "map.select-textured",
-        "map.copySurface",
-        "map.pasteSurface",
-        "map.replace-texture"
+        "map.reset-textures"
       ],
       "cli": [
-        "map replace-texture",
-        "map select-textured",
-        "map copy-surface",
-        "map paste-surface",
         "map align-textures"
       ],
-      "limitation": "No single dialog sets typed absolute U/V scale, shift and rotation per ticked field for faces filtered by texture: pasting copies every mapping value of a source face that must be set up first, and Surface Alignment applies relative steps or a natural reset. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Add a Reset Textures mode to Surface Alignment and map align-textures: target the selection or whole map, filter by texture name, optionally rename, and set absolute U/V scale, U/V shift and rotation for each ticked field, patches included, as one undo step.",
+      "limitation": "The window has no live preview. Brush-primitive faces need the material's image size from the open package (or --texture-size on the CLI). Patches take only the name, as in bobToolz. A reset covers at most 262,144 faces and 65,536 patches. Native physical-input and macOS/Linux acceptance remain open.",
       "evidence": [
         "src/core/level_surface.cpp",
-        "src/core/level_surface_clipboard.cpp",
         "src/core/level_map.cpp",
-        "src/app/level_surface_dialog.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "src/tests/level_surface_clipboard_smoke_test.cpp",
-        "src/tests/level_surface_ui_smoke_test.cpp",
-        "src/tests/shell_interaction_smoke_test.cpp"
+        "src/app/level_texture_reset_dialog.cpp",
+        "src/app/level_surface_quick_actions.cpp",
+        "src/app/level_surface_worker.cpp",
+        "src/cli/cli.cpp",
+        "src/core/studio_semantics.cpp",
+        "src/tests/level_texture_reset_smoke_test.cpp",
+        "src/tests/level_texture_reset_ui_smoke_test.cpp"
       ]
     },
     {
@@ -8798,16 +8882,26 @@
     },
     {
       "id": "nrc:plugin/contrib/ufoaiplug/ufoai.cpp/ActorClip",
-      "status": "Planned",
-      "workflow": "Untick **Clip** in the **Filters** section of the **View** tab. It hides brushes whose every face carries the player or monster clip content bit, or a texture named *clip*, in the 2D views and camera without changing the map. The choice persists between sessions and is separate from **Show All Hidden**. Existing control: Levels > View tab > Filters > Clip check box (levelFilter-clip)",
-      "gui": [],
-      "cli": [],
-      "limitation": "Clip groups player, monster and named clip, so player clip cannot be hidden alone. Filter-kind matching has no dedicated automated test, and there is no palette entry or CLI report: the view-filter header names a `map filters` command that does not exist. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Split Clip into player, monster and weapon clip sub-filters, keyed by content bit and texture name. Add palette toggles for filter kinds, a CLI report of filter matches, and a core test for filter matching.",
+      "status": "Partial",
+      "workflow": "To hide player clip on its own:\n- Untick **Player Clip** in the **Filters** section of the Levels **View** tab.\n- Or choose View > Filters > Player Clip, or Filter: Player Clip in command search.\n\nBrushes whose every face carries content bit 0x10000 (CONTENTS_PLAYERCLIP, UFO:AI's actor clip), and clip-shaded patches, leave the views. So do faces with a Quake III shader declaring surfaceparm playerclip, or a clip, playerclip or fullclip texture. Monster and weapon clip stay shown.\n\n**Monster Clip** and **Weapon Clip** hide the other parts, and **Clip** still hides them all. Ticking a kind again shows it. `map filters --off player-clip --objects` reports the matches.",
+      "gui": [
+        "map.filter-player-clip",
+        "map.filter-monster-clip",
+        "map.filter-weapon-clip",
+        "map.filter-clip"
+      ],
+      "cli": [
+        "map filters"
+      ],
+      "limitation": "Every face must carry the bit, where NRC's release builds judge by the last face visited. There is no UFO:AI game profile that names the kind Actor Clip, and no default key, as upstream. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
         "src/core/level_view_filters.cpp",
+        "src/app/level_view_filter_actions.cpp",
         "src/app/level_sidebar_panels.cpp",
-        "src/tests/level_visibility_ui_smoke_test.cpp",
-        "docs/LEVEL_EDITOR.md",
+        "src/core/studio_semantics.cpp",
+        "src/cli/level_view_filters.cpp",
+        "src/tests/level_filter_material_kinds_smoke_test.cpp",
+        "src/tests/level_filter_material_kinds_ui_smoke_test.cpp",
         "docs/manual/levels.md"
       ]
     },
@@ -8998,22 +9092,23 @@
     {
       "id": "nrc:plugin/contrib/ufoaiplug/ufoai.cpp/NoDraw",
       "status": "Partial",
-      "workflow": "No filter kind reads the nodraw flag. Choose **Select by Texture\u2026** with the game's nodraw texture, or type `texture:nodraw` in the **Objects** filter and press Enter, then **Hide Selection**; **Show All Hidden** brings them back. `map find` lists the same objects. On Quake II maps the **Clip** and **Triggers** filters hide most nodraw brushes.",
+      "workflow": "To hide brushes that draw nothing in game:\n- Untick **Nodraw** in the **Filters** section of the Levels **View** tab.\n- Or choose View > Filters > Nodraw, or Filter: Nodraw in command search.\n\nA brush is hidden when every face carries the SURF_NODRAW (0x80) surface flag, a Quake III shader with surfaceparm nodraw from the open package, or a nodraw texture. Hidden brushes leave every plan view and the camera, with a count. The map is unchanged and the choice persists. Ticking it again shows them.\n\n`map filters <map> --off nodraw [--package path] --objects` reports the matches.",
       "gui": [
-        "map.hide-selection",
-        "map.show-all",
-        "map.select-by-texture"
+        "map.filter-nodraw"
       ],
       "cli": [
-        "map find"
+        "map filters"
       ],
-      "limitation": "Matching uses texture names on any face, not the 0x80 flag or a Quake III shader's surfaceparm nodraw, and hiding acts on a one-off selection rather than a toggle that re-reads the map. **Filters** has no Nodraw kind. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Add a Nodraw filter kind with counts, a palette toggle and a CLI report. It should match the 0x80 surface flag on Quake II faces, surfaceparm nodraw from the material library for Quake III, and nodraw texture names.",
+      "limitation": "Every face must be nodraw, where NRC's release builds judge by the last face visited. On Quake III maps, caulk, clip and trigger shaders that declare nodraw count too. There is no UFO:AI game profile. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
         "src/core/level_view_filters.cpp",
-        "src/core/level_map.cpp",
-        "src/app/application_shell.cpp",
-        "src/tests/level_map_smoke_test.cpp",
-        "src/tests/level_visibility_ui_smoke_test.cpp"
+        "src/app/level_view_filter_actions.cpp",
+        "src/app/level_sidebar_panels.cpp",
+        "src/core/studio_semantics.cpp",
+        "src/cli/level_view_filters.cpp",
+        "src/tests/level_filter_material_kinds_smoke_test.cpp",
+        "src/tests/level_filter_material_kinds_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
@@ -9503,43 +9598,47 @@
     {
       "id": "tb:Controls/Map view/Flip textures horizontally",
       "status": "Partial",
-      "workflow": "**Flip U** on the Levels **Surfaces** tab mirrors the Surfaces target's U axis (a scale of \u22121 about the middle) as one undo step, for brushes, picked faces and patches. **Surface Alignment\u2026** with a Scale of \u22121 on X does the same for chosen faces, and `map align-textures --flip u` matches it in the CLI.",
+      "workflow": "**Flip Textures Horizontally** (Surfaces menu > **Move Textures from Camera**, the Tools tab and the palette) mirrors, about the middle of each face, the texture axis that runs across the 3D camera's view. It acts on the faces picked in the camera, or on the **Surfaces** target when none is picked, for classic, Valve 220 and brush-primitive faces and patches, as one undo step through the shared surface queue, and needs no image size. The TrenchBroom profile binds <kbd>Ctrl</kbd>+<kbd>F</kbd> in the camera, taken only while faces are picked; otherwise Ctrl+F flips objects, or reaches Find with nothing selected. Brush-face flips are covered by core and UI tests. CLI: `map align-textures --camera-flip horizontal --camera-yaw Y --camera-pitch P`.",
       "gui": [
-        "map.align-surfaces",
-        "map.surface-flip-u"
+        "map.flip-textures-horizontally"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "Flip U acts on the texture's U axis, not the camera's horizontal, so on rotated textures or floors seen from another angle it can flip a different axis from TB. No profile binds Ctrl+F (the global Find key), and Flip U has no palette entry. Only a patch flip has an automated test; brush-face flips and the button have none. Native physical input and macOS/Linux acceptance remain open. Remaining work: Add camera-relative flip commands that choose U or V from the camera's right and up vectors, as TB's flipUV does. Register palette entries and bind Ctrl+F in the TrenchBroom profile's camera context. Add core and UI tests for brush-face flips.",
+      "limitation": "VibeStudio mirrors about each face's middle, as Flip U and Flip V do. TrenchBroom's mirror anchor and per-face axis choice live in its model library, which the pinned checkout lacks, so they were not compared, and the offset after a flip can differ. Only the TrenchBroom profile has a key. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
-        "src/app/level_surface_dialog.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
+        "src/app/level_camera_texture_actions.cpp",
+        "src/app/level_nudge_actions.cpp",
+        "src/core/level_editor_controls.cpp",
         "src/cli/cli.cpp",
-        "src/tests/level_patch_tools_smoke_test.cpp"
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
       "id": "tb:Controls/Map view/Flip textures vertically",
       "status": "Partial",
-      "workflow": "**Flip V** on the Levels **Surfaces** tab mirrors the Surfaces target's V axis (a scale of \u22121 about the middle) as one undo step, for brushes, picked faces and patches. **Surface Alignment\u2026** with a Scale of \u22121 on Y does the same for chosen faces, and `map align-textures --flip v` matches it.",
+      "workflow": "**Flip Textures Vertically** (Surfaces menu > **Move Textures from Camera**, the Tools tab and the palette) mirrors, about the middle of each face, the texture axis that runs up the 3D camera's view. It acts on the picked faces, or on the **Surfaces** target when none is picked, for classic, Valve 220 and brush-primitive faces and patches, as one undo step that needs no image size. The TrenchBroom profile binds <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd> in the camera, taken only while faces are picked; otherwise it flips objects vertically. Covered by core and UI tests, including the key. CLI: `map align-textures --camera-flip vertical --camera-yaw Y --camera-pitch P`.",
       "gui": [
-        "map.align-surfaces",
-        "map.surface-flip-v"
+        "map.flip-textures-vertically"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "Flip V uses the texture's V axis rather than the camera's vertical, so results can differ from TB on rotated textures or views. No profile binds Ctrl+Alt+F, and Flip V has no palette entry. Only a patch U flip is tested; V flips and the button have no automated test. Native physical input and macOS/Linux acceptance remain open. Remaining work: Add a camera-relative vertical flip that picks U or V from the camera's up vector. Register a palette entry, bind Ctrl+Alt+F in the TrenchBroom profile and add core and UI tests.",
+      "limitation": "VibeStudio mirrors about each face's middle, as Flip U and Flip V do. TrenchBroom's mirror anchor and per-face axis choice live in its model library, which the pinned checkout lacks, so they were not compared, and the offset after a flip can differ. Only the TrenchBroom profile has a key. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
-        "src/app/level_surface_dialog.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
+        "src/app/level_camera_texture_actions.cpp",
+        "src/app/level_nudge_actions.cpp",
+        "src/core/level_editor_controls.cpp",
         "src/cli/cli.cpp",
-        "src/tests/level_patch_tools_smoke_test.cpp"
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
@@ -9717,266 +9816,269 @@
     {
       "id": "tb:Controls/Map view/Move textures down",
       "status": "Partial",
-      "workflow": "**Levels \u2192 Surfaces** **V \u2212** (Shift Texture V \u2212) shifts the selection or picked faces by the **Shift step** (default 8 texels) through the shared surface edit queue, as an undoable edit. The GtkRadiant 1.4/1.5, Q3Radiant and QeRadiant profiles bind it to Shift+Down in the level views. CLI: `map align-textures --shift 0,-N`.",
+      "workflow": "**Move Textures Down** (Surfaces menu > **Move Textures from Camera**, the Tools tab and the palette) moves the textures of the faces picked in the 3D camera, or of the **Surfaces** target when none is picked, one grid size in texels down the camera's view, along each face's texture axis running most nearly up the view. This covers classic, Valve 220 and brush-primitive faces and patches. Each command or burst is one undo step through the shared surface queue. The TrenchBroom profile binds <kbd>Down</kbd> in the camera, taken only while faces are picked outside vertex, edge and face editing; otherwise Down still nudges objects. CLI: `map align-textures --camera-shift 0,-N --camera-yaw Y --camera-pitch P`.",
       "gui": [
-        "map.surfaceShiftDown"
+        "map.move-textures-down"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "TrenchBroom moves against the camera's projected up vector by the grid size. VibeStudio shifts along texture V by a session step, so on rotated or sideways faces the direction can differ. The TrenchBroom profile binds no key: its camera leaves the arrows unbound and its 2D views use them to nudge objects. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Add camera-relative texture moves that project the camera vectors onto each face's UV axes and step by the grid size. Bind plain Down in the TrenchBroom camera only while faces are selected; keep object nudging otherwise.",
+      "limitation": "TrenchBroom's per-face axis choice lives in its model library, which the pinned checkout lacks, so diagonal textures were not compared. A patch follows its texture direction at the middle control point. Moves are refused while a geometry tool is busy. Only the TrenchBroom profile has a key. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/core/level_editor_familiar_controls.cpp",
-        "src/tests/level_surface_quick_ui_smoke_test.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "docs/EDITOR_PROFILES.md"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/app/level_nudge_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/cli/cli.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
       "id": "tb:Controls/Map view/Move textures down (coarse)",
       "status": "Partial",
-      "workflow": "Uses the same route as the normal move. Set the **Shift step** to twice the grid size, then use **V \u2212** (Shift Texture V \u2212) on the selection or picked faces. CLI: `map align-textures --shift 0,-N` takes any amount.",
+      "workflow": "**Move Textures Down (Coarse)** moves the picked faces' textures, or the **Surfaces** target's, twice the grid size in texels down the 3D camera's view. It uses the same camera-relative axis choice, shared queue and single undo step. The TrenchBroom profile binds <kbd>Shift</kbd>+<kbd>Down</kbd> in the camera, taken only while faces are picked; otherwise Shift+Down keeps the eight-step nudge. CLI: `map align-textures --camera-shift 0,-2N --camera-yaw Y --camera-pitch P`.",
       "gui": [
-        "map.surfaceShiftDown"
+        "map.move-textures-down-coarse"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "There is no one-key coarse command. TrenchBroom's Shift+Down moves twice the grid size against the camera's up vector; VibeStudio needs the step edited and shifts along texture V. In the GtkRadiant, Q3Radiant and QeRadiant profiles Shift+Down is the ordinary step. TrenchBroom-profile bindings, native physical-input and macOS/Linux acceptance remain open. Remaining work: Once the camera-relative base move exists, add a coarse command (twice the grid size) and bind Shift+Down in the TrenchBroom camera while faces are selected.",
+      "limitation": "TrenchBroom's per-face axis choice lives in its model library, which the pinned checkout lacks, so diagonal textures were not compared. A patch follows its texture direction at the middle control point. Only the TrenchBroom profile has a key. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/core/level_editor_familiar_controls.cpp",
-        "src/tests/level_surface_quick_ui_smoke_test.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "docs/EDITOR_PROFILES.md"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/app/level_nudge_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
       "id": "tb:Controls/Map view/Move textures down (fine)",
       "status": "Partial",
-      "workflow": "Set the **Shift step** to 1, then use **V \u2212** (Shift Texture V \u2212), or run `map align-textures --shift 0,-1`. **Surface Alignment\u2026** also takes exact offsets. On Doom walls, **Nudge Texture Down at Crosshair** slides the sidedef offset by one unit.",
+      "workflow": "**Move Textures Down (Fine)** moves the picked faces' textures, or the **Surfaces** target's, one texel down the 3D camera's view, whatever the grid, as one undo step through the shared surface queue. The TrenchBroom profile binds <kbd>Ctrl</kbd>+<kbd>Down</kbd> in the camera, taken only while faces are picked; otherwise Ctrl+Down still duplicates and moves the selection. Also in Surfaces > **Move Textures from Camera**, the Tools tab and the palette. CLI: `map align-textures --camera-shift 0,-1 --camera-yaw Y --camera-pitch P`.",
       "gui": [
-        "map.surfaceShiftDown",
-        "map.align-surfaces",
-        "map.nudge-camera-texture-down"
+        "map.move-textures-down-fine"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "There is no one-key fine command for brush faces. TrenchBroom's Ctrl+Down moves one unit against the camera's up vector; VibeStudio shifts along texture V by the session step. The Doom crosshair nudge covers only wall sidedefs and has no palette entry. TrenchBroom-profile bindings, native physical-input and macOS/Linux acceptance remain open. Remaining work: Once the camera-relative base move exists, add a fine command (one unit) and bind Ctrl+Down in the TrenchBroom camera while faces are selected.",
+      "limitation": "TrenchBroom's per-face axis choice lives in its model library, which the pinned checkout lacks, so diagonal textures were not compared. A patch follows its texture direction at the middle control point. Doom walls keep the separate crosshair nudges. Only the TrenchBroom profile has a key. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/app/level_surface_dialog.cpp",
-        "src/app/level_editing_actions.cpp",
-        "src/tests/level_surface_quick_ui_smoke_test.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "src/tests/doom_preview_ui_smoke_test.cpp"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/app/level_nudge_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
       "id": "tb:Controls/Map view/Move textures left",
       "status": "Partial",
-      "workflow": "**Levels \u2192 Surfaces** **U \u2212** (Shift Texture U \u2212) shifts the selection or picked faces by the **Shift step** (default 8 texels) through the shared surface edit queue, as an undoable edit. The GtkRadiant 1.4/1.5, Q3Radiant and QeRadiant profiles bind it to Shift+Left in the level views. CLI: `map align-textures --shift -N,0`.",
+      "workflow": "**Move Textures Left** (Surfaces menu > **Move Textures from Camera**, the Tools tab and the palette) moves the textures of the faces picked in the 3D camera, or of the **Surfaces** target when none is picked, one grid size in texels left in the camera's view, along each face's texture axis running most nearly across it. Turned and mirrored textures therefore move as seen, on classic, Valve 220 and brush-primitive faces and patches. Each command or burst is one undo step through the shared surface queue. The TrenchBroom profile binds <kbd>Left</kbd> in the camera, taken only while faces are picked outside vertex, edge and face editing; otherwise Left still nudges objects. CLI: `map align-textures --camera-shift -N,0 --camera-yaw Y --camera-pitch P`.",
       "gui": [
-        "map.surfaceShiftLeft"
+        "map.move-textures-left"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "TrenchBroom moves against the camera's projected right vector by the grid size. VibeStudio shifts along texture U by a session step, so on rotated or mirrored faces the direction can differ. The TrenchBroom profile binds no key: its camera leaves the arrows unbound and its 2D views use them to nudge objects. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Add camera-relative texture moves that project the camera vectors onto each face's UV axes and step by the grid size. Bind plain Left in the TrenchBroom camera only while faces are selected; keep object nudging otherwise.",
+      "limitation": "TrenchBroom's per-face axis choice lives in its model library, which the pinned checkout lacks, so diagonal textures were not compared. A patch follows its texture direction at the middle control point. Moves are refused while a geometry tool is busy. Only the TrenchBroom profile has a key. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/core/level_editor_familiar_controls.cpp",
-        "src/tests/level_surface_quick_ui_smoke_test.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "docs/EDITOR_PROFILES.md"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/app/level_nudge_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/cli/cli.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
       "id": "tb:Controls/Map view/Move textures left (coarse)",
       "status": "Partial",
-      "workflow": "Uses the same route as the normal move. Set the **Shift step** to twice the grid size, then use **U \u2212** (Shift Texture U \u2212) on the selection or picked faces. CLI: `map align-textures --shift -N,0` takes any amount.",
+      "workflow": "**Move Textures Left (Coarse)** moves the picked faces' textures, or the **Surfaces** target's, twice the grid size in texels left in the 3D camera's view, through the same camera-relative axis choice, shared queue and single undo step. The TrenchBroom profile binds <kbd>Shift</kbd>+<kbd>Left</kbd> in the camera, taken only while faces are picked; otherwise Shift+Left keeps the eight-step nudge. CLI: `map align-textures --camera-shift -2N,0 --camera-yaw Y --camera-pitch P`.",
       "gui": [
-        "map.surfaceShiftLeft"
+        "map.move-textures-left-coarse"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "There is no one-key coarse command. TrenchBroom's Shift+Left moves twice the grid size against the camera's right vector; VibeStudio needs the step edited and shifts along texture U. In the GtkRadiant, Q3Radiant and QeRadiant profiles Shift+Left is the ordinary step. TrenchBroom-profile bindings, native physical-input and macOS/Linux acceptance remain open. Remaining work: Once the camera-relative base move exists, add a coarse command (twice the grid size) and bind Shift+Left in the TrenchBroom camera while faces are selected.",
+      "limitation": "TrenchBroom's per-face axis choice lives in its model library, which the pinned checkout lacks, so diagonal textures were not compared. A patch follows its texture direction at the middle control point. Only the TrenchBroom profile has a key. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/core/level_editor_familiar_controls.cpp",
-        "src/tests/level_surface_quick_ui_smoke_test.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "docs/EDITOR_PROFILES.md"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/app/level_nudge_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
       "id": "tb:Controls/Map view/Move textures left (fine)",
       "status": "Partial",
-      "workflow": "Set the **Shift step** to 1, then use **U \u2212** (Shift Texture U \u2212), or run `map align-textures --shift -1,0`. **Surface Alignment\u2026** also takes exact offsets. On Doom walls, **Nudge Texture Left at Crosshair** slides the sidedef offset by one unit.",
+      "workflow": "**Move Textures Left (Fine)** moves the picked faces' textures, or the **Surfaces** target's, one texel left in the 3D camera's view, whatever the grid, as one undo step through the shared surface queue. The TrenchBroom profile binds <kbd>Ctrl</kbd>+<kbd>Left</kbd> in the camera, taken only while faces are picked; otherwise Ctrl+Left still duplicates and moves the selection. Also in Surfaces > **Move Textures from Camera**, the Tools tab and the palette. CLI: `map align-textures --camera-shift -1,0 --camera-yaw Y --camera-pitch P`.",
       "gui": [
-        "map.surfaceShiftLeft",
-        "map.align-surfaces",
-        "map.nudge-camera-texture-left"
+        "map.move-textures-left-fine"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "There is no one-key fine command for brush faces. TrenchBroom's Ctrl+Left moves one unit against the camera's right vector; VibeStudio shifts along texture U by the session step. The Doom crosshair nudge covers only wall sidedefs and has no palette entry. TrenchBroom-profile bindings, native physical-input and macOS/Linux acceptance remain open. Remaining work: Once the camera-relative base move exists, add a fine command (one unit) and bind Ctrl+Left in the TrenchBroom camera while faces are selected.",
+      "limitation": "TrenchBroom's per-face axis choice lives in its model library, which the pinned checkout lacks, so diagonal textures were not compared. A patch follows its texture direction at the middle control point. Doom walls keep the separate crosshair nudges. Only the TrenchBroom profile has a key. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/app/level_surface_dialog.cpp",
-        "src/app/level_editing_actions.cpp",
-        "src/tests/level_surface_quick_ui_smoke_test.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "src/tests/doom_preview_ui_smoke_test.cpp"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/app/level_nudge_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
       "id": "tb:Controls/Map view/Move textures right",
       "status": "Partial",
-      "workflow": "**Levels \u2192 Surfaces** **U +** (Shift Texture U +) shifts the selection or picked faces by the **Shift step** (default 8 texels) through the shared surface edit queue, as an undoable edit. The GtkRadiant 1.4/1.5, Q3Radiant and QeRadiant profiles bind it to Shift+Right in the level views. CLI: `map align-textures --shift N,0`.",
+      "workflow": "**Move Textures Right** (Surfaces menu > **Move Textures from Camera**, the Tools tab and the palette) moves the textures of the faces picked in the 3D camera, or of the **Surfaces** target when none is picked, one grid size in texels right in the camera's view, along each face's texture axis running most nearly across it. This covers classic, Valve 220 and brush-primitive faces and patches. Each command or burst is one undo step through the shared surface queue, which respects scene locks, hidden objects and the open group. The TrenchBroom profile binds <kbd>Right</kbd> in the camera, taken only while faces are picked outside vertex, edge and face editing; otherwise Right still nudges objects. CLI: `map align-textures --camera-shift N,0 --camera-yaw Y --camera-pitch P`.",
       "gui": [
-        "map.surfaceShiftRight"
+        "map.move-textures-right"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "TrenchBroom moves along the camera's projected right vector by the grid size. VibeStudio shifts along texture U by a session step, so on rotated or mirrored faces the direction can differ. The TrenchBroom profile binds no key: its camera leaves the arrows unbound and its 2D views use them to nudge objects. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Add camera-relative texture moves that project the camera vectors onto each face's UV axes and step by the grid size. Bind plain Right in the TrenchBroom camera only while faces are selected; keep object nudging otherwise.",
+      "limitation": "TrenchBroom's per-face axis choice lives in its model library, which the pinned checkout lacks, so diagonal textures were not compared. A patch follows its texture direction at the middle control point. Moves are refused while a geometry tool is busy. Only the TrenchBroom profile has a key. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/core/level_editor_familiar_controls.cpp",
-        "src/tests/level_surface_quick_ui_smoke_test.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "src/tests/level_component_surfaces_ui_smoke_test.cpp",
-        "docs/EDITOR_PROFILES.md"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/app/level_nudge_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/cli/cli.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
       "id": "tb:Controls/Map view/Move textures right (coarse)",
       "status": "Partial",
-      "workflow": "Uses the same route as the normal move. Set the **Shift step** to twice the grid size, then use **U +** (Shift Texture U +) on the selection or picked faces. CLI: `map align-textures --shift N,0` takes any amount.",
+      "workflow": "**Move Textures Right (Coarse)** moves the picked faces' textures, or the **Surfaces** target's, twice the grid size in texels right in the 3D camera's view, through the same camera-relative axis choice, shared queue and single undo step. The TrenchBroom profile binds <kbd>Shift</kbd>+<kbd>Right</kbd> in the camera, taken only while faces are picked; otherwise Shift+Right keeps the eight-step nudge. CLI: `map align-textures --camera-shift 2N,0 --camera-yaw Y --camera-pitch P`.",
       "gui": [
-        "map.surfaceShiftRight"
+        "map.move-textures-right-coarse"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "There is no one-key coarse command. TrenchBroom's Shift+Right moves twice the grid size along the camera's right vector; VibeStudio needs the step edited and shifts along texture U. In the GtkRadiant, Q3Radiant and QeRadiant profiles Shift+Right is the ordinary step. TrenchBroom-profile bindings, native physical-input and macOS/Linux acceptance remain open. Remaining work: Once the camera-relative base move exists, add a coarse command (twice the grid size) and bind Shift+Right in the TrenchBroom camera while faces are selected.",
+      "limitation": "TrenchBroom's per-face axis choice lives in its model library, which the pinned checkout lacks, so diagonal textures were not compared. A patch follows its texture direction at the middle control point. Only the TrenchBroom profile has a key. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/core/level_editor_familiar_controls.cpp",
-        "src/tests/level_surface_quick_ui_smoke_test.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "docs/EDITOR_PROFILES.md"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/app/level_nudge_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
       "id": "tb:Controls/Map view/Move textures right (fine)",
       "status": "Partial",
-      "workflow": "Set the **Shift step** to 1, then use **U +** (Shift Texture U +), or run `map align-textures --shift 1,0`. **Surface Alignment\u2026** also takes exact offsets. On Doom walls, **Nudge Texture Right at Crosshair** slides the sidedef offset by one unit.",
+      "workflow": "**Move Textures Right (Fine)** moves the picked faces' textures, or the **Surfaces** target's, one texel right in the 3D camera's view, whatever the grid, as one undo step through the shared surface queue. The TrenchBroom profile binds <kbd>Ctrl</kbd>+<kbd>Right</kbd> in the camera, taken only while faces are picked; otherwise Ctrl+Right still duplicates and moves the selection. Also in Surfaces > **Move Textures from Camera**, the Tools tab and the palette. CLI: `map align-textures --camera-shift 1,0 --camera-yaw Y --camera-pitch P`.",
       "gui": [
-        "map.surfaceShiftRight",
-        "map.align-surfaces",
-        "map.nudge-camera-texture-right"
+        "map.move-textures-right-fine"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "There is no one-key fine command for brush faces. TrenchBroom's Ctrl+Right moves one unit along the camera's right vector; VibeStudio shifts along texture U by the session step. The Doom crosshair nudge covers only wall sidedefs and has no palette entry. TrenchBroom-profile bindings, native physical-input and macOS/Linux acceptance remain open. Remaining work: Once the camera-relative base move exists, add a fine command (one unit) and bind Ctrl+Right in the TrenchBroom camera while faces are selected.",
+      "limitation": "TrenchBroom's per-face axis choice lives in its model library, which the pinned checkout lacks, so diagonal textures were not compared. A patch follows its texture direction at the middle control point. Doom walls keep the separate crosshair nudges. Only the TrenchBroom profile has a key. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/app/level_surface_dialog.cpp",
-        "src/app/level_editing_actions.cpp",
-        "src/tests/level_surface_quick_ui_smoke_test.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "src/tests/doom_preview_ui_smoke_test.cpp"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/app/level_nudge_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
       "id": "tb:Controls/Map view/Move textures up",
       "status": "Partial",
-      "workflow": "**Levels \u2192 Surfaces** **V +** (Shift Texture V +) shifts the selection or picked faces by the **Shift step** (default 8 texels) through the shared surface edit queue, as an undoable edit. The GtkRadiant 1.4/1.5, Q3Radiant and QeRadiant profiles bind it to Shift+Up in the level views. CLI: `map align-textures --shift 0,N`.",
+      "workflow": "**Move Textures Up** (Surfaces menu > **Move Textures from Camera**, the Levels **Tools** tab and the palette) moves the textures of the faces picked in the 3D camera, or of the **Surfaces** target when none is picked, one grid size in texels up the camera's view. On every classic, Valve 220 or brush-primitive face, and on patches, the texture axis running most nearly up the view is the one moved, so turned and mirrored textures move as seen. Each command or quick burst is one undo step through the shared surface queue, which is cancellable and respects scene locks, hidden objects and the open group. The TrenchBroom profile binds <kbd>Up</kbd> in the camera, which takes the key only while faces are picked outside vertex, edge and face editing; otherwise Up still nudges objects. CLI: `map align-textures --camera-shift 0,N --camera-yaw Y --camera-pitch P`.",
       "gui": [
-        "map.surfaceShiftUp"
+        "map.move-textures-up"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "TrenchBroom moves along the camera's projected up vector by the grid size. VibeStudio shifts along texture V by a session step, so on rotated or sideways faces the direction can differ. The TrenchBroom profile binds no key: its camera leaves the arrows unbound and its 2D views use them to nudge objects. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Add camera-relative texture moves that project the camera's up and right vectors onto each face's UV axes (classic, Valve 220 and brush primitives) and step by the current grid size. Bind plain Up in the TrenchBroom camera only while faces are selected; keep object nudging otherwise.",
+      "limitation": "TrenchBroom's per-face axis choice lives in its model library, which the pinned checkout lacks, so it was not compared; a face whose texture runs diagonally to the view may move along the other axis. A patch follows its texture direction at the middle control point. Moves are refused while a geometry tool is busy. Only the TrenchBroom profile has a key. Camera keys are tested with offscreen synthetic events; native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/core/level_editor_familiar_controls.cpp",
-        "src/tests/level_surface_quick_ui_smoke_test.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "docs/EDITOR_PROFILES.md"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/app/level_nudge_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/cli/cli.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
       "id": "tb:Controls/Map view/Move textures up (coarse)",
       "status": "Partial",
-      "workflow": "Uses the same route as the normal move. Set the **Shift step** to twice the grid size, then use **V +** (Shift Texture V +) on the selection or picked faces. CLI: `map align-textures --shift 0,N` takes any amount.",
+      "workflow": "**Move Textures Up (Coarse)** moves the picked faces' textures, or the **Surfaces** target's, twice the grid size in texels up the 3D camera's view. It uses the same camera-relative axis choice, shared surface queue and single undo step as **Move Textures Up**. The TrenchBroom profile binds <kbd>Shift</kbd>+<kbd>Up</kbd> in the camera, taken only while faces are picked; otherwise Shift+Up keeps the eight-step nudge. Also in Surfaces > **Move Textures from Camera**, the Tools tab and the palette. CLI: `map align-textures --camera-shift 0,2N --camera-yaw Y --camera-pitch P`.",
       "gui": [
-        "map.surfaceShiftUp"
+        "map.move-textures-up-coarse"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "There is no one-key coarse command. TrenchBroom's Shift+Up moves twice the grid size along the camera's up vector; VibeStudio needs the step edited and shifts along texture V. In the GtkRadiant, Q3Radiant and QeRadiant profiles Shift+Up is the ordinary step. TrenchBroom-profile bindings, native physical-input and macOS/Linux acceptance remain open. Remaining work: Once the camera-relative base move exists, add a coarse command (twice the grid size) and bind Shift+Up in the TrenchBroom camera while faces are selected.",
+      "limitation": "TrenchBroom's per-face axis choice lives in its model library, which the pinned checkout lacks, so diagonal textures were not compared. A patch follows its texture direction at the middle control point. Only the TrenchBroom profile has a key. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/core/level_editor_familiar_controls.cpp",
-        "src/tests/level_surface_quick_ui_smoke_test.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "docs/EDITOR_PROFILES.md"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/app/level_nudge_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
       "id": "tb:Controls/Map view/Move textures up (fine)",
       "status": "Partial",
-      "workflow": "Set the **Shift step** to 1, then use **V +** (Shift Texture V +), or run `map align-textures --shift 0,1`. **Surface Alignment\u2026** also takes exact offsets. On Doom walls, **Nudge Texture Up at Crosshair** slides the sidedef offset by one unit.",
+      "workflow": "**Move Textures Up (Fine)** moves the picked faces' textures, or the **Surfaces** target's, one texel up the 3D camera's view, whatever the grid. It uses the same camera-relative axis choice, shared surface queue and single undo step as **Move Textures Up**. The TrenchBroom profile binds <kbd>Ctrl</kbd>+<kbd>Up</kbd> in the camera, taken only while faces are picked; otherwise Ctrl+Up still duplicates and moves the selection. Also in Surfaces > **Move Textures from Camera**, the Tools tab and the palette. CLI: `map align-textures --camera-shift 0,1 --camera-yaw Y --camera-pitch P`.",
       "gui": [
-        "map.surfaceShiftUp",
-        "map.align-surfaces",
-        "map.nudge-camera-texture-up"
+        "map.move-textures-up-fine"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "There is no one-key fine command for brush faces. TrenchBroom's Ctrl+Up moves one unit along the camera's up vector; VibeStudio shifts along texture V by the session step. The Doom crosshair nudge covers only wall sidedefs and has no palette entry. TrenchBroom-profile bindings, native physical-input and macOS/Linux acceptance remain open. Remaining work: Once the camera-relative base move exists, add a fine command (one unit) and bind Ctrl+Up in the TrenchBroom camera while faces are selected.",
+      "limitation": "TrenchBroom's per-face axis choice lives in its model library, which the pinned checkout lacks, so diagonal textures were not compared. A patch follows its texture direction at the middle control point. Only the TrenchBroom profile has a key. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/app/level_surface_dialog.cpp",
-        "src/app/level_editing_actions.cpp",
-        "src/tests/level_surface_quick_ui_smoke_test.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "src/tests/doom_preview_ui_smoke_test.cpp"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/app/level_nudge_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
@@ -10047,42 +10149,46 @@
     {
       "id": "tb:Controls/Map view/Reset texture alignment",
       "status": "Partial",
-      "workflow": "**Natural** on the Surfaces tab resets the target to zero shift and rotation at the format's natural scale (0.5 in Quake III, 1 otherwise), square to the world. **Align to Face** resets along the face's own plane. Both are one undo step, handle patches too, and match `map align-textures --natural` or `--face-aligned`.",
+      "workflow": "**Reset Texture Alignment** resets the picked faces, or the **Surfaces** target, to zero offsets and rotation at the default scale, keeping each face's projection kind, as one undo step. Classic faces go to their natural numbers. Valve 220 and brush-primitive faces are laid in their own plane, as **Align to Face** lays them. Patches get their natural spread. It is on the **Surfaces** tab (**Reset**), in the **Surfaces** menu, on the **Tools** tab, in the command palette, and on <kbd>Shift</kbd>+<kbd>R</kbd> in the TrenchBroom profile. **Natural Texture Mapping** and **Align Texture to Face** also have palette entries. `map align-textures --reset-alignment U,V` does the same.",
       "gui": [
+        "map.surface-reset",
         "map.surface-natural",
         "map.surface-face-aligned"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "No single reset keeps each face's current projection kind and uses game-configuration defaults; the user picks Natural or Align to Face. Neither command has a palette entry or TB's Shift+R binding. Native physical input and macOS/Linux acceptance remain open. Remaining work: Add a map.surfaceReset command that resets offsets, rotation and scale to the game's defaults while keeping each face's projection kind. Register palette entries for it, Natural and Align to Face, and bind Shift+R in the TrenchBroom profile.",
+      "limitation": "The default scale is the map format's (0.5 Quake III, 1 otherwise), not the game configuration's face-attribute defaults. TrenchBroom's mdl::resetAll is not in the pinned checkout, so its per-format axes were not compared. Patches, which TrenchBroom's reset leaves alone, get their natural spread. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
         "src/core/level_surface.cpp",
+        "src/core/level_texture_mapping.cpp",
+        "src/app/level_surface_quick_actions.cpp",
+        "src/app/level_surface_tools.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/core/studio_semantics.cpp",
         "src/cli/cli.cpp",
-        "src/tests/level_geometry_tools_ui_smoke_test.cpp",
-        "src/tests/level_patch_tools_smoke_test.cpp"
+        "src/tests/level_texture_reset_smoke_test.cpp",
+        "src/tests/level_texture_reset_ui_smoke_test.cpp"
       ]
     },
     {
       "id": "tb:Controls/Map view/Reset texture alignment to world aligned",
       "status": "Partial",
-      "workflow": "**Natural** on the Levels **Surfaces** tab resets the target to zero shift and rotation at the format's natural scale, projected square to the world, as Radiant's Natural does, in classic, Valve 220 and brush-primitive faces. It also gives patches natural texturing, in one undo step. `map align-textures --natural U,V` matches it.",
+      "workflow": "**Natural Texture Mapping** on the Levels **Surfaces** tab resets the target to zero shift and rotation at the format's natural scale, projected square to the world as Radiant's Natural does, on classic, Valve 220 and brush-primitive faces. It gives patches natural texturing, in one undo step. The TrenchBroom profile binds it to <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd>, beside **Reset Texture Alignment** on <kbd>Shift</kbd>+<kbd>R</kbd>. `map align-textures --natural U,V` does the same.",
       "gui": [
         "map.surface-natural"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "Natural uses the format's natural scale rather than a per-game configuration default. The TrenchBroom profile does not bind Shift+Alt+R. Native physical input and macOS/Linux acceptance remain open.",
+      "limitation": "Natural uses the format's natural scale rather than a per-game configuration default. It acts on the Surfaces target rather than first on picked faces. Native physical input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
+        "src/core/level_editor_controls.cpp",
         "src/core/level_surface.cpp",
-        "src/cli/cli.cpp",
-        "src/tests/level_geometry_tools_ui_smoke_test.cpp",
-        "src/tests/level_patch_tools_smoke_test.cpp",
+        "src/app/level_surface_tools.cpp",
         "src/core/studio_semantics.cpp",
-        "src/tests/level_palette_coverage_ui_smoke_test.cpp"
+        "src/tests/level_texture_reset_ui_smoke_test.cpp",
+        "src/tests/level_geometry_tools_ui_smoke_test.cpp"
       ]
     },
     {
@@ -10159,126 +10265,124 @@
     {
       "id": "tb:Controls/Map view/Rotate textures clockwise",
       "status": "Partial",
-      "workflow": "**Levels \u2192 Surfaces** **Rotate +** (Rotate Texture +) turns the targeted faces and patches by the **Rotation step** about each face centre, as an undoable edit. The default step of 15\u00b0 matches TrenchBroom's grid angle. The GtkRadiant 1.4/1.5, Q3Radiant and QeRadiant profiles bind Shift+Page Down. CLI: `map align-textures --degrees N`.",
+      "workflow": "**Rotate Textures Clockwise** (Levels **Surfaces** menu > **Rotate Textures**, the **Tools** tab, command palette) turns the textures of the picked faces, or of the **Surfaces** target, 15\u00b0 clockwise as seen from each face's front, about the texture origin, as one undo step. It works on classic, Valve 220 and brush-primitive faces and on patches, whether the texture reads the right way round or mirrored. The TrenchBroom profile binds Page Up in the camera while faces are picked. CLI: `map align-textures --clockwise 15`.",
       "gui": [
-        "map.surfaceRotateRight"
+        "map.rotate-textures-clockwise"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "TrenchBroom binds Page Up in the camera; the TrenchBroom profile has no binding, and VibeStudio's step is an editable session value rather than a fixed angle. Rotate + uses the same positive sign as TrenchBroom's and Radiant's clockwise commands, but visual clockwise parity across classic, Valve 220 and brush-primitive faces is unverified. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Add a fixed 15-degree clockwise texture rotation command that does not depend on the panel step, and bind Page Up to it in the TrenchBroom camera while faces are selected. Add a test that confirms the visual clockwise direction for each face format.",
+      "limitation": "TrenchBroom's mdl::rotateUV is not in the pinned checkout, so its own on-screen direction per face format was not compared; VibeStudio guarantees clockwise as seen from each face's front. In vertex, edge and face editing Page Up stays with the component nudge. Patches need the material's image size. Native physical-input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/core/level_editor_familiar_controls.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "src/tests/level_surface_quick_ui_smoke_test.cpp",
+        "src/app/level_camera_texture_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/cli/cli.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp",
         "docs/EDITOR_PROFILES.md"
       ]
     },
     {
       "id": "tb:Controls/Map view/Rotate textures clockwise (coarse)",
       "status": "Partial",
-      "workflow": "Set the **Rotation step** to 90\u00b0, then use **Rotate +** (Rotate Texture +) on the selection or picked faces. CLI: `map align-textures --degrees 90`.",
+      "workflow": "**Rotate Textures Clockwise (Coarse)** turns the picked faces' textures, or the **Surfaces** target's, a quarter turn (90\u00b0) clockwise as seen from each face's front, about the texture origin, as one undo step. The TrenchBroom profile binds Shift+Page Up in the camera while faces are picked; other profiles keep their own Shift+Page Up meaning. CLI: `map align-textures --clockwise 90`.",
       "gui": [
-        "map.surfaceRotateRight"
+        "map.rotate-textures-clockwise-coarse"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "There is no one-key 90-degree command; the step has to be edited. In the GtkRadiant, Q3Radiant and QeRadiant profiles Shift+Page Up runs Rotate \u2212 by the ordinary step, which conflicts with the TrenchBroom meaning. Visual direction parity per face format, TrenchBroom-profile bindings, native physical-input and macOS/Linux acceptance remain open. Remaining work: Add a fixed 90-degree clockwise texture rotation command and bind Shift+Page Up to it in the TrenchBroom profile only, while faces are selected.",
+      "limitation": "TrenchBroom's per-format direction in mdl::rotateUV was not compared, since the pinned checkout lacks its model library. With no face picked, Shift+Page Up nudges eight grid steps along the depth axis instead. Patches need the image size. Native physical-input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/core/level_editor_familiar_controls.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "src/tests/level_surface_quick_ui_smoke_test.cpp"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp"
       ]
     },
     {
       "id": "tb:Controls/Map view/Rotate textures clockwise (fine)",
       "status": "Partial",
-      "workflow": "Set the **Rotation step** to 1\u00b0, then use **Rotate +** (Rotate Texture +) on the selection or picked faces. CLI: `map align-textures --degrees 1`. **Surface Alignment\u2026** also accepts exact angles.",
+      "workflow": "**Rotate Textures Clockwise (Fine)** turns the picked faces' textures, or the **Surfaces** target's, 1\u00b0 clockwise as seen from each face's front, about the texture origin, as one undo step. The TrenchBroom profile binds Ctrl+Page Up in the camera while faces are picked. CLI: `map align-textures --clockwise 1`.",
       "gui": [
-        "map.surfaceRotateRight",
-        "map.align-surfaces"
+        "map.rotate-textures-clockwise-fine"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "There is no one-key one-degree command; the step has to be edited. Visual clockwise parity per face format, a TrenchBroom-profile Ctrl+Page Up binding, native physical-input and macOS/Linux acceptance remain open. Remaining work: Add a fixed one-degree clockwise texture rotation command and bind Ctrl+Page Up to it in the TrenchBroom camera while faces are selected.",
+      "limitation": "TrenchBroom's per-format direction in mdl::rotateUV was not compared. With no face picked, Ctrl+Page Up copies the selection along the depth axis, as TrenchBroom's object context does. Patches need the image size. Native physical-input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/app/level_surface_dialog.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "src/tests/level_surface_quick_ui_smoke_test.cpp"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp"
       ]
     },
     {
       "id": "tb:Controls/Map view/Rotate textures counter-clockwise",
       "status": "Partial",
-      "workflow": "**Rotate \u2212** on the Levels **Surfaces** tab (**Rotate Texture \u2212** in command search) turns the Surfaces target by the negative **Rotation step**, 15\u00b0 by default, as one undo step. It covers selected brushes, picked faces and patches. The GtkRadiant 1.4/1.5 and Q3Radiant profiles bind it to Radiant's anticlockwise Shift+PgUp. **Surface Alignment\u2026** and `map align-textures --degrees -N` take exact angles.",
+      "workflow": "**Rotate Textures Counter-clockwise** turns the picked faces' textures, or the **Surfaces** target's, 15\u00b0 counter-clockwise as seen from each face's front, about the texture origin (no re-centring), as one undo step, on every face format and on patches, the right way round or mirrored. The TrenchBroom profile binds Page Down in the camera while faces are picked. CLI: `map align-textures --clockwise -15`.",
       "gui": [
-        "map.surfaceRotateLeft",
-        "map.align-surfaces"
+        "map.rotate-textures-counterclockwise"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "The TrenchBroom profile binds no Page Down key, and the step comes from the Surfaces panel, not a grid rotation angle. VibeStudio pivots each face about its centre, so the resulting offsets can differ from TB's. Only the core and CLI rotate paths are tested; the button and keys have no UI test. Native physical input and macOS/Linux acceptance remain open. Remaining work: Bind Page Down to map.surfaceRotateLeft in the TrenchBroom profile, scoped to the camera. Optionally take the default step from a level rotation-snap angle, and offer a TB-style rotation that does not re-centre the face. Add a UI test for the rotate buttons and keys.",
+      "limitation": "TrenchBroom's per-format direction in mdl::rotateUV was not compared. In vertex, edge and face editing Page Down stays with the component nudge. Patches need the image size. Native physical-input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_quick_actions.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/core/level_editor_familiar_controls.cpp",
+        "src/app/level_camera_texture_actions.cpp",
+        "src/core/level_editor_controls.cpp",
         "src/cli/cli.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "src/tests/level_patch_tools_smoke_test.cpp"
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp"
       ]
     },
     {
       "id": "tb:Controls/Map view/Rotate textures counter-clockwise (coarse)",
       "status": "Partial",
-      "workflow": "Set the Surfaces tab's **Rotation step** to 90\u00b0 and press **Rotate \u2212**. You can also enter \u221290 in **Surface Alignment\u2026** (Rotate) or run `map align-textures --degrees -90`. Each is one undo step on the Surfaces target.",
+      "workflow": "**Rotate Textures Counter-clockwise (Coarse)** turns the picked faces' textures, or the **Surfaces** target's, 90\u00b0 counter-clockwise as seen from each face's front, about the texture origin, as one undo step. The TrenchBroom profile binds Shift+Page Down in the camera while faces are picked. CLI: `map align-textures --clockwise -90`.",
       "gui": [
-        "map.surfaceRotateLeft",
-        "map.align-surfaces"
+        "map.rotate-textures-counterclockwise-coarse"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "No coarse command exists, so the user changes the shared step or types an angle. No profile binds Shift+Page Down to a coarse turn; in the Radiant profiles it already turns the other way by the normal step. Rotation is centre-anchored, unlike TB. Native physical input and macOS/Linux acceptance remain open. Remaining work: Add fixed 90\u00b0 coarse rotate commands (map.surfaceRotateLeftCoarse and its clockwise pair) with palette entries. Bind Shift+Page Down to them in the TrenchBroom profile and cover them in the quick-surface UI test.",
+      "limitation": "TrenchBroom's per-format direction in mdl::rotateUV was not compared. With no face picked, Shift+Page Down nudges eight grid steps along the depth axis; the Radiant profiles keep Shift+Page Down for Rotate Texture by the step. Patches need the image size. Native physical-input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_dialog.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/cli/cli.cpp",
-        "src/tests/level_surface_smoke_test.cpp",
-        "src/tests/level_surface_ui_smoke_test.cpp"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp"
       ]
     },
     {
       "id": "tb:Controls/Map view/Rotate textures counter-clockwise (fine)",
       "status": "Partial",
-      "workflow": "Set the Surfaces tab's **Rotation step** to 1\u00b0 (it accepts down to 0.001\u00b0) and press **Rotate \u2212**. You can also enter \u22121 in **Surface Alignment\u2026** or run `map align-textures --degrees -1`. Each is one undo step on the Surfaces target.",
+      "workflow": "**Rotate Textures Counter-clockwise (Fine)** turns the picked faces' textures, or the **Surfaces** target's, 1\u00b0 counter-clockwise as seen from each face's front, about the texture origin, as one undo step. The TrenchBroom profile binds Ctrl+Page Down in the camera while faces are picked. CLI: `map align-textures --clockwise -1`.",
       "gui": [
-        "map.surfaceRotateLeft",
-        "map.align-surfaces"
+        "map.rotate-textures-counterclockwise-fine"
       ],
       "cli": [
         "map align-textures"
       ],
-      "limitation": "There is no fine command alongside the normal step, so switching step sizes means editing the spin box. No profile binds Ctrl+Page Down. Rotation is centre-anchored, unlike TB. Native physical input and macOS/Linux acceptance remain open. Remaining work: Add fixed 1\u00b0 fine rotate commands with palette entries. Bind Ctrl+Page Down in the TrenchBroom profile and add UI coverage.",
+      "limitation": "TrenchBroom's per-format direction in mdl::rotateUV was not compared. With no face picked, Ctrl+Page Down copies the selection along the depth axis. Patches need the image size. Native physical-input and macOS/Linux acceptance remain open.",
       "evidence": [
-        "src/app/level_surface_tools.cpp",
-        "src/app/level_surface_dialog.cpp",
+        "src/core/level_camera_texture.cpp",
         "src/core/level_surface.cpp",
-        "src/cli/cli.cpp",
-        "src/tests/level_surface_smoke_test.cpp"
+        "src/app/level_camera_texture_actions.cpp",
+        "src/core/level_editor_controls.cpp",
+        "src/tests/level_camera_texture_smoke_test.cpp",
+        "src/tests/level_camera_texture_ui_smoke_test.cpp"
       ]
     },
     {
@@ -10297,35 +10401,43 @@
     {
       "id": "tb:Controls/Map view/View Filter > Hide faces",
       "status": "Partial",
-      "workflow": "**View** > **3D Wireframe** draws the level camera as edges instead of faces, so you can see what lies behind. The same toggle is on the **View** sidebar tab and in the palette. The VibeStudio profile binds W; the TrenchBroom, Radiant and other familiar profiles leave it unbound, as TrenchBroom does.",
+      "workflow": "**View** > **Camera Display** > **Hide Faces in Camera** sets the saved face mode to hidden. **3D Wireframe** toggles it (W in the VibeStudio profile, unbound in TrenchBroom and the Radiant profiles, as upstream). The camera then draws brush and patch polygon edges, not triangle diagonals, and keeps doing so across preview rebuilds after edits, undo or Reload. Turning it off brings back the textured or flat faces and edges chosen before. The choice is kept for the next session.",
       "gui": [
+        "map.hide-camera-faces",
         "map.preview-wireframe"
       ],
       "cli": [],
-      "limitation": "It is a single unsaved toggle, not TrenchBroom's persistent face mode: the camera returns to textured or flat shading whenever the preview rebuilds, for example after an edit, and turning it off ignores the Textures choice. It draws every render triangle's edges, not brush polygon edges. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Keep wireframe across preview rebuilds and restore the previous textured or flat mode when it is turned off. Offer an explicit, persisted face mode (textured, flat, hidden) that profiles can bind.",
+      "limitation": "Hidden faces always show the edges; TrenchBroom's combination of hidden faces with edges off (an empty camera) is not offered. Placed models are still stroked triangle by triangle. Native physical-input and macOS/Linux acceptance remain open.",
       "evidence": [
+        "src/core/level_camera_render.cpp",
+        "src/app/level_camera_render_actions.cpp",
         "src/app/application_shell.cpp",
         "src/app/level_preview_actions.cpp",
-        "src/app/level_sidebar_actions.cpp",
         "src/app/model_viewport_render.cpp",
-        "src/core/studio_semantics.cpp",
-        "src/core/level_editor_controls.cpp",
+        "src/tests/level_camera_render_ui_smoke_test.cpp",
         "src/tests/shell_interaction_smoke_test.cpp",
-        "src/tests/editor_profiles_smoke_test.cpp"
+        "docs/manual/levels.md"
       ]
     },
     {
       "id": "tb:Controls/Map view/View Filter > Hide textures",
-      "status": "Planned",
-      "workflow": "Untick **Textures** above the level views, or the matching **Textures in Camera** checkbox on the **View** sidebar tab, and the camera draws flat-shaded faces. Ticking it brings back package images and static shader previews. The choice is kept in the shell layout state. Existing control: Textures checkbox in the level preview status strip above the views (levelPreviewTextured); View tab checkbox (levelViewTextured)",
-      "gui": [],
+      "status": "Partial",
+      "workflow": "**View** > **Camera Display** > **Hide Textures in Camera** draws the camera's faces in flat-shaded colours, turning **3D Wireframe** off. Unticking **Textures in Camera** (map.preview-textures, the same command as the **Textures** box above the views and the **View** tab box, now kept in step) does the same as a toggle. The choice is saved, survives preview rebuilds, and **3D Wireframe** restores it when turned off.",
+      "gui": [
+        "map.hide-camera-textures",
+        "map.preview-textures"
+      ],
       "cli": [],
-      "limitation": "The toggle is a plain QAction with no command id, so it is not in the palette and takes no profile or user shortcut. Turning 3D Wireframe off returns to flat shading until the preview next rebuilds, and the status-strip box does not follow a change made on the View tab. Native physical-input and macOS/Linux acceptance remain open. Remaining work: Register the textures toggle as a palette command (for example map.preview-textures), with explicit show and hide entries that profiles can bind, keep both checkboxes in sync, and make 3D Wireframe restore the Textures choice when it is turned off.",
+      "limitation": "Only the 3D camera changes. There is no separate flat colour preference beyond the theme's surface colours. Native physical-input and macOS/Linux acceptance remain open.",
       "evidence": [
+        "src/core/level_camera_render.cpp",
+        "src/app/level_camera_render_actions.cpp",
         "src/app/level_preview_actions.cpp",
         "src/app/level_sidebar_actions.cpp",
-        "src/app/model_viewport.cpp",
-        "src/tests/level_materials_ui_smoke_test.cpp"
+        "src/core/studio_semantics.cpp",
+        "src/tests/level_camera_render_ui_smoke_test.cpp",
+        "src/tests/level_materials_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {
@@ -10377,29 +10489,43 @@
     },
     {
       "id": "tb:Controls/Map view/View Filter > Show edges",
-      "status": "Planned",
-      "workflow": "No direct equivalent. The level camera outlines only selected or hovered objects, and 3D Wireframe shows edges without faces. ModelViewport already supports an edge overlay, used by the Models workbench and level dialog previews such as the brush editor, but the level camera never enables it. Existing control: None",
-      "gui": [],
+      "status": "Partial",
+      "workflow": "**View** > **Camera Display** > **Edges in Camera** (also a **View** tab box) outlines every brush face and patch quad over the camera's textured or flat faces. Fan diagonals are left out through ModelViewport::setPolygonEdges and the surface shader's diagonal bits, so polygons rather than triangles are drawn. The choice is saved and survives preview rebuilds. It is in command search and can take keys; TrenchBroom gives it none.",
+      "gui": [
+        "map.preview-edges"
+      ],
       "cli": [],
-      "limitation": "Brush boundaries on faces with similar shading are hard to read in the camera, and no profile can bind an edge toggle. Native physical-input and macOS/Linux acceptance remain open once a toggle is built. Remaining work: Add a persisted Edges in Camera toggle that calls ModelViewport::setShowEdges on the level camera, with a palette command and a View tab checkbox. Make sure brush polygon edges are drawn rather than triangulation diagonals.",
+      "limitation": "Off by default (TrenchBroom defaults it on), to keep the existing camera look. The edge colour follows the theme with no separate preference. Placed models still show their triangle edges. Level dialog previews keep triangle edges. Native physical-input and macOS/Linux acceptance remain open.",
       "evidence": [
+        "src/app/level_camera_render_actions.cpp",
+        "src/app/level_sidebar_actions.cpp",
         "src/app/model_viewport.h",
-        "src/app/model_viewport.cpp",
-        "src/app/application_shell.cpp",
-        "src/app/level_preview_actions.cpp"
+        "src/app/model_viewport_render.cpp",
+        "src/core/shaders/model_surface.frag",
+        "src/core/shaders/model_surface.vert",
+        "src/tests/level_camera_render_ui_smoke_test.cpp",
+        "docs/LEVEL_EDITOR.md"
       ]
     },
     {
       "id": "tb:Controls/Map view/View Filter > Show textures",
-      "status": "Planned",
-      "workflow": "The **Textures** check box in the camera's preview status bar, mirrored as **Textures in Camera** on the **View** tab, switches the camera between textured and flat-shaded rendering. The choice is remembered. **3D Wireframe** draws edges only. Existing control: Level camera preview status bar > Textures check box; View tab > Textures in Camera",
-      "gui": [],
+      "status": "Partial",
+      "workflow": "**View** > **Camera Display** > **Show Textures in Camera** draws the camera's faces textured, turning **3D Wireframe** off if it is on, and says so in the status bar. **Textures in Camera** (the same command as the **Textures** box above the views and the **View** tab box) toggles images and flat shading. The choice is kept for the next session and survives preview rebuilds. Both are in command search and can take user or profile keys; TrenchBroom gives them none, as upstream.",
+      "gui": [
+        "map.show-camera-textures",
+        "map.preview-textures"
+      ],
       "cli": [],
-      "limitation": "The control is a check box with no command id, so it cannot be bound or found in command search. It affects only the camera; the 2D views draw outlines. Native physical input and macOS/Linux acceptance remain open.",
+      "limitation": "It affects only the 3D camera; the 2D views draw outlines. Images still come from the open package or asset folder only. Native physical-input and macOS/Linux acceptance remain open.",
       "evidence": [
+        "src/core/level_camera_render.h",
+        "src/core/level_camera_render.cpp",
+        "src/app/level_camera_render_actions.cpp",
         "src/app/level_preview_actions.cpp",
-        "src/app/level_sidebar_actions.cpp",
-        "src/tests/level_materials_ui_smoke_test.cpp"
+        "src/core/studio_semantics.cpp",
+        "src/tests/level_camera_render_smoke_test.cpp",
+        "src/tests/level_camera_render_ui_smoke_test.cpp",
+        "docs/manual/levels.md"
       ]
     },
     {

@@ -148,20 +148,13 @@ int main(int argc, char **argv)
 	// Numeric rotation inherits the same controls when it opens.
 	lock->trigger();
 	bool inherited = false;
-	QTimer inspect;
-	inspect.setInterval(30);
-	QObject::connect(&inspect, &QTimer::timeout, &shell, [&] {
-		auto *active = QApplication::activeModalWidget();
-		if (!active || active->objectName() != QStringLiteral("levelRotationDialog")) {
-			return;
-		}
-		auto *dialog = static_cast<LevelRotationDialog *>(active);
-		inherited = !dialog->request().textureLock && dialog->request().allowValve220;
-		dialog->reject();
-		inspect.stop();
-	});
-	inspect.start();
+	// The rotation window is modeless (NetRadiant Custom's Arbitrary Rotation).
 	shell.findChild<QAction *>(QStringLiteral("map.rotatePrecisely"))->trigger();
+	if (auto *active = shell.findChild<QDialog *>(QStringLiteral("levelRotationDialog"), Qt::FindDirectChildrenOnly)) {
+		auto *dialog = static_cast<LevelRotationDialog *>(active);
+		inherited = dialog->isVisible() && !QApplication::activeModalWidget() && !dialog->request().textureLock && dialog->request().allowValve220;
+		dialog->reject();
+	}
 	ok &= expect(inherited, "numeric dialog inherits shared policy");
 	settings.sync();
 	StudioSettings persisted(root.filePath(QStringLiteral("settings.ini")));

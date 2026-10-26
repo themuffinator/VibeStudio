@@ -7,7 +7,8 @@
 // modes draw opaque fragments with depth testing, then peel translucent skin
 // texels front to back in up to four layers and composite them in depth
 // order. Wireframe draws every visible edge once as an antialiased stroke,
-// with a depth-tested id pass beneath it for picking. Every frame reads back
+// with a depth-tested id pass beneath it for picking; with polygon edges on,
+// fan diagonals are left out of it and of the edge overlay. Every frame reads back
 // the colour image and the triangle under each pixel, which is what picking,
 // orbit pivots and vertex visibility use.
 
@@ -261,7 +262,8 @@ bool modelSkinHasAlpha(const QImage& image)
 bool ModelViewport::GeometryKey::matches(const GeometryKey& other) const
 {
 	if (mesh != other.mesh || frame != other.frame || blendFrame != other.blendFrame || frameBlend != other.frameBlend || textured != other.textured
-		|| highContrast != other.highContrast || editMoveActive != other.editMoveActive || moving != other.moving || resizing != other.resizing) {
+		|| highContrast != other.highContrast || polygonEdges != other.polygonEdges || editMoveActive != other.editMoveActive || moving != other.moving
+		|| resizing != other.resizing) {
 		return false;
 	}
 	if (editMoveActive
@@ -308,6 +310,41 @@ std::shared_ptr<const ModelViewport::GpuGeometry> ModelViewport::buildGpuGeometr
 		std::memcpy(at + 36, surfaceColor.data(), 4);
 		put(at + 40, info);
 	};
+	if (work.polygonEdges) {
+		// A map preview adds each polygon as a fan over its own corners, so the
+		// only edges two triangles of one surface share are fan diagonals. The
+		// triangle list is surface-major, so one table serves each surface.
+		geometry->innerEdges.fill(0, count);
+		QHash<quint64, qsizetype> firstUse;
+		int tableSurface = std::numeric_limits<int>::min();
+		for (int index = 0; index < count; ++index) {
+			if ((index & 4095) == 0 && work.cancelled.load()) {
+				return nullptr;
+			}
+			const MeshTriangle& source = work.meshTriangles.at(index);
+			if (source.surface != tableSurface) {
+				firstUse.clear();
+				tableSurface = source.surface;
+			}
+			const int corners[3] = {source.a, source.b, source.c};
+			for (int edge = 0; edge < 3; ++edge) {
+				// Edge e is opposite corner e.
+				const int from = corners[(edge + 1) % 3];
+				const int to = corners[(edge + 2) % 3];
+				if (from == to) {
+					continue;
+				}
+				const quint64 key = (quint64(quint32(std::min(from, to))) << 32) | quint32(std::max(from, to));
+				const auto found = firstUse.constFind(key);
+				if (found == firstUse.cend()) {
+					firstUse.insert(key, qsizetype(index) * 3 + edge);
+					continue;
+				}
+				geometry->innerEdges[index] |= quint8(1u << edge);
+				geometry->innerEdges[*found / 3] |= quint8(1u << (*found % 3));
+			}
+		}
+	}
 	for (int index = 0; index < count; ++index) {
 		if ((index & 4095) == 0 && work.cancelled.load()) {
 			return nullptr;
@@ -434,8 +471,10 @@ std::shared_ptr<const ModelViewport::GpuGeometry> ModelViewport::buildGpuGeometr
 		const float d = static_cast<float>(dot(normal, p[0]));
 		geometry->planes[index] = {normal.x, normal.y, normal.z, d};
 		geometry->valid.setBit(index);
+		// Bits 2..4: polygon diagonals, which the edge overlay leaves out.
+		const quint32 inner = geometry->innerEdges.isEmpty() ? 0u : quint32(geometry->innerEdges.at(index)) << 2;
 		for (int corner = 0; corner < 3; ++corner) {
-			writeCorner(index, corner, p[size_t(corner)], uv[size_t(corner)], normal, d, uvValid ? 1u : 0u);
+			writeCorner(index, corner, p[size_t(corner)], uv[size_t(corner)], normal, d, (uvValid ? 1u : 0u) | inner);
 			const double values[3] = {p[size_t(corner)].x, p[size_t(corner)].y, p[size_t(corner)].z};
 			for (int axis = 0; axis < 3; ++axis) {
 				low[axis] = std::min(low[axis], values[axis]);
@@ -539,8 +578,14 @@ void ModelViewport::renderGpu(RasterWork& work)
 		}
 		const bool highlighted = (index < work.highlighted.size() && work.highlighted.at(index)) || work.surfaceStrokeTriangles.contains(index);
 		const int vertices[3] = {source.a, source.b, source.c};
+		const quint8 inner = geometry.innerEdges.isEmpty() ? quint8(0) : geometry.innerEdges.at(index);
 		for (int corner = 0; corner < 3; ++corner) {
 			const int next = (corner + 1) % 3;
+			// The edge from this corner to the next is opposite the third; a
+			// polygon diagonal draws no stroke, selected or not.
+			if ((inner >> ((corner + 2) % 3)) & 1u) {
+				continue;
+			}
 			const auto edge = qMakePair(std::min(vertices[corner], vertices[next]), std::max(vertices[corner], vertices[next]));
 			const quint64 key = (quint64(quint32(edge.first)) << 32) | quint32(edge.second);
 			// A legacy face move can separate shared endpoints: keep every

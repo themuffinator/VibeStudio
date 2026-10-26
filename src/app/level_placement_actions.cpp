@@ -2,6 +2,7 @@
 #include "app/level_placement_dialog.h"
 #include "app/level_placement_task_dialog.h"
 #include "app/map_viewport.h"
+#include "core/level_texture_mapping.h"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QStatusBar>
@@ -55,8 +56,25 @@ bool ApplicationShell::runLevelPlacementFromUi(const LevelPlacementRequest& requ
 			transform.delta = request.snapMoveDelta ? snapLevelMapPosition(request.offset, request.grid) : request.offset;
 			return applyLevelComponentTransform(transform, error);
 		case LevelPlacementOperation::Rotate:
+			if (request.rotation.euler) {
+				// Arbitrary Rotation's X, then Y, then Z turn as one affine map.
+				const auto steps = levelMapRotationSteps(request.rotation);
+				if (steps.isEmpty()) { if (error) { *error = tr("A whole number of full turns changes nothing."); } return false; }
+				transform.operation = LevelComponentTransformKind::Affine;
+				for (auto& column : transform.linear) {
+					for (const auto& step : steps) { column = rotateLevelVector(column, step.first, step.second); }
+				}
+				transform.delta = {0, 0, 0, true};
+				transform.pivot = request.rotation.pivot;
+				return applyLevelComponentTransform(transform, error);
+			}
 			transform.operation = LevelComponentTransformKind::Rotate;
 			transform.axis = request.rotation.axis; transform.amount = request.rotation.degrees; transform.pivot = request.rotation.pivot;
+			return applyLevelComponentTransform(transform, error);
+		case LevelPlacementOperation::Scale:
+			transform.operation = LevelComponentTransformKind::Scale;
+			transform.scale = {request.scale.factors[0], request.scale.factors[1], request.scale.factors[2], true};
+			transform.pivot = request.scale.pivot;
 			return applyLevelComponentTransform(transform, error);
 		case LevelPlacementOperation::Mirror:
 			transform.operation = LevelComponentTransformKind::Scale;

@@ -51,6 +51,13 @@ LevelTextureProjection levelNaturalTextureProjection(const LevelMapBrushFace& fa
 // The same axes turned into the face's own plane, so a slope shows its
 // texture unstretched, as TrenchBroom's reset to the face does.
 LevelTextureProjection levelFaceAlignedTextureProjection(const LevelMapBrushFace& face, double scaleU, double scaleV, QSize imageSize = {});
+// The projection Radiant's Reset Texture gives a Valve 220 or brush-primitive
+// face: the plane's own basis (levelTexturePrimitiveBasis(), q3map2's
+// ComputeAxisBase), unshifted and unrotated, at `scaleU` and `scaleV` map
+// units per texel. On a floor it runs U along world Y and V along X, a
+// quarter turn from the face-aligned projection. Brush primitives count in
+// repeats, so they also need the image size.
+LevelTextureProjection levelPlaneBasisTextureProjection(const LevelMapBrushFace& face, double scaleU, double scaleV, QSize imageSize = {});
 
 // Columns of the linear transform followed by its translation: p' = A p + t.
 // Brush planes are transformed by the caller; UV covectors use A^-T so every

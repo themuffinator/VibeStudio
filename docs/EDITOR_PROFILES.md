@@ -486,8 +486,37 @@ defaults as of `master` `90de03c`, September 2026 (see docs/CREDITS.md).
     `v2026.2` / `4c756be1`). The views take them only while a copy can be made,
     so Ctrl+arrows still pan a 2D view with nothing selected, and Doom maps
     keep Ctrl+Page Up and Ctrl+Page Down for the ceilings.
-- **Left alone:** TrenchBroom's Ctrl+F flips objects, but VibeStudio keeps
-  Ctrl+F for Find. Alt+arrows keep going Back and Forward.
+  - Camera textures: while a face is picked in the 3D view (outside vertex,
+    edge and face editing), the arrows move its texture one grid size across
+    or up the view, Shift+arrows twice the grid, Ctrl+arrows one texel, and
+    Ctrl+F and Ctrl+Alt+F flip it horizontally and vertically, as the "Move
+    textures" and "Flip textures" actions and `MapViewBase::moveUV` and
+    `flipUV` at `v2026.2` / `4c756be1` do. The commands
+    (`map.moveTexturesUp` and so on, `map.flipTexturesHorizontally` and
+    `Vertically`) claim these keys in the camera in a layer of their own
+    (`camera-faces`), so the same keys nudge, copy and flip objects whenever
+    no face is picked, and in the 2D views. Each face's axis nearest the
+    view's horizontal moves or flips (`core/level_camera_texture.h`); flips
+    mirror about the middle of each face, as **Flip U** and **Flip V** do.
+    TrenchBroom's own axis choice and mirror anchor live in its model library
+    (`mdl::translateUV`, `mdl::flipUV`), which the pinned checkout does not
+    include, so they were not compared.
+  - Texture turns: in the same face-selection context, Page Up turns the
+    picked faces' textures 15° clockwise and Page Down 15° counter-clockwise,
+    Shift+Page Up and Down a quarter turn and Ctrl+Page Up and Down 1°, as the
+    "Rotate textures" actions and `MapViewBase::rotateUV` and `rotateUVAngle`
+    at `v2026.2` / `4c756be1` do (15° is TrenchBroom's fixed grid angle). The
+    commands (`map.rotateTexturesClockwise`, `...Coarse`, `...Fine` and the
+    `Counterclockwise` set) share the `camera-faces` layer, so with no face
+    picked these keys still nudge and copy along the depth axis. Each texture
+    turns the named way as seen from the face's front on every face format,
+    about the texture origin (`ClockwiseRotate` in `core/level_surface.h`).
+    TrenchBroom adds its angle to the stored rotation through
+    `mdl::rotateUV`, which the pinned checkout does not include, so its
+    on-screen direction per face format was not compared; VibeStudio checks
+    its own direction on screen instead.
+- **Left alone:** with nothing selected, Ctrl+F in a view still reaches Find,
+  and Alt+arrows keep going Back and Forward.
 
 ### NetRadiant Custom Style
 Reference: [NetRadiant Custom](https://github.com/Garux/netradiant-custom).
@@ -544,13 +573,24 @@ plans a VibeMap3 build.
     `"MoveToCamera"` in `radiant/select.cpp` at `449778b3`). Its Alt+R (Reset
     Transforms) is left to the menu bar; **Reset Repeat Transforms** is in
     **Edit** > **Repeat** and command search.
+  - Exact transforms: Shift+R opens **Rotate Selection…** and Ctrl+Shift+S
+    **Scale Selection…**, NRC's modeless Arbitrary Rotation and Arbitrary
+    Scale windows (`"ArbitraryRotation"` and `"ArbitraryScale"` in
+    `radiant/select.cpp` at `449778b3`). NRC's Save Map As has no key, and
+    the studio's **Save Map As** keeps Ctrl+Alt+S, so Ctrl+Shift+S is free in
+    the Levels page. The NetRadiant baseline leaves both unbound.
   - Selection: C deselects, and I inverts.
   - Hiding: H hides, and Shift+H shows all.
   - Tools: X is the clipper. Enter clips, Shift+Enter keeps both halves, and
     Ctrl+Enter flips which half stays.
   - Grid: [ and ] step it, 1 to 9 set it, and 0 shows it.
   - View: ` frames the selection, and End levels the camera (**Level
-    Camera**, NRC `camwindow.cpp` CenterView at `449778b3`).
+    Camera**, NRC `camwindow.cpp` CenterView at `449778b3`). Shift+] and
+    Shift+[ step the camera through Wireframe, Flat Shaded, Textured and
+    Textured with Edges (**Next Camera Mode** and **Previous Camera Mode**,
+    NRC `camwindow.cpp` CameraModeNext and CameraModePrev at `449778b3`); the
+    NetRadiant baseline leaves them unbound, as its `camwindow.cpp` has no
+    such commands.
   - CSG and entities: Shift+U carves (CSG subtract), Ctrl+U wraps/merges
     selected brushes or picked components, Ctrl+G rounds every brush vertex,
     patch control point and point-entity origin of the selection (or only the
@@ -1082,6 +1122,18 @@ share `core/level_surface.h` (`RadiantScale`, `RadiantRotate`) with
 reference shows **Texture rotation step**, and `editor controls` reports
 `surfaceRotationStep` and `surfaceRotationPivot`. Patches turn in texels rather
 than NRC's normalised coordinates, so a non-square image is not sheared.
+
+### Texture reset keys
+
+NRC's "TextureReset/Cap" in radiant/surfacedialog.cpp at `449778b3` is
+Shift+N; `netradiant-custom` binds it to **Radiant Texture Reset**
+(`map.surfaceRadiantReset`). TrenchBroom's "Reset texture alignment" and
+"Reset texture alignment to world aligned" in ActionManager.cpp at `4c756be1`
+are Shift+R and Shift+Alt+R; `trenchbroom` binds them to **Reset Texture
+Alignment** (`map.surfaceReset`) and **Natural Texture Mapping**
+(`map.surfaceNatural`). Both resets act on the picked faces first, then the
+Surfaces target (`LevelSurfaceOperation::Reset` and `RadiantReset`). Other
+profiles leave them without keys; NRC's Shift+R stays on **Rotate Precisely…**.
 
 ### NRC entity connections
 

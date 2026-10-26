@@ -145,6 +145,13 @@ public:
 	[[nodiscard]] bool showAxes() const;
 	void setShowEdges(bool show);
 	[[nodiscard]] bool showEdges() const;
+	// For meshes made of polygon fans, such as a map preview: an edge two
+	// triangles of one surface share is a polygon diagonal, which neither the
+	// edge overlay nor the wireframe draws, so brush faces and patch quads are
+	// outlined rather than their triangles. Off by default, as a model's shared
+	// edges are real edges.
+	void setPolygonEdges(bool enabled);
+	[[nodiscard]] bool polygonEdges() const;
 	// Triangles drawn in the highlight colour and outlined, such as the
 	// selected objects of a map preview; indexes as in ModelViewportHit.
 	void setHighlightedTriangles(const QVector<int>& triangles);
@@ -879,6 +886,7 @@ private:
 	bool m_showGrid = true;
 	bool m_showAxes = true;
 	bool m_showEdges = false;
+	bool m_polygonEdges = false;
 	bool m_highContrast = false;
 	bool m_reducedMotion = false;
 

@@ -682,15 +682,17 @@ void StudioCommandRegistry::installShortcuts()
 		QList<QPointer<QWidget>> scopes;
 		bool preferred = false;
 		bool claims = false;
+		QString layer;
 	};
 	QHash<QString, QVector<Owner>> owners;
 	// A command whose surfaces claim its keys (setShortcutScopeClaims) shares
 	// them with any other command: the surfaces run it while it is enabled,
 	// and the other command keeps the key everywhere else. Two such commands
-	// still clash where their surfaces meet.
-	auto clashWith = [&owners](const QString& key, const QList<QPointer<QWidget>>& scopes, bool claims) -> Owner {
+	// still clash where their surfaces meet, unless they claim in different
+	// layers, between which those surfaces choose by context.
+	auto clashWith = [&owners](const QString& key, const QList<QPointer<QWidget>>& scopes, bool claims, const QString& layer) -> Owner {
 		for (const Owner& owner : owners.value(key)) {
-			if (owner.claims != claims) {
+			if (owner.claims != claims || (claims && owner.layer != layer)) {
 				continue;
 			}
 			if (scopesOverlap(owner.scopes, scopes)) {
@@ -739,6 +741,7 @@ void StudioCommandRegistry::installShortcuts()
 		// Only a command with live surfaces can claim its keys there; without
 		// them it would be window-wide and meet the other owner everywhere.
 		const bool claims = !scopes.isEmpty() && m_scopeClaims.contains(normalizedToken(registration->commandId));
+		const QString layer = claims ? m_scopeClaims.value(normalizedToken(registration->commandId)) : QString();
 		const auto user = m_userShortcuts.constFind(normalizedToken(registration->commandId));
 		const bool userKeys = user != m_userShortcuts.constEnd() && shortcutRemappable(registration->commandId);
 		const bool preferredKeys = userKeys || (shortcutRemappable(registration->commandId) && overrides.contains(normalizedToken(registration->commandId)));
@@ -761,7 +764,7 @@ void StudioCommandRegistry::installShortcuts()
 			if (seenHere.contains(key)) {
 				continue;
 			}
-			const Owner owner = clashWith(key, scopes, claims);
+			const Owner owner = clashWith(key, scopes, claims, layer);
 			if (!owner.commandId.isEmpty()) {
 				// Sequences claimed by an earlier command win; a duplicate is
 				// recorded and skipped rather than silently shadowing its owner.
@@ -774,7 +777,7 @@ void StudioCommandRegistry::installShortcuts()
 				continue;
 			}
 			seenHere.insert(key);
-			owners[key].push_back({registration->commandId, scopes, preferredKeys, claims});
+			owners[key].push_back({registration->commandId, scopes, preferredKeys, claims, layer});
 			accepted << sequence;
 			acceptedText << sequence.toString(QKeySequence::PortableText);
 		}
@@ -965,14 +968,14 @@ void StudioCommandRegistry::setShortcutScopes(const QString& commandId, const QL
 	installShortcuts();
 }
 
-void StudioCommandRegistry::setShortcutScopeClaims(const QString& commandId, bool claims)
+void StudioCommandRegistry::setShortcutScopeClaims(const QString& commandId, bool claims, const QString& layer)
 {
 	const QString token = normalizedToken(commandId);
-	if (claims == m_scopeClaims.contains(token)) {
+	if (claims == m_scopeClaims.contains(token) && (!claims || m_scopeClaims.value(token) == layer)) {
 		return;
 	}
 	if (claims) {
-		m_scopeClaims.insert(token);
+		m_scopeClaims.insert(token, layer);
 	} else {
 		m_scopeClaims.remove(token);
 	}

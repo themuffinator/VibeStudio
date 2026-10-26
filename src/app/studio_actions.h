@@ -103,8 +103,11 @@ public:
 	// beside any other command's, such as Go Back's window-wide Alt+Left,
 	// instead of taking them away or being refused: inside its surfaces the
 	// enabled command wins, and elsewhere, or while it is disabled, the other
-	// command keeps the key.
-	void setShortcutScopeClaims(const QString& commandId, bool claims);
+	// command keeps the key. Claiming commands in different `layer`s never
+	// clash: their surfaces choose between them by context when a key arrives,
+	// as the camera does for TrenchBroom's texture moves on the nudge keys
+	// while faces are picked.
+	void setShortcutScopeClaims(const QString& commandId, bool claims, const QString& layer = {});
 	// Embedded documents keep their local keys; identical shell keys remain
 	// available in menus and resume when focus leaves the document.
 	void setShortcutFocusSurface(QWidget* surface);
@@ -169,8 +172,9 @@ private:
 	QHash<QString, QList<QKeySequence>> m_sequences;
 	QPointer<QWidget> m_shortcutFocusSurface;
 	QHash<QString, QList<QPointer<QWidget>>> m_shortcutScopes;
-	// Normalized ids of commands whose surfaces claim their keys.
-	QSet<QString> m_scopeClaims;
+	// Normalized ids of commands whose surfaces claim their keys, with the
+	// claim layer each claims in.
+	QHash<QString, QString> m_scopeClaims;
 	QString m_editorProfileId;
 	QHash<QString, QStringList> m_userShortcuts;
 	QStringList m_conflicts;

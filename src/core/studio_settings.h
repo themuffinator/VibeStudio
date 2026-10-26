@@ -26,6 +26,8 @@ struct PackageCopyLimits;
 struct LevelViewLinks;
 struct LevelEditorControls;
 struct LevelPlanPanes;
+struct LevelRoomPreferences;
+struct LevelCsgToolPreferences;
 
 enum class StudioTheme {
 	System,
@@ -352,6 +354,12 @@ public:
 	bool levelComponentUvLock() const;
 	LevelClipperPreferences levelClipperPreferences() const;
 	bool setLevelClipperPreferences(const LevelClipperPreferences& preferences);
+	// Make Room's caulk and open-face options (core/level_hollow.h).
+	LevelRoomPreferences levelRoomPreferences() const;
+	bool setLevelRoomPreferences(const LevelRoomPreferences& preferences);
+	// The CSG Tool's thickness, face policy, caulk and keep-inner options.
+	LevelCsgToolPreferences levelCsgToolPreferences() const;
+	bool setLevelCsgToolPreferences(const LevelCsgToolPreferences& preferences);
 	void setLevelComponentUvLock(bool enabled);
 	// With component UV lock on: fit three corners where an exact lock cannot
 	// hold, instead of refusing the edit. On by default, as Radiant and

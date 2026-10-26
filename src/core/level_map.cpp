@@ -2,6 +2,7 @@
 #include "core/level_duplicate_p.h"
 #include "core/level_entity_connections_p.h"
 #include "core/level_entity_ownership.h"
+#include "core/level_hollow.h"
 #include "core/level_paste.h"
 #include "core/level_repeat_p.h"
 #include "core/level_doom_selection.h"
@@ -10057,7 +10058,8 @@ bool commitLevelSurfaceEdit(LevelMapDocument* document, const LevelSurfaceEditPl
 		return fail(QCoreApplication::translate("LevelSurface", "The map changed after the surface preview. Prepare the edit again."));
 	}
 	LevelMapUndoCommand command;
-	command.commandKind = plan.m_paste ? QStringLiteral("edit-brush") : QStringLiteral("transform-objects");
+	// Renaming rebuilds the map's texture list, as a paste does.
+	command.commandKind = plan.m_paste || plan.m_renamed > 0 ? QStringLiteral("edit-brush") : QStringLiteral("transform-objects");
 	command.objectKind = QStringLiteral("brush");
 	for (int b = 0; b < plan.m_after.size(); ++b) {
 		const auto& after = plan.m_after[b];
@@ -10086,7 +10088,9 @@ bool commitLevelSurfaceEdit(LevelMapDocument* document, const LevelSurfaceEditPl
 			}
 		}
 		for (int f = 0; f < after.faces.size(); ++f) {
-			if (!after.faces[f].textureParametersDirty) { continue; }
+			// Reset Textures can rename a face and keep its numbers.
+			const bool renamed = after.faces[f].textureName != before.faces[f].textureName;
+			if (!after.faces[f].textureParametersDirty && !renamed) { continue; }
 			LevelMapTextureChange change;
 			change.kind = QStringLiteral("face");
 			change.objectId = before.id;
@@ -10095,6 +10099,7 @@ bool commitLevelSurfaceEdit(LevelMapDocument* document, const LevelSurfaceEditPl
 			change.newName = after.faces[f].textureName;
 			if (const auto problem = textureNameProblem(*document, change.newName); !problem.isEmpty()) { return fail(problem); }
 			if (const auto problem = textureChangesProblem(*document, {change}); !problem.isEmpty()) { return fail(problem); }
+			if (!after.faces[f].textureParametersDirty) { continue; }
 			const QString line = before.startLine > 0 ? document->textLines.value(before.faces[f].line - 1)
 				: before.sourceLines.value(before.faces[f].line - before.sourceFirstLine);
 			bool readable = false;
@@ -10128,10 +10133,13 @@ bool commitLevelSurfaceEdit(LevelMapDocument* document, const LevelSurfaceEditPl
 		command.patchSnapshots << *current; command.patchResults << after;
 	}
 	if (command.brushResults.isEmpty() && command.patchResults.isEmpty()) { return true; }
-	command.description = plan.m_paste ? QCoreApplication::translate("LevelSurface", "Paste %n surface(s)", nullptr, plan.m_faceCount + plan.patchCount())
-		: plan.patchCount() > 0 ? QCoreApplication::translate("LevelSurface", "Align %n surface(s)", nullptr, plan.m_faceCount + plan.patchCount())
+	const int surfaces = plan.m_faceCount + plan.patchCount();
+	command.description = plan.m_paste ? QCoreApplication::translate("LevelSurface", "Paste %n surface(s)", nullptr, surfaces)
+		: plan.m_reset ? QCoreApplication::translate("LevelSurface", "Reset textures on %n surface(s)", nullptr, surfaces)
+		: plan.patchCount() > 0 ? QCoreApplication::translate("LevelSurface", "Align %n surface(s)", nullptr, surfaces)
 		: QCoreApplication::translate("LevelSurface", "Align %n brush face(s)", nullptr, plan.m_faceCount);
 	command.undoDescription = plan.m_paste ? QCoreApplication::translate("LevelSurface", "Restore pasted surfaces")
+		: plan.m_reset ? QCoreApplication::translate("LevelSurface", "Restore reset textures")
 		: QCoreApplication::translate("LevelSurface", "Restore surface alignment");
 	if (!applyLevelMapCommand(document, command, true)) {
 		return fail(QCoreApplication::translate("LevelSurface", "The surface edit could not be applied."));
@@ -12195,19 +12203,41 @@ bool clipLevelMapPoints(LevelMapDocument* document, const QVector<LevelMapVec3>&
 
 QString levelMapHollowModeId(LevelMapHollowMode mode)
 {
-	return mode == LevelMapHollowMode::Touch ? QStringLiteral("touch") : (mode == LevelMapHollowMode::Room ? QStringLiteral("room") : QStringLiteral("overlap"));
+	switch (mode) {
+	case LevelMapHollowMode::Touch:
+		return QStringLiteral("touch");
+	case LevelMapHollowMode::Room:
+		return QStringLiteral("room");
+	case LevelMapHollowMode::Diagonal:
+		return QStringLiteral("diagonal");
+	case LevelMapHollowMode::Extrude:
+		return QStringLiteral("extrude");
+	case LevelMapHollowMode::Overlap:
+		break;
+	}
+	return QStringLiteral("overlap");
 }
 
 bool parseLevelMapHollowMode(const QString& id, LevelMapHollowMode* mode)
 {
 	const QString key = id.trimmed().toLower();
-	const LevelMapHollowMode parsed = key == QStringLiteral("touch") ? LevelMapHollowMode::Touch
-		: key == QStringLiteral("room") ? LevelMapHollowMode::Room : LevelMapHollowMode::Overlap;
-	if (key != QStringLiteral("touch") && key != QStringLiteral("room") && key != QStringLiteral("overlap")) {
+	// NetRadiant Custom's CSG Tool calls Touch "wrap" and Make Room's walls
+	// "pull".
+	static const QHash<QString, LevelMapHollowMode> modes {
+		{QStringLiteral("overlap"), LevelMapHollowMode::Overlap},
+		{QStringLiteral("touch"), LevelMapHollowMode::Touch},
+		{QStringLiteral("wrap"), LevelMapHollowMode::Touch},
+		{QStringLiteral("room"), LevelMapHollowMode::Room},
+		{QStringLiteral("pull"), LevelMapHollowMode::Room},
+		{QStringLiteral("diagonal"), LevelMapHollowMode::Diagonal},
+		{QStringLiteral("extrude"), LevelMapHollowMode::Extrude},
+	};
+	const auto found = modes.constFind(key);
+	if (found == modes.constEnd()) {
 		return false;
 	}
 	if (mode) {
-		*mode = parsed;
+		*mode = found.value();
 	}
 	return true;
 }
@@ -12220,25 +12250,176 @@ bool hollowLevelMapSelection(LevelMapDocument* document, double thickness, int* 
 bool hollowLevelMapSelection(LevelMapDocument* document, double thickness, LevelMapHollowMode mode, int* hollowed, QString* error,
 	QStringList* skipped)
 {
-	int sceneResult_hollowed = 0;
-	QStringList sceneResult_skipped = skipped ? *skipped : QStringList{};
+	LevelMapHollowReport report;
+	const bool done = hollowLevelMapSelection(document, thickness, mode, LevelMapHollowOptions {}, &report, error);
+	if (hollowed) {
+		*hollowed = done ? report.hollowed : 0;
+	}
+	if (skipped) {
+		*skipped = done ? report.skipped : QStringList {};
+	}
+	return done;
+}
+
+namespace {
+
+// A plane a CSG Tool wall is built from: its outward normal and distance
+// (n.p = d), the face whose material and flags it takes, and whether caulk
+// covers it.
+struct WallPlane {
+	LevelMapVec3 normal;
+	double distance = 0.0;
+	const LevelMapBrushFace* like = nullptr;
+	bool caulked = false;
+};
+
+// Solves `planes` as one brush and writes each plane that bounds it on its
+// own corners, as faceOnPolygon() does, keeping their order; empty when they
+// make no closed brush or the last plane does not bound it.
+QVector<NewBrushFace> wallFacesFromPlanes(const QVector<WallPlane>& planes, const QString& caulk)
+{
+	QVector<LevelMapBrushFace> faces;
+	for (const WallPlane& plane : planes) {
+		// Three points on the plane, wound so (p0 - p1) x (p2 - p1) is its
+		// normal: u and v = n x u span it.
+		const LevelMapVec3& n = plane.normal;
+		const LevelMapVec3 helper = std::abs(n.x) < 0.6 ? LevelMapVec3 {1.0, 0.0, 0.0, true} : LevelMapVec3 {0.0, 1.0, 0.0, true};
+		LevelMapVec3 u {n.y * helper.z - n.z * helper.y, n.z * helper.x - n.x * helper.z, n.x * helper.y - n.y * helper.x, true};
+		const double length = std::sqrt(u.x * u.x + u.y * u.y + u.z * u.z);
+		if (!std::isfinite(length) || length < 1e-9) {
+			return {};
+		}
+		u = {u.x / length, u.y / length, u.z / length, true};
+		const LevelMapVec3 v {n.y * u.z - n.z * u.y, n.z * u.x - n.x * u.z, n.x * u.y - n.y * u.x, true};
+		constexpr double kSpan = 256.0;
+		const LevelMapVec3 origin {n.x * plane.distance, n.y * plane.distance, n.z * plane.distance, true};
+		LevelMapBrushFace face;
+		face.p0 = {origin.x + u.x * kSpan, origin.y + u.y * kSpan, origin.z + u.z * kSpan, true};
+		face.p1 = origin;
+		face.p2 = {origin.x + v.x * kSpan, origin.y + v.y * kSpan, origin.z + v.z * kSpan, true};
+		faces << face;
+	}
+	const MapBrushGeometry solved = solveBrushGeometry(faces);
+	if (!solved.solved || solved.faces.size() != planes.size() || !solved.faces.last().isValid()) {
+		return {};
+	}
+	QVector<NewBrushFace> written;
+	for (int index = 0; index < planes.size(); ++index) {
+		const MapFacePolygon& polygon = solved.faces.at(index);
+		if (!polygon.isValid()) {
+			continue;
+		}
+		NewBrushFace face = faceOnPolygon(polygon, planes.at(index).normal, *planes.at(index).like, 0.0);
+		if (planes.at(index).caulked) {
+			face.texture = caulk;
+		}
+		written << face;
+	}
+	return written;
+}
+
+LevelMapVec3 planeNormalOf(const MapFacePolygon& polygon)
+{
+	return {polygon.plane.normalX, polygon.plane.normalY, polygon.plane.normalZ, true};
+}
+
+// NetRadiant Custom's "Hollow::diagonal joints": the wall outside `face`
+// reaches from the face to the brush pushed out by the thickness, and meets
+// each neighbouring wall on the plane halfway between their faces, so the
+// walls fill the shell exactly. Workflow reference: brush_extrudeDiag
+// (radiant/csg.cpp) at 449778b3 (GPL-2.0-or-later); this builds each wall as
+// the points outside the brush that lie furthest outside `face`.
+QVector<NewBrushFace> diagonalWallFaces(const LevelMapBrush& brush, const MapBrushGeometry& geometry, int face, const QSet<int>& open,
+	double thickness, const QString& caulk, bool caulkOuter, bool caulkInner, bool caulkJoints)
+{
+	const MapFacePolygon& own = geometry.faces.at(face);
+	const LevelMapVec3 n = planeNormalOf(own);
+	QVector<WallPlane> planes;
+	planes << WallPlane {n, own.plane.distance + thickness, &brush.faces.at(face), caulkOuter};
+	for (int other = 0; other < geometry.faces.size() && other < brush.faces.size(); ++other) {
+		const MapFacePolygon& polygon = geometry.faces.at(other);
+		if (other == face || !polygon.isValid()) {
+			continue;
+		}
+		const LevelMapVec3 m = planeNormalOf(polygon);
+		if (open.contains(other)) {
+			// An open face is not pushed out: the wall stops on its plane,
+			// lining the opening with its material.
+			planes << WallPlane {m, polygon.plane.distance, &brush.faces.at(other), false};
+			continue;
+		}
+		// The joint: points as far outside this face as outside the other.
+		const LevelMapVec3 joint {m.x - n.x, m.y - n.y, m.z - n.z, true};
+		const double length = std::sqrt(joint.x * joint.x + joint.y * joint.y + joint.z * joint.z);
+		if (length < 1e-9) {
+			continue;
+		}
+		planes << WallPlane {{joint.x / length, joint.y / length, joint.z / length, true}, (polygon.plane.distance - own.plane.distance) / length,
+			&brush.faces.at(face), caulkJoints};
+	}
+	planes << WallPlane {{-n.x, -n.y, -n.z, true}, -own.plane.distance, &brush.faces.at(face), caulkInner};
+	return wallFacesFromPlanes(planes, caulk);
+}
+
+// NetRadiant Custom's "Hollow::extrude faces": the wall goes straight out
+// from `face` by the thickness, its sides square to the face through its
+// edges. Workflow reference: FaceMakeBrush's eExtrude (radiant/csg.cpp) at
+// 449778b3 (GPL-2.0-or-later).
+QVector<NewBrushFace> extrudedWallFaces(const LevelMapBrush& brush, const MapBrushGeometry& geometry, int face, double thickness,
+	const QString& caulk, bool caulkOuter, bool caulkInner)
+{
+	const MapFacePolygon& own = geometry.faces.at(face);
+	const LevelMapVec3 n = planeNormalOf(own);
+	QVector<WallPlane> planes;
+	planes << WallPlane {n, own.plane.distance + thickness, &brush.faces.at(face), caulkOuter};
+	LevelMapVec3 centre {0.0, 0.0, 0.0, true};
+	for (const LevelMapVec3& point : own.points) {
+		centre.x += point.x / own.points.size();
+		centre.y += point.y / own.points.size();
+		centre.z += point.z / own.points.size();
+	}
+	for (int index = 0; index < own.points.size(); ++index) {
+		const LevelMapVec3& a = own.points.at(index);
+		const LevelMapVec3& b = own.points.at((index + 1) % own.points.size());
+		const LevelMapVec3 edge {b.x - a.x, b.y - a.y, b.z - a.z, true};
+		LevelMapVec3 side {edge.y * n.z - edge.z * n.y, edge.z * n.x - edge.x * n.z, edge.x * n.y - edge.y * n.x, true};
+		const double length = std::sqrt(side.x * side.x + side.y * side.y + side.z * side.z);
+		if (length < 1e-9) {
+			continue;
+		}
+		side = {side.x / length, side.y / length, side.z / length, true};
+		// Facing away from the face's middle.
+		if (side.x * (centre.x - a.x) + side.y * (centre.y - a.y) + side.z * (centre.z - a.z) > 0.0) {
+			side = {-side.x, -side.y, -side.z, true};
+		}
+		planes << WallPlane {side, side.x * a.x + side.y * a.y + side.z * a.z, &brush.faces.at(face), caulkOuter};
+	}
+	planes << WallPlane {{-n.x, -n.y, -n.z, true}, -own.plane.distance, &brush.faces.at(face), caulkInner};
+	return wallFacesFromPlanes(planes, caulk);
+}
+
+} // namespace
+
+// Workflow reference for the caulk, open-face and keep-inner options and the
+// Diagonal and Extrude walls: NetRadiant Custom CSG_MakeRoom, CSG_Hollow,
+// HollowSettings, FaceMakeBrush and CaulkFace (radiant/csg.cpp) at 449778b3
+// (GPL-2.0-or-later). Original Qt implementation; see docs/CREDITS.md.
+bool hollowLevelMapSelection(LevelMapDocument* document, double thickness, LevelMapHollowMode mode, const LevelMapHollowOptions& options,
+	LevelMapHollowReport* report, QString* error)
+{
+	LevelMapHollowReport sceneResult_report;
 	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
-		return hollowLevelMapSelection(candidate, thickness, mode, hollowed ? &sceneResult_hollowed : nullptr, error,
-			skipped ? &sceneResult_skipped : nullptr);
+		return hollowLevelMapSelection(candidate, thickness, mode, options, &sceneResult_report, error);
 	}); guarded.has_value()) {
-		if (*guarded && hollowed) { *hollowed = std::move(sceneResult_hollowed); }
-		if (*guarded && skipped) { *skipped = std::move(sceneResult_skipped); }
+		if (*guarded && report) { *report = std::move(sceneResult_report); }
 		return *guarded;
 	}
 
 	if (error) {
 		error->clear();
 	}
-	if (hollowed) {
-		*hollowed = 0;
-	}
-	if (skipped) {
-		skipped->clear();
+	if (report) {
+		*report = {};
 	}
 	const auto fail = [error](const QString& message) {
 		if (error) {
@@ -12252,26 +12433,74 @@ bool hollowLevelMapSelection(LevelMapDocument* document, double thickness, Level
 	if (!std::isfinite(thickness) || thickness <= 0.0) {
 		return fail(QCoreApplication::translate("VibeStudioLevelMap", "The walls need a thickness above zero."));
 	}
+	const QString caulk = options.caulkTexture.trimmed();
+	if (!caulk.isEmpty()) {
+		const QString problem = textureNameProblem(*document, caulk);
+		if (!problem.isEmpty()) {
+			return fail(problem);
+		}
+	}
 	const QSet<int> brushIds = selectedBrushIds(*document);
 	if (brushIds.isEmpty()) {
 		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Select brushes, or brush entities, to hollow."));
 	}
+	// The open faces of the brushes this edit reaches; others are ignored.
+	QHash<int, QSet<int>> openFaces;
+	for (const LevelSurfaceFace& face : options.openFaces) {
+		if (brushIds.contains(face.brushId)) {
+			openFaces[face.brushId].insert(face.faceIndex);
+		}
+	}
 	int nextId = 0;
 	for (const LevelMapBrush& brush : document->brushes) {
 		nextId = std::max(nextId, brush.id + 1);
+		for (const int face : openFaces.value(brush.id)) {
+			if (face < 0 || face >= brush.faces.size()) {
+				return fail(QCoreApplication::translate("VibeStudioLevelMap", "Brush %1 has no face %2 to leave open.").arg(brush.id).arg(face + 1));
+			}
+		}
 	}
 	LevelMapUndoCommand command;
 	command.commandKind = QStringLiteral("replace-objects");
 	command.objectKind = QStringLiteral("brush");
 	QStringList refusals;
+	int wallCount = 0;
+	int caulkedCount = 0;
+	int openCount = 0;
+	int innerCount = 0;
+	QVector<LevelMapSelectionRef> wallRefs;
+	// Make Room, Diagonal and Extrude build outside the brush.
+	const bool outwards = mode == LevelMapHollowMode::Room || mode == LevelMapHollowMode::Diagonal || mode == LevelMapHollowMode::Extrude;
+	// The faces caulk reaches. Without the inner brush the room is empty, so
+	// they are every wall face but those facing the room and those lining an
+	// opening; with it the room is solid, so they are the faces between the
+	// walls and the inner brush, and between walls, and the outside keeps its
+	// materials.
+	const bool caulkOuter = !caulk.isEmpty() && !options.keepInner;
+	const bool caulkInner = !caulk.isEmpty() && options.keepInner;
+	const bool caulkJoints = !caulk.isEmpty();
+	const QSet<QString> hiddenObjects = levelMapHiddenObjects(*document);
 	for (int index = 0; index < document->brushes.size(); ++index) {
 		const LevelMapBrush& brush = document->brushes.at(index);
 		if (!brushIds.contains(brush.id)) {
 			continue;
 		}
+		if (hiddenObjects.contains(brushObjectId(brush.id))) {
+			refusals << QCoreApplication::translate("VibeStudioLevelMap", "Brush %1 is hidden, so it was left as it was.").arg(brush.id);
+			continue;
+		}
 		const MapBrushGeometry geometry = solveBrushGeometry(brush.faces, brush.id, brush.entityId);
 		if (!geometry.solved) {
 			refusals << QCoreApplication::translate("VibeStudioLevelMap", "Brush %1 is not a closed brush, so it cannot be hollowed.").arg(brush.id);
+			continue;
+		}
+		const QSet<int> open = openFaces.value(brush.id);
+		bool anyWall = false;
+		for (int face = 0; face < geometry.faces.size() && face < brush.faces.size(); ++face) {
+			anyWall = anyWall || (geometry.faces.at(face).isValid() && !open.contains(face));
+		}
+		if (!anyWall) {
+			refusals << QCoreApplication::translate("VibeStudioLevelMap", "Brush %1 has every face open, so it would have no walls.").arg(brush.id);
 			continue;
 		}
 		// Two walls must fit across the brush along every face's normal.
@@ -12293,8 +12522,8 @@ bool hollowLevelMapSelection(LevelMapDocument* document, double thickness, Level
 			}
 			thickEnough = thickEnough && highest - lowest > 2.0 * thickness;
 		}
-		// Make Room builds outwards, so any brush is thick enough.
-		if (!thickEnough && mode != LevelMapHollowMode::Room) {
+		// Walls built outwards fit round any brush.
+		if (!thickEnough && !outwards) {
 			refusals << QCoreApplication::translate("VibeStudioLevelMap", "Brush %1 is too thin for two walls %2 units thick.").arg(brush.id).arg(mapCoordinateText(thickness));
 			continue;
 		}
@@ -12310,12 +12539,34 @@ bool hollowLevelMapSelection(LevelMapDocument* document, double thickness, Level
 					    .arg(brush.id);
 			continue;
 		}
-		// One wall per face: the face pulled in by the thickness, turned to face
-		// the inside, and textured like the face it grew from. Touching walls
-		// also stop at the inside of the walls before them, as NetRadiant
-		// Custom's wrapped hollow does; Make Room builds each wall outside its
-		// face instead, between the face and the brush pushed out on every
-		// side, so the room is the brush itself.
+		// One wall per face, textured like the face it grew from. Overlap
+		// walls are the face pulled in by the thickness and turned to face
+		// the inside; touching walls also stop at the inside of the walls
+		// before them, as NetRadiant Custom's wrapped hollow does. Make Room
+		// builds each wall outside its face instead, between the face and the
+		// brush pushed out on every side, so the room is the brush itself;
+		// Diagonal walls meet on mitred joints and Extrude walls go straight
+		// out. An open face gets no wall, and the walls beside it stop on its
+		// plane instead of past it.
+		//
+		// With caulk, the brush's own faces in the walls are outside faces,
+		// except those on an open face's plane: they line the opening, so they
+		// keep the open face's material.
+		BrushPieceText wallText = text;
+		if (caulkOuter) {
+			for (int face = 0; face < brush.faces.size() && face < text.faceLines.size(); ++face) {
+				if (!open.contains(face)) {
+					const int line = text.faceLines.at(face);
+					wallText.lines[line] = replaceFaceTexture(text.lines.at(line), caulk);
+				}
+			}
+		}
+		const auto caulked = [&caulk](NewBrushFace face, bool hide) {
+			if (hide) {
+				face.texture = caulk;
+			}
+			return face;
+		};
 		QVector<LevelMapBrush> walls;
 		bool built = true;
 		QVector<NewBrushFace> pulledIn;
@@ -12325,30 +12576,41 @@ bool hollowLevelMapSelection(LevelMapDocument* document, double thickness, Level
 		};
 		if (mode == LevelMapHollowMode::Room) {
 			for (int face = 0; face < geometry.faces.size() && face < brush.faces.size(); ++face) {
-				if (geometry.faces.at(face).isValid()) {
-					pushedOut << faceOnPolygon(geometry.faces.at(face), outwardOf(geometry.faces.at(face)), brush.faces.at(face), thickness);
+				const MapFacePolygon& polygon = geometry.faces.at(face);
+				if (!polygon.isValid()) {
+					continue;
 				}
+				pushedOut << (open.contains(face) ? faceOnPolygon(polygon, outwardOf(polygon), brush.faces.at(face), 0.0)
+												  : caulked(faceOnPolygon(polygon, outwardOf(polygon), brush.faces.at(face), thickness), caulkOuter));
 			}
 		}
+		const QVector<bool> noneKept(brush.faces.size(), false);
 		for (int face = 0; face < geometry.faces.size() && face < brush.faces.size() && built; ++face) {
 			const MapFacePolygon& polygon = geometry.faces.at(face);
-			if (!polygon.isValid()) {
+			if (!polygon.isValid() || open.contains(face)) {
 				continue;
 			}
 			const LevelMapVec3 outward = outwardOf(polygon);
 			const LevelMapVec3 inward {-outward.x, -outward.y, -outward.z, true};
 			std::optional<LevelMapBrush> wall;
 			if (mode == LevelMapHollowMode::Overlap) {
-				wall = brushWithAddedFace(*document, brush, text, faceOnPolygon(polygon, inward, brush.faces.at(face), thickness));
+				wall = brushWithAddedFace(*document, brush, wallText, caulked(faceOnPolygon(polygon, inward, brush.faces.at(face), thickness), caulkInner));
 			} else if (mode == LevelMapHollowMode::Touch) {
 				QVector<NewBrushFace> added = pulledIn;
-				added << faceOnPolygon(polygon, inward, brush.faces.at(face), thickness);
-				wall = brushWithFaces(*document, brush, text, {}, added);
-				pulledIn << faceOnPolygon(polygon, outward, brush.faces.at(face), -thickness);
-			} else {
+				added << caulked(faceOnPolygon(polygon, inward, brush.faces.at(face), thickness), caulkInner);
+				wall = brushWithFaces(*document, brush, wallText, {}, added);
+				pulledIn << caulked(faceOnPolygon(polygon, outward, brush.faces.at(face), -thickness), caulkJoints);
+			} else if (mode == LevelMapHollowMode::Room) {
 				QVector<NewBrushFace> added = pushedOut;
-				added << faceOnPolygon(polygon, inward, brush.faces.at(face), 0.0);
-				wall = brushWithFaces(*document, brush, text, QVector<bool>(brush.faces.size(), false), added);
+				added << caulked(faceOnPolygon(polygon, inward, brush.faces.at(face), 0.0), caulkInner);
+				wall = brushWithFaces(*document, brush, wallText, noneKept, added);
+			} else {
+				const QVector<NewBrushFace> added = mode == LevelMapHollowMode::Diagonal
+					? diagonalWallFaces(brush, geometry, face, open, thickness, caulk, caulkOuter, caulkInner, caulkJoints)
+					: extrudedWallFaces(brush, geometry, face, thickness, caulk, caulkOuter, caulkInner);
+				if (!added.isEmpty()) {
+					wall = brushWithFaces(*document, brush, wallText, noneKept, added);
+				}
 			}
 			built = wall.has_value();
 			if (wall) {
@@ -12360,7 +12622,61 @@ bool hollowLevelMapSelection(LevelMapDocument* document, double thickness, Level
 			refusals << QCoreApplication::translate("VibeStudioLevelMap", "Brush %1 could not be made into closed walls.").arg(brush.id);
 			continue;
 		}
-		replaceBrushInCommand(*document, &command, brush, index, walls);
+		// With keepInner, the brush stays: as it is round walls built
+		// outwards, its covered faces caulked; inside walls built inwards,
+		// what they leave of it, each walled face pulled in by the thickness.
+		// It keeps the brush's number.
+		std::optional<LevelMapBrush> inner;
+		if (options.keepInner) {
+			if (outwards) {
+				BrushPieceText innerText = text;
+				if (!caulk.isEmpty()) {
+					for (int face = 0; face < brush.faces.size() && face < text.faceLines.size(); ++face) {
+						if (!open.contains(face) && face < geometry.faces.size() && geometry.faces.at(face).isValid()) {
+							const int line = text.faceLines.at(face);
+							innerText.lines[line] = replaceFaceTexture(text.lines.at(line), caulk);
+						}
+					}
+				}
+				inner = brushWithFaces(*document, brush, innerText, {}, {});
+			} else {
+				QVector<bool> keep(brush.faces.size(), false);
+				QVector<NewBrushFace> added;
+				for (int face = 0; face < geometry.faces.size() && face < brush.faces.size(); ++face) {
+					const MapFacePolygon& polygon = geometry.faces.at(face);
+					if (open.contains(face)) {
+						keep[face] = true;
+					} else if (polygon.isValid()) {
+						added << caulked(faceOnPolygon(polygon, outwardOf(polygon), brush.faces.at(face), -thickness), !caulk.isEmpty());
+					}
+				}
+				inner = brushWithFaces(*document, brush, text, keep, added);
+			}
+			if (!inner) {
+				refusals << QCoreApplication::translate("VibeStudioLevelMap", "Brush %1 could not keep an inner brush inside its walls.").arg(brush.id);
+				continue;
+			}
+			inner->id = brush.id;
+		}
+		QVector<LevelMapBrush> pieces;
+		if (inner) {
+			pieces << *inner;
+			++innerCount;
+		}
+		pieces += walls;
+		if (!caulk.isEmpty()) {
+			for (const LevelMapBrush& piece : std::as_const(pieces)) {
+				caulkedCount += static_cast<int>(std::count_if(piece.faces.cbegin(), piece.faces.cend(), [&caulk](const LevelMapBrushFace& face) {
+					return face.textureName == caulk;
+				}));
+			}
+		}
+		for (const LevelMapBrush& wall : std::as_const(walls)) {
+			wallRefs << LevelMapSelectionRef {LevelMapSelectionKind::QuakeBrush, wall.id};
+		}
+		wallCount += static_cast<int>(walls.size());
+		openCount += static_cast<int>(open.size());
+		replaceBrushInCommand(*document, &command, brush, index, pieces);
 	}
 	if (command.brushSnapshots.isEmpty()) {
 		return fail(refusals.isEmpty() ? QCoreApplication::translate("VibeStudioLevelMap", "Select brushes, or brush entities, to hollow.") : refusals.first());
@@ -12369,20 +12685,26 @@ bool hollowLevelMapSelection(LevelMapDocument* document, double thickness, Level
 	if (count == 1) {
 		const int id = command.brushSnapshots.first().id;
 		command.objectId = id;
-		command.description = QCoreApplication::translate("VibeStudioLevelMap", "Hollow brush:%1 into %2 walls").arg(id).arg(command.brushResults.size());
+		command.description = QCoreApplication::translate("VibeStudioLevelMap", "Hollow brush:%1 into %2 walls").arg(id).arg(wallCount);
 		command.undoDescription = QCoreApplication::translate("VibeStudioLevelMap", "Fill brush:%1 back in").arg(id);
 	} else {
-		command.description = QCoreApplication::translate("VibeStudioLevelMap", "Hollow %1 brushes into %2 walls").arg(count).arg(command.brushResults.size());
+		command.description = QCoreApplication::translate("VibeStudioLevelMap", "Hollow %1 brushes into %2 walls").arg(count).arg(wallCount);
 		command.undoDescription = QCoreApplication::translate("VibeStudioLevelMap", "Fill %1 brushes back in").arg(count);
 	}
-	if (!commitBrushReplacement(document, &command)) {
+	// The walls are selected; a kept inner brush is not.
+	if (!commitBrushReplacement(document, &command, innerCount == 0)) {
 		return fail(QCoreApplication::translate("VibeStudioLevelMap", "The brushes to hollow are no longer in the map."));
 	}
-	if (hollowed) {
-		*hollowed = count;
+	if (innerCount > 0) {
+		setLevelMapSelection(document, wallRefs);
 	}
-	if (skipped) {
-		*skipped = refusals;
+	if (report) {
+		report->hollowed = count;
+		report->walls = wallCount;
+		report->innerKept = innerCount;
+		report->caulkedFaces = caulkedCount;
+		report->openFaces = openCount;
+		report->skipped = refusals;
 	}
 	return true;
 }
@@ -15247,8 +15569,209 @@ bool resizeLevelMapSelection(LevelMapDocument* document, const LevelMapVec3& min
 	return transformLevelMapSelection(document, transform, true, error);
 }
 
+// NetRadiant Custom's Arbitrary Scale: factors about a pivot, where negative
+// factors mirror. Workflow reference: NRC radiant/select.cpp ScaleDialog and
+// Select_Scale, and radiant/selection.cpp scaleSelected, at 449778b3
+// (GPL-2.0-or-later). Original implementation; see docs/CREDITS.md.
+bool scaleLevelMapSelection(LevelMapDocument* document, const LevelMapScaleRequest& request, QString* error)
+{
+	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
+		return scaleLevelMapSelection(candidate, request, error);
+	}); guarded.has_value()) {
+		return *guarded;
+	}
+
+	if (error) {
+		error->clear();
+	}
+	const auto fail = [error](const QString& message) {
+		if (error) {
+			*error = message;
+		}
+		return false;
+	};
+	if (!document || document->selection.isEmpty()) {
+		return fail(document ? QCoreApplication::translate("VibeStudioLevelMap", "Nothing is selected.") : QCoreApplication::translate("VibeStudioLevelMap", "Missing map document."));
+	}
+	const auto& factors = request.factors;
+	for (int axis = 0; axis < 3; ++axis) {
+		if (!std::isfinite(factors[axis]) || std::abs(factors[axis]) > 32768) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "Each scale factor must be a finite number between -32768 and 32768."));
+		}
+		if (std::abs(factors[axis]) < 1e-6) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "A scale factor of 0 along %1 would flatten the selection.").arg(QString(QLatin1Char("xyz"[axis]))));
+		}
+	}
+	if (factors == std::array<double, 3> {1, 1, 1}) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Scale factors of 1, 1 and 1 change nothing."));
+	}
+	const bool doom = document->format == LevelMapFormat::DoomWad;
+	if (doom && factors[2] != 1) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "A Doom map scales in the top view only. Set the Z factor to 1."));
+	}
+	const double pivotLimit = document->doomUdmf ? 1e7 : 32768;
+	const auto& pivot = request.pivot;
+	if (pivot.valid && (!std::isfinite(pivot.x) || !std::isfinite(pivot.y) || !std::isfinite(pivot.z)
+		|| std::max({std::abs(pivot.x), std::abs(pivot.y), std::abs(pivot.z)}) > pivotLimit)) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "The scale pivot must be finite and within %1 to %2 on each axis.")
+			.arg(-pivotLimit, 0, 'g', 10).arg(pivotLimit, 0, 'g', 10));
+	}
+	SelectionTransform transform;
+	transform.repeatable = true;
+	transform.pivot = pivot;
+	transform.textures = request.textures;
+	transform.point = [factors](const LevelMapVec3& point, const LevelMapVec3& centre) {
+		return LevelMapVec3 {centre.x + (point.x - centre.x) * factors[0], centre.y + (point.y - centre.y) * factors[1],
+			centre.z + (point.z - centre.z) * factors[2], point.valid};
+	};
+	transform.direction = [factors](const LevelMapVec3& direction) {
+		return LevelMapVec3 {direction.x * factors[0], direction.y * factors[1], direction.z * factors[2], direction.valid};
+	};
+	// Scaling by S takes a plane's normal n to S^-1 n, kept at unit length;
+	// a negative factor turns it with the mirrored plane.
+	transform.normal = [factors](const LevelMapVec3& normal) {
+		LevelMapVec3 result {normal.x / factors[0], normal.y / factors[1], normal.z / factors[2], normal.valid};
+		const double length = std::sqrt(result.x * result.x + result.y * result.y + result.z * result.z);
+		if (length > 0.0) {
+			result.x /= length;
+			result.y /= length;
+			result.z /= length;
+		}
+		return result;
+	};
+	// Headings reflect as Flip X (180 - a) and Flip Y (-a) do; both together
+	// turn them half round. Positive factors keep them, as Resize does.
+	const bool mirrorX = factors[0] < 0, mirrorY = factors[1] < 0;
+	transform.yaw = [mirrorX, mirrorY](double yaw) -> std::optional<double> {
+		if (mirrorX && mirrorY) {
+			return yaw + 180.0;
+		}
+		if (mirrorX) {
+			return 180.0 - yaw;
+		}
+		if (mirrorY) {
+			return -yaw;
+		}
+		return std::nullopt;
+	};
+	// Doom geometry has no height to mirror (the z factor is 1 there).
+	transform.mirror = factors[0] * factors[1] * factors[2] < 0;
+	const QString scale = QStringLiteral("%1, %2, %3").arg(mapCoordinateText(factors[0]), mapCoordinateText(factors[1]), mapCoordinateText(factors[2]));
+	if (document->selection.size() == 1) {
+		const QString only = levelMapSelectionRefId(document->selection.first());
+		transform.description = QCoreApplication::translate("VibeStudioLevelMap", "Scale %1 by %2").arg(only, scale);
+		transform.undoDescription = QCoreApplication::translate("VibeStudioLevelMap", "Scale %1 back").arg(only);
+	} else {
+		const int count = static_cast<int>(document->selection.size());
+		transform.description = QCoreApplication::translate("VibeStudioLevelMap", "Scale %1 objects by %2").arg(count).arg(scale);
+		transform.undoDescription = QCoreApplication::translate("VibeStudioLevelMap", "Scale %1 objects back").arg(count);
+	}
+	return transformLevelMapSelection(document, transform, true, error);
+}
+
+QVector<QPair<int, double>> levelMapRotationSteps(const LevelMapRotationRequest& request)
+{
+	QVector<QPair<int, double>> steps;
+	if (!request.euler) {
+		steps.append({request.axis, request.degrees});
+		return steps;
+	}
+	for (int axis = 0; axis < 3; ++axis) {
+		const double degrees = request.eulerDegrees[axis];
+		// A non-finite angle stays, so the turn reports it.
+		if (!std::isfinite(degrees) || std::abs(std::remainder(degrees, 360.0)) >= 1e-9) {
+			steps.append({axis, degrees});
+		}
+	}
+	return steps;
+}
+
+namespace {
+// NetRadiant Custom's Arbitrary Rotation: one Euler XYZ turn about one pivot.
+// Each world-axis turn reuses the single-axis service, so entity angles, texture
+// lock, Valve 220 policy and Repeat Last Commands behave as for one turn, and
+// the turns fold into one undo step. Workflow reference: NRC radiant/select.cpp
+// RotateDialog and libs/math/matrix.h matrix4_rotation_for_euler_xyz at
+// 449778b3 (GPL-2.0-or-later). Original implementation; see docs/CREDITS.md.
+bool rotateLevelMapSelectionEuler(LevelMapDocument* document, const LevelMapRotationRequest& request, QString* error)
+{
+	if (error) { error->clear(); }
+	const auto fail = [error](const QString& message) { if (error) { *error = message; } return false; };
+	const auto steps = levelMapRotationSteps(request);
+	if (steps.isEmpty()) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "A whole number of full turns changes nothing."));
+	}
+	LevelMapRotationRequest single = request;
+	single.euler = false;
+	if (steps.size() == 1) {
+		single.axis = steps.first().first;
+		single.degrees = steps.first().second;
+		return rotateLevelMapSelection(document, single, error);
+	}
+	if (!document || document->selection.isEmpty()) { return fail(QCoreApplication::translate("VibeStudioLevelMap", "Nothing is selected.")); }
+	if (document->format == LevelMapFormat::DoomWad) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "A Doom map turns about Z only. Set the X and Y angles to 0."));
+	}
+	for (const auto& step : steps) {
+		if (!std::isfinite(step.second) || std::abs(step.second) > 360000) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "Rotation must be a finite number between -360000 and 360000 degrees."));
+		}
+	}
+	// Every turn keeps the first one's pivot: the selection's centre moves
+	// as it turns, and an Euler rotation turns about one point.
+	LevelMapVec3 pivot = request.pivot;
+	if (!pivot.valid) {
+		LevelMapVec3 low, high;
+		if (!transformSetBounds(*document, transformSetFor(*document, document->selection), &low, &high)) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "Nothing selected has a position to transform about."));
+		}
+		pivot = {(low.x + high.x) * 0.5, (low.y + high.y) * 0.5, (low.z + high.z) * 0.5, true};
+	}
+	single.pivot = pivot;
+	std::array<double, 3> recorded {0, 0, 0};
+	for (const auto& step : steps) { recorded[step.first] = step.second; }
+	auto candidate = *document;
+	const auto apply = [&](LevelMapDocument* working) {
+		const detail::LevelMapHistoryScope history(*working);
+		const auto before = working->undoStack.size();
+		const auto repeatRevision = working->repeat.revision;
+		for (const auto& step : steps) {
+			single.axis = step.first;
+			single.degrees = step.second;
+			if (!rotateLevelMapSelection(working, single, error)) {
+				return false;
+			}
+		}
+		// The steps recorded their last turn for Repeat Transforms; it repeats
+		// the whole Euler turn instead, as NetRadiant Custom's does.
+		if (working->repeat.revision != repeatRevision) {
+			working->repeat.transforms.rotationEulerXyz = true;
+			working->repeat.transforms.rotationEuler = recorded;
+			working->repeat.transforms.rotationAxis = -1;
+			working->repeat.transforms.rotationDegrees = 0;
+		}
+		return collapseLevelMapUndoSteps(working, static_cast<int>(working->undoStack.size() - before),
+			QCoreApplication::translate("VibeStudioLevelMap", "Rotate selection %1, %2 and %3 degrees about x, y and z")
+				.arg(mapCoordinateText(recorded[0]), mapCoordinateText(recorded[1]), mapCoordinateText(recorded[2])),
+			QCoreApplication::translate("VibeStudioLevelMap", "Undo selection rotation"), error);
+	};
+	if (const auto guarded = guardLevelSceneEdit(&candidate, error, apply); guarded.has_value()) {
+		if (!*guarded) {
+			return false;
+		}
+	} else if (!apply(&candidate)) {
+		return false;
+	}
+	*document = std::move(candidate);
+	return true;
+}
+} // namespace
+
 bool rotateLevelMapSelection(LevelMapDocument* document, const LevelMapRotationRequest& request, QString* error)
 {
+	if (request.euler) {
+		return rotateLevelMapSelectionEuler(document, request, error);
+	}
 	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
 		return rotateLevelMapSelection(candidate, request, error);
 	}); guarded.has_value()) {

@@ -102,6 +102,11 @@ void main()
 	if (!marked && (params.y > 0.5 || hovered)) {
 		float width = (hovered ? 1.8 : 0.9) * ratio;
 		for (int edge = 0; edge < 3; ++edge) {
+			// Polygon diagonals keep the plain outline off; the hovered
+			// triangle is still outlined on all three sides.
+			if (!hovered && (vFlags & (64u << uint(edge))) != 0u) {
+				continue;
+			}
 			if (edgeDistance[edge] <= width) {
 				color = tint(color, hovered ? hoverColor : edgeColor);
 				break;

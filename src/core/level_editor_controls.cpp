@@ -1,4 +1,5 @@
 #include "core/level_editor_controls.h"
+#include "core/level_camera_texture.h"
 
 #include "core/level_map.h"
 #include "core/studio_semantics.h"
@@ -339,6 +340,43 @@ LevelEditorControls trenchBroomLevelControls()
 		bind("map.duplicateMoveBack", {QStringLiteral("Ctrl+Down")}),
 		bind("map.duplicateMoveDepthUp", {QStringLiteral("Ctrl+PgUp")}),
 		bind("map.duplicateMoveDepthDown", {QStringLiteral("Ctrl+PgDown")}),
+		// TB ActionManager "Controls/Map view/Move textures up, down, left and
+		// right" (plain, coarse and fine) and "Flip textures horizontally /
+		// vertically" at 4c756be1 (GPL-3.0-or-later): the 3D view with faces
+		// selected. Key facts only; see docs/CREDITS.md. They act only in the
+		// camera, and only while faces are picked there; otherwise these keys
+		// nudge, copy and flip objects as above (core/level_camera_texture.h).
+		bind("map.moveTexturesUp", {QStringLiteral("Up")}),
+		bind("map.moveTexturesDown", {QStringLiteral("Down")}),
+		bind("map.moveTexturesLeft", {QStringLiteral("Left")}),
+		bind("map.moveTexturesRight", {QStringLiteral("Right")}),
+		bind("map.moveTexturesUpCoarse", {QStringLiteral("Shift+Up")}),
+		bind("map.moveTexturesDownCoarse", {QStringLiteral("Shift+Down")}),
+		bind("map.moveTexturesLeftCoarse", {QStringLiteral("Shift+Left")}),
+		bind("map.moveTexturesRightCoarse", {QStringLiteral("Shift+Right")}),
+		bind("map.moveTexturesUpFine", {QStringLiteral("Ctrl+Up")}),
+		bind("map.moveTexturesDownFine", {QStringLiteral("Ctrl+Down")}),
+		bind("map.moveTexturesLeftFine", {QStringLiteral("Ctrl+Left")}),
+		bind("map.moveTexturesRightFine", {QStringLiteral("Ctrl+Right")}),
+		bind("map.flipTexturesHorizontally", {QStringLiteral("Ctrl+F")}),
+		bind("map.flipTexturesVertically", {QStringLiteral("Ctrl+Alt+F")}),
+		// TB ActionManager "Controls/Map view/Rotate textures clockwise /
+		// counter-clockwise" (plain, coarse and fine) at 4c756be1
+		// (GPL-3.0-or-later), the same face-selection context: 15°, 90° and 1°.
+		// Key facts only; see docs/CREDITS.md. With no face picked, Page Up and
+		// Page Down nudge along the depth axis and Ctrl copies, as above.
+		bind("map.rotateTexturesClockwise", {QStringLiteral("PgUp")}),
+		bind("map.rotateTexturesClockwiseCoarse", {QStringLiteral("Shift+PgUp")}),
+		bind("map.rotateTexturesClockwiseFine", {QStringLiteral("Ctrl+PgUp")}),
+		bind("map.rotateTexturesCounterclockwise", {QStringLiteral("PgDown")}),
+		bind("map.rotateTexturesCounterclockwiseCoarse", {QStringLiteral("Shift+PgDown")}),
+		bind("map.rotateTexturesCounterclockwiseFine", {QStringLiteral("Ctrl+PgDown")}),
+		// TB ActionManager "Controls/Map view/Reset texture alignment" and
+		// "... to world aligned" at 4c756be1 (GPL-3.0-or-later): Shift+R keeps
+		// each face's projection kind; Shift+Alt+R projects along the world
+		// axes, as Natural does. Key facts only; see docs/CREDITS.md.
+		bind("map.surfaceReset", {QStringLiteral("Shift+R")}),
+		bind("map.surfaceNatural", {QStringLiteral("Alt+Shift+R")}),
 	};
 	controls.keys += gridDigitKeys();
 	return controls;
@@ -481,6 +519,12 @@ LevelEditorControls netRadiantCustomLevelControls()
 		bind("map.redo", {QStringLiteral("Ctrl+Shift+Z"), QStringLiteral("Ctrl+Y")}),
 		// W is a camera key in mouse look.
 		bind("map.previewWireframe", {}),
+		// NRC camwindow.cpp CameraModeNext and CameraModePrev at 449778b3
+		// (GPL-2.0-or-later) step the camera's draw mode on Shift+] and
+		// Shift+[ (core/level_camera_render.h). Key facts only; see
+		// docs/CREDITS.md.
+		bind("map.nextCameraMode", {QStringLiteral("Shift+]")}),
+		bind("map.previousCameraMode", {QStringLiteral("Shift+[")}),
 		// NRC 449778b3 (GPL-2.0-or-later): tools.cpp DragVertices, DragEdges
 		// and DragFaces; patchmanip.cpp's patch matrix, Invert, Transpose and
 		// Thicken and Smooth Columns keys and InvertCurveTextureY;
@@ -512,6 +556,10 @@ LevelEditorControls netRadiantCustomLevelControls()
 		bind("map.surfaceScaleStepDown", {QStringLiteral("Ctrl+Down")}),
 		bind("map.surfaceScaleStepLeft", {QStringLiteral("Ctrl+Left")}),
 		bind("map.surfaceScaleStepRight", {QStringLiteral("Ctrl+Right")}),
+		// NRC radiant/surfacedialog.cpp "TextureReset/Cap" at 449778b3
+		// (GPL-2.0-or-later) resets textures and caps patches on Shift+N. Key
+		// facts only; see docs/CREDITS.md.
+		bind("map.surfaceRadiantReset", {QStringLiteral("Shift+N")}),
 		bind("map.textureLock", {QStringLiteral("Shift+T")}),
 		bind("map.makeDetail", {QStringLiteral("Alt+D")}),
 		bind("map.makeStructural", {QStringLiteral("Alt+S")}),
@@ -539,21 +587,35 @@ LevelEditorControls netRadiantCustomLevelControls()
 		// (Reset Transforms) stays off a menu-bar mnemonic chord here.
 		bind("map.moveToCamera", {QStringLiteral("Ctrl+Shift+V")}),
 		bind("map.repeatTransforms", {QStringLiteral("Ctrl+R")}),
+		// NRC radiant/select.cpp "ArbitraryRotation" and "ArbitraryScale" at
+		// 449778b3 (GPL-2.0-or-later): Shift+R opens the rotation window and
+		// Ctrl+Shift+S the scale window. NRC's Save Map As has no key, and the
+		// studio's Save Map As keeps Ctrl+Alt+S, so neither clashes. Key facts
+		// only; see docs/CREDITS.md.
+		bind("map.rotatePrecisely", {QStringLiteral("Shift+R")}),
+		bind("map.scaleSelection", {QStringLiteral("Ctrl+Shift+S")}),
 		// NRC radiant/filters.cpp ConstructFilters at 449778b3
 		// (GPL-2.0-or-later): the Filter menu's keys, for the kinds VibeStudio
 		// filters. Key facts only; see docs/CREDITS.md. Ctrl+P (Patches) stays
-		// unbound: the studio keeps it for Go to File, a window-wide key.
+		// unbound: the studio keeps it for Go to File, a window-wide key, and
+		// Lightgrid has no key upstream either.
 		bind("map.filterWorld", {QStringLiteral("Alt+1")}),
 		bind("map.filterEntities", {QStringLiteral("Alt+2")}),
+		bind("map.filterAreaportals", {QStringLiteral("Alt+3")}),
+		bind("map.filterTranslucent", {QStringLiteral("Alt+4")}),
 		bind("map.filterLiquids", {QStringLiteral("Alt+5")}),
 		bind("map.filterCaulk", {QStringLiteral("Alt+6")}),
 		bind("map.filterClip", {QStringLiteral("Alt+7")}),
 		bind("map.filterPaths", {QStringLiteral("Alt+8")}),
+		bind("map.filterClusterportals", {QStringLiteral("Alt+9")}),
 		bind("map.filterLights", {QStringLiteral("Alt+0")}),
+		bind("map.filterStructural", {QStringLiteral("Ctrl+Shift+D")}),
 		bind("map.filterDetail", {QStringLiteral("Ctrl+D")}),
 		bind("map.filterHint", {QStringLiteral("Ctrl+H")}),
 		bind("map.filterModels", {QStringLiteral("Shift+M")}),
 		bind("map.filterTriggers", {QStringLiteral("Ctrl+Shift+T")}),
+		bind("map.filterBotclip", {QStringLiteral("Alt+M")}),
+		bind("map.filterDecals", {QStringLiteral("Shift+D")}),
 	};
 	controls.keys += gridDigitKeys();
 	return controls;
@@ -1194,9 +1256,12 @@ QStringList levelEditorControlProblems(const LevelEditorControls& controls)
 	if (camera.toggleModifiers != Qt::NoModifier && camera.leftPanModifiers.testAnyFlags(camera.toggleModifiers)) {
 		problems << QCoreApplication::translate("VibeStudioLevelControls", "A 3D click that toggles would pan instead.");
 	}
-	// No key may belong to two commands.
-	QHash<QString, QString> owners;
+	// No key may belong to two commands. The camera's texture moves and flips
+	// are apart: they take their keys only while faces are picked there, and
+	// the same keys work the views otherwise (core/level_camera_texture.h).
+	QHash<QString, QString> owners, faceOwners;
 	for (const LevelEditorKeyBinding& binding : controls.keys) {
+		QHash<QString, QString>& keyOwners = levelCameraTextureCommandForId(binding.commandId) ? faceOwners : owners;
 		for (const QString& key : binding.keys) {
 			const auto sequence = QKeySequence::fromString(key, QKeySequence::PortableText);
 			if (sequence.isEmpty() || sequence[0].key() == Qt::Key_unknown) {
@@ -1204,12 +1269,17 @@ QStringList levelEditorControlProblems(const LevelEditorControls& controls)
 				continue;
 			}
 			const QString normalized = sequence.toString(QKeySequence::PortableText).toLower();
-			const auto owner = owners.constFind(normalized);
-			if (owner != owners.constEnd() && owner.value() != binding.commandId) {
+			const auto owner = keyOwners.constFind(normalized);
+			if (owner != keyOwners.constEnd() && owner.value() != binding.commandId) {
 				problems << QCoreApplication::translate("VibeStudioLevelControls", "%1 is bound to both %2 and %3.").arg(key, owner.value(), binding.commandId);
 				continue;
 			}
-			owners.insert(normalized, binding.commandId);
+			keyOwners.insert(normalized, binding.commandId);
+		}
+	}
+	for (auto face = faceOwners.cbegin(); face != faceOwners.cend(); ++face) {
+		if (!owners.contains(face.key())) {
+			owners.insert(face.key(), face.value());
 		}
 	}
 	for (const auto& lookKey : {camera.lookToggleKey, camera.lookHoldKey}) {

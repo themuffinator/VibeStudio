@@ -1,6 +1,11 @@
 #include "core/level_surface.h"
+#include "core/level_camera_texture.h"
+#include "core/level_patch.h"
 #include "core/level_patch_tools.h"
+#include "core/level_scene.h"
+#include "core/level_scene_locks.h"
 #include "core/level_texture_mapping.h"
+#include "core/level_visibility.h"
 #include "core/map_geometry.h"
 #include <QCoreApplication>
 #include <QMap>
@@ -181,11 +186,88 @@ bool writable(LevelMapBrushFace *face)
 	const double area = std::abs(crossX * plane.normalX + crossY * plane.normalY + crossZ * plane.normalZ);
 	return p.valid && std::isfinite(area) && area > 1e-14;
 }
+bool cameraOperation(LevelSurfaceOperation operation)
+{
+	return operation == LevelSurfaceOperation::CameraShift || operation == LevelSurfaceOperation::CameraFlip;
+}
+// A camera move or flip as the face's own shift or mirror, once its texture
+// axes are placed on screen (core/level_camera_texture.h).
+LevelSurfaceRequest cameraRequest(const LevelSurfaceRequest &request, const LevelCameraTextureAxes &axes)
+{
+	LevelSurfaceRequest local = request;
+	if (request.operation == LevelSurfaceOperation::CameraShift) {
+		const QPointF shift = levelCameraTextureShift(axes, request.x, request.y);
+		local.operation = LevelSurfaceOperation::Shift;
+		local.x = shift.x();
+		local.y = shift.y();
+		return local;
+	}
+	const bool across = request.x != 0, upward = request.y != 0;
+	local.operation = LevelSurfaceOperation::Scale;
+	local.x = (axes.uHorizontal ? across : upward) ? -1 : 1;
+	local.y = (axes.uHorizontal ? upward : across) ? -1 : 1;
+	return local;
+}
 bool editFace(LevelMapBrushFace *face, const MapFacePolygon &polygon, const LevelSurfaceRequest &request, QSize imageSize, QString *error)
 {
 	const auto original = levelTextureProjection(*face);
 	if (!original.valid || !polygon.isValid()) {
 		return fail(error, SurfaceText::tr("The face has no valid winding or texture projection."));
+	}
+	if (cameraOperation(request.operation)) {
+		if (request.x == 0 && request.y == 0) {
+			return true;
+		}
+		const auto plane = face->explicitPlane ? MapPlane{face->planeNormal.x, face->planeNormal.y, face->planeNormal.z, 0, true}
+											   : planeFromPoints(face->p0, face->p1, face->p2);
+		const auto axes = levelCameraTextureAxes(original.u, original.v, {plane.normalX, plane.normalY, plane.normalZ, true}, request.cameraRight,
+			request.cameraUp);
+		if (!axes.valid) {
+			return fail(error, SurfaceText::tr("The face's texture mapping is collapsed on its plane. Reset its mapping before moving it from the camera."));
+		}
+		return editFace(face, polygon, cameraRequest(request, axes), imageSize, error);
+	}
+	if (request.operation == LevelSurfaceOperation::ClockwiseRotate) {
+		// TrenchBroom's turn: clockwise from the face's front, keeping the
+		// offsets. Workflow reference: TB MapViewBase::rotateUV and
+		// rotateUVAngle at 4c756be1 (GPL-3.0-or-later); original code, see
+		// docs/CREDITS.md.
+		if (std::remainder(request.degrees, 360.0) == 0) {
+			return true;
+		}
+		// Which way a positive Radiant turn goes on screen depends on the
+		// face: a classic face turns its projection axes whatever its scale
+		// signs, a Valve 220 face its stored axes, and a brush-primitive face
+		// always turns anticlockwise from its front. A quarter turn of a copy
+		// shows which.
+		LevelMapBrushFace probe = *face;
+		if (!turn(&probe, 90, true, error)) {
+			return false;
+		}
+		const auto turned = levelTextureProjection(probe);
+		const LevelTextureTurn positive = turned.valid
+			? levelTextureTurnSense(original.u, turned.u, {polygon.plane.normalX, polygon.plane.normalY, polygon.plane.normalZ, true})
+			: LevelTextureTurn::None;
+		if (positive == LevelTextureTurn::None) {
+			return fail(error, SurfaceText::tr("The face's texture mapping is collapsed on its plane. Reset its mapping before rotating it."));
+		}
+		LevelSurfaceRequest local = request;
+		local.operation = LevelSurfaceOperation::RadiantRotate;
+		local.degrees = positive == LevelTextureTurn::Counterclockwise ? -request.degrees : request.degrees;
+		return editFace(face, polygon, local, imageSize, error);
+	}
+	if (request.operation == LevelSurfaceOperation::Reset
+		|| (request.operation == LevelSurfaceOperation::RadiantReset && !face->explicitTextureAxes && !face->explicitTextureMatrix)) {
+		// One reset whatever the face's format, keeping it: a classic face to
+		// its natural numbers, others into their plane. Workflow reference: TB
+		// MapViewBase::resetUV (Reset Texture Alignment) and NRC
+		// SurfaceInspector_ResetTexture (TextureReset/Cap) at 4c756be1
+		// (GPL-3.0-or-later) and 449778b3 (GPL-2.0-or-later). Original code;
+		// see docs/CREDITS.md. A Radiant reset of a Valve 220 or primitive face
+		// takes its plane's basis below.
+		LevelSurfaceRequest local = request;
+		local.operation = !face->explicitTextureAxes && !face->explicitTextureMatrix ? LevelSurfaceOperation::Natural : LevelSurfaceOperation::FaceAligned;
+		return editFace(face, polygon, local, imageSize, error);
 	}
 	const bool turning = request.operation == LevelSurfaceOperation::Rotate || request.operation == LevelSurfaceOperation::RadiantRotate;
 	if ((request.operation == LevelSurfaceOperation::Shift && request.x == 0 && request.y == 0) ||
@@ -203,12 +285,15 @@ bool editFace(LevelMapBrushFace *face, const MapFacePolygon &polygon, const Leve
 		return fail(error, SurfaceText::tr("Material %1 needs a known image size. Open its package or provide an explicit texture size.")
 							   .arg(face->textureName));
 	}
-	if (request.operation == LevelSurfaceOperation::Natural || request.operation == LevelSurfaceOperation::FaceAligned) {
+	if (request.operation == LevelSurfaceOperation::Natural || request.operation == LevelSurfaceOperation::FaceAligned
+		|| request.operation == LevelSurfaceOperation::RadiantReset) {
 		// A reset mapping, in the face's own dialect. Classic faces take the
 		// natural one as plain numbers; a face-aligned slope may need axes.
 		const auto projection = request.operation == LevelSurfaceOperation::Natural
 			? levelNaturalTextureProjection(*face, request.x, request.y, imageSize)
-			: levelFaceAlignedTextureProjection(*face, request.x, request.y, imageSize);
+			: request.operation == LevelSurfaceOperation::FaceAligned
+			? levelFaceAlignedTextureProjection(*face, request.x, request.y, imageSize)
+			: levelPlaneBasisTextureProjection(*face, request.x, request.y, imageSize);
 		if (!projection.valid) {
 			return fail(error, SurfaceText::tr("The face's plane has no projection to reset to."));
 		}
@@ -305,6 +390,47 @@ bool editFace(LevelMapBrushFace *face, const MapFacePolygon &polygon, const Leve
 	return true;
 }
 
+// The directions in which a patch's texture coordinates grow, and its
+// surface normal, at its middle control point: from the control points on
+// either side of it along the row and down the column. A patch whose middle
+// has no spread falls back to the whole grid's, first to last. Flat patches
+// with an even mapping give the same directions anywhere.
+bool patchTextureDirections(const LevelMapPatch &patch, LevelMapVec3 *gradientU, LevelMapVec3 *gradientV, LevelMapVec3 *normal)
+{
+	if (patch.width < 2 || patch.height < 2 || patch.controlPoints.size() != patch.width * patch.height) {
+		return false;
+	}
+	const auto at = [&patch](int row, int column) { return row * patch.width + column; };
+	const auto solve = [&](int row0, int row1, int column0, int column1, int middleRow, int middleColumn) {
+		// Tangents along the row (s) and down the column (t), with the
+		// coordinate changes along each.
+		const auto &a = patch.controlPoints[at(middleRow, column0)], &b = patch.controlPoints[at(middleRow, column1)];
+		const auto &c = patch.controlPoints[at(row0, middleColumn)], &d = patch.controlPoints[at(row1, middleColumn)];
+		const LevelMapVec3 s{b.x - a.x, b.y - a.y, b.z - a.z, true}, t{d.x - c.x, d.y - c.y, d.z - c.z, true};
+		const double du[2] = {patch.controlU[at(middleRow, column1)] - patch.controlU[at(middleRow, column0)],
+							  patch.controlU[at(row1, middleColumn)] - patch.controlU[at(row0, middleColumn)]};
+		const double dv[2] = {patch.controlV[at(middleRow, column1)] - patch.controlV[at(middleRow, column0)],
+							  patch.controlV[at(row1, middleColumn)] - patch.controlV[at(row0, middleColumn)]};
+		const double ss = s.x * s.x + s.y * s.y + s.z * s.z, tt = t.x * t.x + t.y * t.y + t.z * t.z, st = s.x * t.x + s.y * t.y + s.z * t.z;
+		const double determinant = ss * tt - st * st;
+		if (!std::isfinite(determinant) || determinant <= 1e-12 * ss * tt || ss <= 1e-12 || tt <= 1e-12) {
+			return false;
+		}
+		// The in-surface vector g with g.s and g.t equal to the changes.
+		const auto gradient = [&](const double change[2]) {
+			const double alpha = (change[0] * tt - change[1] * st) / determinant, beta = (change[1] * ss - change[0] * st) / determinant;
+			return LevelMapVec3{alpha * s.x + beta * t.x, alpha * s.y + beta * t.y, alpha * s.z + beta * t.z, true};
+		};
+		*gradientU = gradient(du);
+		*gradientV = gradient(dv);
+		*normal = {s.y * t.z - s.z * t.y, s.z * t.x - s.x * t.z, s.x * t.y - s.y * t.x, true};
+		return true;
+	};
+	const int row = (patch.height - 1) / 2, column = (patch.width - 1) / 2;
+	return solve(std::max(row - 1, 0), std::min(row + 1, patch.height - 1), std::max(column - 1, 0), std::min(column + 1, patch.width - 1), row, column)
+		|| solve(0, patch.height - 1, 0, patch.width - 1, row, column);
+}
+
 // The same adjustments on a patch's control-point coordinates, which count
 // repeats. Rotation and scaling keep the middle of the patch's coordinates
 // where it is, as they keep a face's centre.
@@ -313,6 +439,54 @@ bool editPatch(LevelMapPatch *patch, const LevelSurfaceRequest &request, QSize i
 	const int count = static_cast<int>(patch->controlPoints.size());
 	if (count == 0 || patch->controlU.size() != count || patch->controlV.size() != count) {
 		return fail(error, SurfaceText::tr("The patch has no texture coordinates."));
+	}
+	if (request.operation == LevelSurfaceOperation::Reset || request.operation == LevelSurfaceOperation::RadiantReset) {
+		// TrenchBroom's reset leaves a patch its natural spread along the
+		// surface; Radiant's caps it, projecting along its average normal.
+		LevelSurfaceRequest local = request;
+		local.operation = request.operation == LevelSurfaceOperation::Reset ? LevelSurfaceOperation::Natural : LevelSurfaceOperation::FaceAligned;
+		return editPatch(patch, local, imageSize, error);
+	}
+	if (cameraOperation(request.operation)) {
+		if (request.x == 0 && request.y == 0) {
+			return true;
+		}
+		LevelMapVec3 gradientU, gradientV, normal;
+		const auto axes = patchTextureDirections(*patch, &gradientU, &gradientV, &normal)
+			? levelCameraTextureAxes(gradientU, gradientV, normal, request.cameraRight, request.cameraUp)
+			: LevelCameraTextureAxes{};
+		if (!axes.valid) {
+			return fail(error, SurfaceText::tr("The patch's texture coordinates have no direction at its middle. Reset them before moving them from the camera."));
+		}
+		return editPatch(patch, cameraRequest(request, axes), imageSize, error);
+	}
+	if (request.operation == LevelSurfaceOperation::ClockwiseRotate) {
+		// Clockwise from the side the patch's normal faces, about coordinate
+		// 0,0. A patch turns its coordinates, so a positive turn reads
+		// anticlockwise on a texture the right way round and clockwise on a
+		// mirrored one; a quarter turn of a copy shows which.
+		if (std::remainder(request.degrees, 360.0) == 0) {
+			return true;
+		}
+		LevelSurfaceRequest quarter = request;
+		quarter.operation = LevelSurfaceOperation::RadiantRotate;
+		quarter.degrees = 90;
+		LevelMapPatch probe = *patch;
+		if (!editPatch(&probe, quarter, imageSize, error)) {
+			return false;
+		}
+		LevelMapVec3 gradientU, gradientV, normal, turnedU, turnedV, turnedNormal;
+		const LevelTextureTurn positive = patchTextureDirections(*patch, &gradientU, &gradientV, &normal)
+				&& patchTextureDirections(probe, &turnedU, &turnedV, &turnedNormal)
+			? levelTextureTurnSense(gradientU, turnedU, normal)
+			: LevelTextureTurn::None;
+		if (positive == LevelTextureTurn::None) {
+			return fail(error, SurfaceText::tr("The patch's texture coordinates have no direction at its middle. Reset them before rotating them."));
+		}
+		LevelSurfaceRequest local = request;
+		local.operation = LevelSurfaceOperation::RadiantRotate;
+		local.degrees = positive == LevelTextureTurn::Counterclockwise ? -request.degrees : request.degrees;
+		return editPatch(patch, local, imageSize, error);
 	}
 	const bool turning = request.operation == LevelSurfaceOperation::Rotate || request.operation == LevelSurfaceOperation::RadiantRotate;
 	if ((request.operation == LevelSurfaceOperation::Shift && request.x == 0 && request.y == 0) ||
@@ -416,6 +590,13 @@ bool editPatch(LevelMapPatch *patch, const LevelSurfaceRequest &request, QSize i
 			return fail(error, problem);
 		}
 		break;
+	case LevelSurfaceOperation::CameraShift:
+	case LevelSurfaceOperation::CameraFlip:
+	case LevelSurfaceOperation::ClockwiseRotate:
+	case LevelSurfaceOperation::Reset:
+	case LevelSurfaceOperation::RadiantReset:
+		// Resolved to a shift, a mirror, a Radiant turn or a reset above.
+		break;
 	}
 	for (int i = 0; i < count; ++i) {
 		// The map writer keeps seventeen digits; clean values stay clean.
@@ -427,14 +608,93 @@ bool editPatch(LevelMapPatch *patch, const LevelSurfaceRequest &request, QSize i
 	}
 	return true;
 }
+
+// A Reset Textures filter's key: as materialKey, also without textures/,
+// which Quake III patches leave off their names.
+QString resetKey(const QString &name)
+{
+	QString key = materialKey(name);
+	return key.startsWith(QStringLiteral("textures/")) ? key.mid(9) : key;
+}
+
+// bobToolz's Reset Textures writes the ticked values into each face's
+// texture definition, and Radiant's Surface Inspector gives Valve 220 and
+// brush-primitive faces the same absolute values. Workflow reference: NRC
+// contrib/bobtoolz/DBrush.cpp DBrush::ResetTextures and radiant/brush_primit.cpp
+// Texdef_Assign, BPTexdef_Assign and TexMatToFakeTexCoords at 449778b3
+// (GPL-2.0-or-later). Original code; see docs/CREDITS.md.
+bool assignTextureValues(LevelMapBrushFace *face, const LevelTextureResetRequest &request, QSize imageSize, QString *error)
+{
+	if (!request.changesValues()) {
+		return true;
+	}
+	if (face->explicitTextureMatrix) {
+		if (imageSize.width() <= 0 || imageSize.height() <= 0) {
+			return fail(error, SurfaceText::tr("Material %1 needs a known image size. Open its package or provide an explicit texture size.")
+								   .arg(face->textureName));
+		}
+		auto &m = face->textureMatrix;
+		const double width = imageSize.width(), height = imageSize.height();
+		// Radiant reads a matrix in texels as a scale from each row's length,
+		// negative where the row's own axis runs backwards, a turn from the
+		// first row and a shift from the offsets.
+		const double lengthU = std::hypot(m[0], m[1]) * width, lengthV = std::hypot(m[3], m[4]) * height;
+		if (!std::isfinite(lengthU) || !std::isfinite(lengthV) || lengthU < 1e-12 || lengthV < 1e-12) {
+			return fail(error, SurfaceText::tr("The face's texture matrix is collapsed. Reset its mapping before setting its values."));
+		}
+		const double scaleU = (m[0] < 0 ? -1.0 : 1.0) / lengthU, scaleV = (m[4] < 0 ? -1.0 : 1.0) / lengthV;
+		double rotation = std::acos(std::clamp(m[0] * width / lengthU, -1.0, 1.0)) * 180.0 / 3.14159265358979323846;
+		if (m[1] > 0) {
+			rotation = -rotation;
+		}
+		if (request.setShiftU) {
+			m[2] = -request.shiftU / width;
+		}
+		if (request.setShiftV) {
+			m[5] = request.shiftV / height;
+		}
+		if (request.setScaleU) {
+			m[0] *= scaleU / request.scaleU;
+			m[1] *= scaleU / request.scaleU;
+		}
+		if (request.setScaleV) {
+			m[3] *= scaleV / request.scaleV;
+			m[4] *= scaleV / request.scaleV;
+		}
+		return !request.setRotation || turn(face, request.rotation - rotation, true, error);
+	}
+	if (request.setRotation) {
+		// Valve 220 axes carry the orientation, so they turn by the change.
+		if (face->explicitTextureAxes && !turn(face, request.rotation - face->rotation, true, error)) {
+			return false;
+		}
+		face->rotation = std::fmod(request.rotation, 360.0);
+	}
+	if (request.setShiftU) {
+		(face->explicitTextureAxes ? face->uOffset : face->shiftX) = request.shiftU;
+	}
+	if (request.setShiftV) {
+		(face->explicitTextureAxes ? face->vOffset : face->shiftY) = request.shiftV;
+	}
+	if (request.setScaleU) {
+		face->scaleX = request.scaleU;
+	}
+	if (request.setScaleV) {
+		face->scaleY = request.scaleV;
+	}
+	return true;
+}
 } // namespace
 
 bool levelSurfaceOperationNeedsSize(LevelSurfaceOperation operation, bool repeatsCoordinates)
 {
 	if (repeatsCoordinates) {
+		// A camera shift is a shift in texels; a camera flip is a mirror.
 		return operation == LevelSurfaceOperation::Shift || operation == LevelSurfaceOperation::Rotate || operation == LevelSurfaceOperation::Natural
 			|| operation == LevelSurfaceOperation::FaceAligned || operation == LevelSurfaceOperation::RadiantRotate
-			|| operation == LevelSurfaceOperation::RadiantScale;
+			|| operation == LevelSurfaceOperation::RadiantScale || operation == LevelSurfaceOperation::CameraShift
+			|| operation == LevelSurfaceOperation::ClockwiseRotate || operation == LevelSurfaceOperation::Reset
+			|| operation == LevelSurfaceOperation::RadiantReset;
 	}
 	return operation == LevelSurfaceOperation::Fit || operation == LevelSurfaceOperation::Align;
 }
@@ -513,7 +773,8 @@ bool prepareLevelSurfaceEdits(const LevelMapDocument &document, const QVector<Le
 		return fail(error, SurfaceText::tr("A surface batch needs between 1 and 64 adjustments."));
 	}
 	for (const auto &request : requests) {
-		const bool reset = request.operation == LevelSurfaceOperation::Natural || request.operation == LevelSurfaceOperation::FaceAligned;
+		const bool reset = request.operation == LevelSurfaceOperation::Natural || request.operation == LevelSurfaceOperation::FaceAligned
+			|| request.operation == LevelSurfaceOperation::Reset || request.operation == LevelSurfaceOperation::RadiantReset;
 		if (!std::isfinite(request.x) || !std::isfinite(request.y) || !std::isfinite(request.degrees) || std::abs(request.x) > 1e6 ||
 			std::abs(request.y) > 1e6 || std::abs(request.degrees) > 360000 ||
 			(request.operation == LevelSurfaceOperation::Scale && (std::abs(request.x) < 1e-6 || std::abs(request.y) < 1e-6)) ||
@@ -521,11 +782,14 @@ bool prepareLevelSurfaceEdits(const LevelMapDocument &document, const QVector<Le
 			 (request.x < 0 || request.y < 0 || (request.x < 1e-6 && request.y < 1e-6) || (request.x > 0 && request.x < 1e-6) ||
 			  (request.y > 0 && request.y < 1e-6))) ||
 			(reset && (request.x < 1e-6 || request.y < 1e-6)) ||
-			request.operation < LevelSurfaceOperation::Shift || request.operation > LevelSurfaceOperation::RadiantRotate ||
+			request.operation < LevelSurfaceOperation::Shift || request.operation > LevelSurfaceOperation::RadiantReset ||
 			request.alignU < LevelSurfaceAlignment::Keep || request.alignU > LevelSurfaceAlignment::Maximum ||
 			request.alignV < LevelSurfaceAlignment::Keep || request.alignV > LevelSurfaceAlignment::Maximum) {
 			return fail(error, SurfaceText::tr(
 								   "Surface values must be finite and in range. Fit repeats must be positive; scale factors cannot be zero."));
+		}
+		if (cameraOperation(request.operation) && !levelCameraTextureBasisValid(request.cameraRight, request.cameraUp)) {
+			return fail(error, SurfaceText::tr("Camera texture moves need the camera's right and up directions, which must not be parallel."));
 		}
 	}
 	QHash<QString, QSize> sizes;
@@ -616,6 +880,228 @@ bool prepareLevelSurfaceEdits(const LevelMapDocument &document, const QVector<Le
 	}
 	if (!wanted.isEmpty()) {
 		return fail(error, SurfaceText::tr("Patch %1 no longer exists.").arg(*wanted.cbegin()));
+	}
+	result.m_ready = true;
+	*plan = std::move(result);
+	return true;
+}
+
+bool levelTextureResetTargets(const LevelMapDocument &document, const LevelTextureResetRequest &request, QVector<LevelSurfaceFace> *faces,
+							  QVector<int> *patches, QStringList *sizedMaterials, QString *error)
+{
+	if (error) {
+		error->clear();
+	}
+	if (!faces || !patches) {
+		return fail(error, SurfaceText::tr("Missing Reset Textures targets."));
+	}
+	faces->clear();
+	patches->clear();
+	if (sizedMaterials) {
+		sizedMaterials->clear();
+	}
+	if (document.format != LevelMapFormat::QuakeMap && document.format != LevelMapFormat::Quake3Map) {
+		return fail(error, SurfaceText::tr("Reset Textures requires a Quake-family text map."));
+	}
+	const QString filter = resetKey(request.onlyTexture);
+	const auto matches = [&filter](const QString &name) { return filter.isEmpty() || resetKey(name) == filter; };
+	QSet<QString> sized;
+	const auto add = [&](const LevelMapBrush &brush, int index) {
+		const auto &face = brush.faces[index];
+		if (!matches(face.textureName)) {
+			return;
+		}
+		faces->append({brush.id, index});
+		if (request.changesValues() && face.explicitTextureMatrix) {
+			sized.insert(materialKey(face.textureName));
+		}
+	};
+	if (request.wholeMap) {
+		// Editable means visible, unlocked and inside the open group, as Find
+		// and Replace Textures reads the map; closed groups stay editable.
+		const auto context = levelSceneSelectionContext(document);
+		const auto excluded = levelMapHiddenObjects(document) | levelSceneLockedObjects(document) | request.excludedObjects;
+		const auto editable = [&](LevelMapSelectionKind kind, int id, int owner) {
+			const QString key = levelMapSelectionRefId({kind, id});
+			return context.allowedObjects.contains(key) && !excluded.contains(key)
+				&& !excluded.contains(levelMapSelectionRefId({LevelMapSelectionKind::Entity, owner}));
+		};
+		for (const auto &brush : document.brushes) {
+			if (editable(LevelMapSelectionKind::QuakeBrush, brush.id, brush.entityId)) {
+				for (int index = 0; index < brush.faces.size(); ++index) {
+					add(brush, index);
+				}
+			}
+		}
+		for (const auto &patch : document.patches) {
+			if (editable(LevelMapSelectionKind::QuakePatch, patch.id, patch.entityId) && matches(patch.textureName)) {
+				patches->append(patch.id);
+			}
+		}
+	} else {
+		QHash<int, const LevelMapBrush *> brushes;
+		for (const auto &brush : document.brushes) {
+			brushes.insert(brush.id, &brush);
+		}
+		QSet<QPair<int, int>> seen;
+		for (const auto &face : request.faces) {
+			const auto *brush = brushes.value(face.brushId);
+			if (!brush || face.faceIndex < 0 || face.faceIndex >= brush->faces.size()) {
+				return fail(error, SurfaceText::tr("Brush %1 has no face %2.").arg(face.brushId).arg(face.faceIndex + 1));
+			}
+			if (!seen.contains({face.brushId, face.faceIndex})) {
+				seen.insert({face.brushId, face.faceIndex});
+				add(*brush, face.faceIndex);
+			}
+		}
+		QSet<int> wanted(request.patches.cbegin(), request.patches.cend());
+		for (const auto &patch : document.patches) {
+			if (wanted.remove(patch.id) && matches(patch.textureName)) {
+				patches->append(patch.id);
+			}
+		}
+		if (!wanted.isEmpty()) {
+			return fail(error, SurfaceText::tr("Patch %1 no longer exists.").arg(*wanted.cbegin()));
+		}
+	}
+	if (faces->size() > 262144 || patches->size() > 65536) {
+		return fail(error, SurfaceText::tr("Reset Textures works on at most 262,144 brush faces and 65,536 patches at once. Filter by texture or reset part of the map."));
+	}
+	if (sizedMaterials) {
+		*sizedMaterials = QStringList(sized.cbegin(), sized.cend());
+		sizedMaterials->sort();
+	}
+	return true;
+}
+
+bool prepareLevelTextureReset(const LevelMapDocument &document, const LevelTextureResetRequest &request, const QHash<QString, QSize> &textureSizes,
+							  LevelSurfaceEditPlan *plan, QString *error, const std::function<bool()> &cancelled)
+{
+	if (error) {
+		error->clear();
+	}
+	if (!plan) {
+		return fail(error, SurfaceText::tr("Missing surface edit plan."));
+	}
+	*plan = {};
+	if (!request.changesSomething()) {
+		return fail(error, SurfaceText::tr("Tick a value to set, or give a new texture name, before resetting textures."));
+	}
+	const auto finite = [](bool set, double value, double limit) { return !set || (std::isfinite(value) && std::abs(value) <= limit); };
+	if (!finite(request.setScaleU, request.scaleU, 1e6) || !finite(request.setScaleV, request.scaleV, 1e6) || !finite(request.setShiftU, request.shiftU, 1e6)
+		|| !finite(request.setShiftV, request.shiftV, 1e6) || !finite(request.setRotation, request.rotation, 360000)
+		|| (request.setScaleU && std::abs(request.scaleU) < 1e-6) || (request.setScaleV && std::abs(request.scaleV) < 1e-6)) {
+		return fail(error, SurfaceText::tr("Reset values must be finite and in range, and a texture scale cannot be 0."));
+	}
+	const QString name = request.renameTo.trimmed();
+	for (const QChar ch : name) {
+		if (ch.isSpace() || !ch.isPrint() || QStringLiteral("\"{}()[]\\").contains(ch)) {
+			return fail(error, SurfaceText::tr("A texture name cannot contain spaces, quotes, braces, brackets, parentheses or backslashes."));
+		}
+	}
+	if (name.contains(QStringLiteral("//"))) {
+		return fail(error, SurfaceText::tr("A texture name cannot contain //, which starts a comment."));
+	}
+	QVector<LevelSurfaceFace> faces;
+	QVector<int> patches;
+	if (!levelTextureResetTargets(document, request, &faces, &patches, nullptr, error)) {
+		return false;
+	}
+	QHash<QString, QSize> sizes;
+	for (auto it = textureSizes.cbegin(); it != textureSizes.cend(); ++it) {
+		sizes.insert(materialKey(it.key()), it.value());
+	}
+	LevelSurfaceEditPlan result;
+	result.m_sourcePath = document.sourcePath;
+	result.m_sourceHash = document.sourceContentHash;
+	result.m_revision = document.revision;
+	result.m_format = document.format;
+	result.m_reset = true;
+	QMap<int, QSet<int>> targets;
+	for (const auto &face : faces) {
+		targets[face.brushId].insert(face.faceIndex);
+	}
+	for (const auto &brush : document.brushes) {
+		if (cancelled && cancelled()) {
+			return fail(error, SurfaceText::tr("Reset Textures cancelled."));
+		}
+		const auto found = targets.constFind(brush.id);
+		if (found == targets.cend()) {
+			continue;
+		}
+		auto after = brush;
+		int changed = 0;
+		bool renamed = false, remapped = false;
+		for (int index : *found) {
+			auto &face = after.faces[index];
+			QString problem;
+			if (!assignTextureValues(&face, request, sizes.value(materialKey(face.textureName)), &problem)) {
+				return fail(error, SurfaceText::tr("Brush %1, face %2: %3").arg(brush.id).arg(index + 1).arg(problem));
+			}
+			if (request.changesValues() && !writable(&face)) {
+				return fail(error, SurfaceText::tr("Brush %1, face %2: %3")
+									   .arg(brush.id)
+									   .arg(index + 1)
+									   .arg(SurfaceText::tr("The result is too large, too small or collapsed at map precision. Adjust the values.")));
+			}
+			const bool rename = !name.isEmpty() && face.textureName != name;
+			if (rename) {
+				face.textureName = name;
+				face.textureDirty = true;
+				renamed = true;
+				++result.m_renamed;
+			}
+			// A rename alone keeps the face's numbers as they are written.
+			if (!sameMapping(brush.faces[index], face)) {
+				face.textureParametersDirty = true;
+				remapped = true;
+			} else {
+				const QString kept = face.textureName;
+				face = brush.faces[index];
+				if (!rename) {
+					continue;
+				}
+				face.textureName = kept;
+				face.textureDirty = true;
+			}
+			++changed;
+		}
+		if (changed == 0) {
+			continue;
+		}
+		after.textureParametersDirty = brush.textureParametersDirty || remapped;
+		if (renamed) {
+			after.texturesDirty = true;
+			after.textureNames.clear();
+			for (const auto &face : after.faces) {
+				if (!face.textureName.trimmed().isEmpty() && !after.textureNames.contains(face.textureName)) {
+					after.textureNames.push_back(face.textureName);
+				}
+			}
+		}
+		result.m_before.append(brush);
+		result.m_after.append(after);
+		result.m_faceCount += changed;
+	}
+	if (!name.isEmpty()) {
+		const QSet<int> wanted(patches.cbegin(), patches.cend());
+		for (const auto &patch : document.patches) {
+			if (cancelled && cancelled()) {
+				return fail(error, SurfaceText::tr("Reset Textures cancelled."));
+			}
+			if (!wanted.contains(patch.id)) {
+				continue;
+			}
+			auto after = patch;
+			after.textureName = levelPatchMaterialToken(name, patch.fixedSubdivisions);
+			if (after.textureName == patch.textureName) {
+				continue;
+			}
+			after.textureDirty = true;
+			result.m_patchBefore.append(patch);
+			result.m_patchAfter.append(after);
+			++result.m_renamed;
+		}
 	}
 	result.m_ready = true;
 	*plan = std::move(result);

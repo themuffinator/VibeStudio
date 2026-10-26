@@ -1,12 +1,14 @@
 #include "app/application_shell.h"
 #include "app/level_surface_tools.h"
 #include "app/level_surface_worker.h"
+#include "app/level_texture_reset_dialog.h"
 #include "app/model_viewport.h"
 #include "app/map_viewport.h"
 #include "app/studio_actions.h"
 #include "core/editor_profiles.h"
 #include "core/level_patch_tools.h"
 #include "core/level_face_clipboard.h"
+#include "core/level_scene.h"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QStatusBar>
@@ -45,6 +47,7 @@ QWidget* ApplicationShell::buildLevelSurfaceTools()
 		if (result.strokeResult) { completeLevelSurfaceStroke(std::move(result)); return; }
 		if (result.token != m_levelSurfaceToken) { startLevelSurfaceBatch(); refreshLevelSurfaceTools(); return; }
 		m_levelSurfacePasting = false;
+		m_levelSurfaceResetting = false;
 		if (!m_levelSurfaceCurrent || !m_levelSurfaceCurrent()) {
 			cancelLevelSurfaceEdits();
 			m_levelSurfaceTools->setStatus(tr("The map, selection, target or package changed. Pending surface adjustments were cancelled."), false);
@@ -89,6 +92,11 @@ QWidget* ApplicationShell::buildLevelSurfaceTools()
 			if (result.convertedFaces > 0) {
 				message = tr("Pasted surfaces and converted %n classic face(s) throughout the map to Valve 220 in one undo step. Unpasted surfaces retain their materials and UVs.", nullptr, result.convertedFaces);
 			}
+			if (result.reset) {
+				message = changedSurfaces > 0 ? tr("Reset textures on %n surface(s). The batch is one undo step.", nullptr, changedSurfaces)
+					: tr("Reset Textures found nothing to change; no undo step was added.");
+				if (result.renamed > 0) { message += QLatin1Char(' ') + tr("%n surface(s) took the new texture name.", nullptr, result.renamed); }
+			}
 			if (advancedClipboard) { message += QLatin1Char(' ') + tr("The wrapped face is now the source for the next paste."); }
 			if (result.edgeOnFaces > 0) { message += QLatin1Char(' ') + tr("Radiant projection left %n face(s) edge-on to the copied mapping. Use Radiant values for face-relative alignment.", nullptr, result.edgeOnFaces); }
 			m_levelSurfaceTools->setStatus(message, false); statusBar()->showMessage(message, 6000);
@@ -106,23 +114,43 @@ void ApplicationShell::registerLevelSurfaceCommands()
 		tr("Flip Texture U"), tr("Flip Texture V"), tr("Fit Texture Width"), tr("Fit Texture Height"),
 		tr("Justify Texture Left"), tr("Justify Texture Right"), tr("Justify Texture Top"), tr("Justify Texture Bottom"),
 		tr("Natural Texture Mapping"), tr("Align Texture to Face"),
-		tr("Texture Scale U −"), tr("Texture Scale U +"), tr("Texture Scale V −"), tr("Texture Scale V +")};
+		tr("Texture Scale U −"), tr("Texture Scale U +"), tr("Texture Scale V −"), tr("Texture Scale V +"),
+		tr("Reset Texture Alignment"), tr("Radiant Texture Reset")};
 	const auto ids = LevelSurfaceTools::commandIds();
 	for (int i = 0; i < ids.size(); ++i) {
 		StudioCommandRegistration command;
 		command.commandId = ids[i]; command.label = labels[i]; command.group = StudioCommandGroup::Edit;
 		command.menuSection = tr("Surface Adjustments"); command.iconName = QStringLiteral("image");
 		command.statusTip = tr("Adjust the texture mapping of the targeted brush faces and patches using the step values in Levels > Surfaces.");
-		command.handler = [this, id = ids[i]] {
+		// The resets act on the picked faces when there are any, as
+		// TrenchBroom's and Radiant's resets act on their face selection.
+		const bool reset = ids[i] == QLatin1String("map.surfaceReset") || ids[i] == QLatin1String("map.surfaceRadiantReset");
+		if (ids[i] == QLatin1String("map.surfaceReset")) {
+			command.statusTip = tr("Reset the picked faces, or the Surfaces target, to no shift or rotation at the default scale, each in its own format: classic faces natural, Valve 220 and brush-primitive faces in their plane, patches their natural spread.");
+		} else if (ids[i] == QLatin1String("map.surfaceRadiantReset")) {
+			command.statusTip = tr("Reset the picked faces, or the Surfaces target, as Radiant does: classic faces natural, Valve 220 and brush-primitive faces in their plane's own basis, patches capped.");
+		}
+		command.handler = [this, id = ids[i], reset] {
 			if (!m_levelSurfaceTools) { return; }
 			setMode(StudioMode::Levels);
 			showLevelSidebarPage(QStringLiteral("surfaces"));
 			QString error;
-			if (!queueLevelSurfaceEdit(m_levelSurfaceTools->request(id), &error)) {
+			if (!queueLevelSurfaceEdit(m_levelSurfaceTools->request(id), &error, reset)) {
 				m_levelSurfaceTools->setStatus(error, levelSurfaceEditsPending()); statusBar()->showMessage(error, 6000);
 			}
 		};
 		m_commands->registerCommand(command);
+	}
+	{
+		// bobToolz's Reset Textures window (app/level_texture_reset_dialog.h).
+		StudioCommandRegistration command;
+		command.commandId = QStringLiteral("map.resetTextures");
+		command.label = tr("Reset Textures…");
+		command.group = StudioCommandGroup::Edit; command.menuSection = tr("Surface Adjustments"); command.iconName = QStringLiteral("image");
+		command.statusTip = tr("Set absolute texture scale, shift and rotation, or a new texture name, on the selection or the whole map, optionally only where one texture is used.");
+		command.handler = [this] { showLevelTextureResetDialog(); };
+		m_commands->registerCommand(command);
+		m_commands->setEnabled(command.commandId, false);
 	}
 	for (bool paste : {false, true}) {
 		StudioCommandRegistration command;
@@ -213,12 +241,27 @@ void ApplicationShell::refreshLevelSurfaceTools()
 	const bool editable = (m_levelMapDocument.format == LevelMapFormat::QuakeMap || m_levelMapDocument.format == LevelMapFormat::Quake3Map)
 		&& (faces > 0 || quickPatches > 0) && faces <= 16384 && quickPatches <= 256 && !levelSurfaceGeometryBusy();
 	for (const auto& id : LevelSurfaceTools::commandIds()) { m_commands->setEnabled(id, editable); }
+	if (!editable && (m_levelMapDocument.format == LevelMapFormat::QuakeMap || m_levelMapDocument.format == LevelMapFormat::Quake3Map)
+		&& !levelSurfaceGeometryBusy()) {
+		// The resets act on picked faces whatever the Surfaces tab's target says.
+		const qsizetype picked = levelPickedSurfaceFaces().size();
+		for (const char* id : {"map.surfaceReset", "map.surfaceRadiantReset"}) {
+			m_commands->setEnabled(QString::fromLatin1(id), picked > 0 && picked <= 16384);
+		}
+	}
+	// Reset Textures can always reach the whole map.
+	m_commands->setEnabled(QStringLiteral("map.resetTextures"), (m_levelMapDocument.format == LevelMapFormat::QuakeMap
+		|| m_levelMapDocument.format == LevelMapFormat::Quake3Map) && !levelSurfaceEditsPending() && !levelSurfaceGeometryBusy());
+	refreshLevelCameraTextureCommands(editable);
 	const bool copyReady = levelComponentsActive() || !levelPickedSurfaceFaces().isEmpty() ? !faceTargets.isEmpty() && faceTargets.size() <= 16384
 		: inspected.brushId >= 0 && inspected.faceIndex >= 0;
 	m_commands->setEnabled(QStringLiteral("map.copySurface"), copyReady && !levelSurfaceEditsPending() && !levelSurfaceGeometryBusy());
 	const bool pasteEditable = m_levelSurfaceTools->singleFace() ? editable : !pasteTargets.isEmpty() && pasteTargets.size() <= 16384;
 	m_commands->setEnabled(QStringLiteral("map.pasteSurface"), pasteEditable && m_levelSurfaceClipboard.ready() && !levelSurfaceEditsPending() && !levelSurfaceGeometryBusy());
 	m_levelSurfaceTools->setClipboardSummary(m_levelSurfaceClipboard);
+	// Hide and Show All wait while surface edits are pending; a batch that
+	// changes nothing publishes no map, so they come back here.
+	refreshLevelVisibilityCommands();
 }
 
 bool ApplicationShell::levelSurfaceEditsPending() const
@@ -233,6 +276,7 @@ void ApplicationShell::cancelLevelSurfaceEdits()
 	const bool wasPasting = m_levelSurfacePasting;
 	++m_levelSurfaceToken; m_levelSurfacePending.clear(); m_levelSurfaceCurrent = {}; m_levelSurfaceSizes.clear();
 	m_levelSurfacePasting = false;
+	m_levelSurfaceResetting = false;
 	if (m_levelSurfaceDebounce) { m_levelSurfaceDebounce->stop(); }
 	if (m_levelSurfaceWorker) { m_levelSurfaceWorker->cancel(); }
 	const auto message = wasStroke ? tr("The complete surface stroke was discarded. Earlier edits remain in undo history.")
@@ -242,7 +286,30 @@ void ApplicationShell::cancelLevelSurfaceEdits()
 	refreshLevelSurfaceTools();
 }
 
-bool ApplicationShell::queueLevelSurfaceEdit(const LevelSurfaceRequest& request, QString* error)
+void ApplicationShell::levelSurfaceQueueTargets(bool cameraTargets, QVector<LevelSurfaceFace>* faces, QVector<int>* patches) const
+{
+	faces->clear(); patches->clear();
+	const QVector<LevelSurfaceFace> picked = cameraTargets ? levelPickedSurfaceFaces() : QVector<LevelSurfaceFace>{};
+	if (!picked.isEmpty()) {
+		// TrenchBroom's camera texture keys act on its face selection: here the
+		// picked faces, with any whole patches Select Textured picked.
+		*faces = picked;
+		for (const auto& ref : m_levelMapDocument.selection) {
+			if (ref.kind == LevelMapSelectionKind::QuakePatch && m_levelTexturedPatches.contains(ref.objectId)) { patches->append(ref.objectId); }
+		}
+		return;
+	}
+	for (const auto& target : levelSurfaceSelectionTargets()) {
+		if (target.kind == LevelMaterialKind::BrushFace) { faces->append({target.objectId,target.faceIndex}); }
+		else if (target.kind == LevelMaterialKind::Patch) { patches->append(target.objectId); }
+	}
+	if (m_levelSurfaceTools->singleFace()) {
+		*faces = levelSurfaceFaceTargets();
+		patches->clear();
+	}
+}
+
+bool ApplicationShell::queueLevelSurfaceEdit(const LevelSurfaceRequest& request, QString* error, bool cameraTargets)
 {
 	if (error) { error->clear(); }
 	if (!m_levelSurfaceTools || !m_levelSurfaceWorker) { return false; }
@@ -252,17 +319,20 @@ bool ApplicationShell::queueLevelSurfaceEdit(const LevelSurfaceRequest& request,
 	if (!m_levelSurfaceCurrent || !m_levelSurfaceCurrent()) { refreshLevelSurfaceTools(); }
 	const auto fail = [error](const QString& message) { if (error) { *error = message; } return false; };
 	if (m_levelSurfacePasting) { return fail(tr("Wait for the surface paste to finish or cancel it before queuing adjustments.")); }
+	if (m_levelSurfaceResetting) { return fail(tr("Wait for Reset Textures to finish or cancel it before queuing adjustments.")); }
 	if (m_levelSurfacePending.size() >= 64) { return fail(tr("The surface queue is full. Wait for the pending batch or cancel it.")); }
+	if (m_levelSurfaceCurrent && cameraTargets != m_levelSurfaceCameraTargets) {
+		// A camera move joins a burst of quick adjustments, or the other way
+		// round, only where both would adjust the same surfaces.
+		QVector<LevelSurfaceFace> faces; QVector<int> patches;
+		levelSurfaceQueueTargets(cameraTargets, &faces, &patches);
+		if (faces != m_levelSurfaceFaces || patches != m_levelSurfacePatches) {
+			return fail(tr("Wait for the pending surface adjustments to finish before adjusting other surfaces."));
+		}
+	}
 	if (!m_levelSurfaceCurrent) {
-		m_levelSurfaceFaces.clear(); m_levelSurfacePatches.clear();
-		for (const auto& target : levelSurfaceSelectionTargets()) {
-			if (target.kind == LevelMaterialKind::BrushFace) { m_levelSurfaceFaces.append({target.objectId,target.faceIndex}); }
-			else if (target.kind == LevelMaterialKind::Patch) { m_levelSurfacePatches.append(target.objectId); }
-		}
-		if (m_levelSurfaceTools->singleFace()) {
-			m_levelSurfaceFaces = levelSurfaceFaceTargets();
-			m_levelSurfacePatches.clear();
-		}
+		levelSurfaceQueueTargets(cameraTargets, &m_levelSurfaceFaces, &m_levelSurfacePatches);
+		m_levelSurfaceCameraTargets = cameraTargets;
 		if ((m_levelSurfaceFaces.isEmpty() && m_levelSurfacePatches.isEmpty()) || m_levelSurfaceFaces.size() > 16384 || m_levelSurfacePatches.size() > 256) {
 			return fail(tr("Select between 1 and 16,384 brush faces, or up to 256 patches, for surface alignment."));
 		}
@@ -360,5 +430,71 @@ bool ApplicationShell::startLevelSurfacePaste(const QVector<LevelMaterialTarget>
 	const auto message = options.includeSelection ? tr("Preparing surface paste for the hit and selected objects…")
 		: tr("Preparing paste for %n surface(s)…", nullptr, static_cast<int>(targets.size()));
 	m_levelSurfaceTools->setStatus(message, true); statusBar()->showMessage(message, 6000); return true;
+}
+
+bool ApplicationShell::startLevelTextureReset(LevelTextureResetRequest request, QString* error)
+{
+	if (error) { error->clear(); }
+	const auto fail = [error](const QString& message) { if (error) { *error = message; } return false; };
+	if (!m_levelSurfaceTools || !m_levelSurfaceWorker) { return fail(tr("Surface tools are unavailable.")); }
+	if (m_levelMapDocument.format != LevelMapFormat::QuakeMap && m_levelMapDocument.format != LevelMapFormat::Quake3Map) {
+		return fail(tr("Open a Quake-family map to reset its textures."));
+	}
+	if (levelSurfaceEditsPending() || levelSurfaceGeometryBusy() || (m_levelMap3D && (m_levelMap3D->surfaceStrokeActive() || m_levelMap3D->isDrawingBrush()
+		|| m_levelMap3D->isResizingSelection() || m_levelMap3D->isMovingSelection()))) {
+		return fail(tr("Finish or cancel the pending level edit before resetting textures."));
+	}
+	if (!request.changesSomething()) { return fail(tr("Tick a value to set, or give a new texture name, before resetting textures.")); }
+	request.excludedObjects.clear();
+	if (request.wholeMap) {
+		// What the views hide with filters or Hide stays as it is, as Find and
+		// Replace Textures and Select All leave it.
+		request.faces.clear(); request.patches.clear();
+		for (const QString& key : levelSceneObjects(m_levelMapDocument)) {
+			const qsizetype colon = key.indexOf(QLatin1Char(':'));
+			if (m_levelMapViewport && m_levelMapViewport->isHidden(levelMapSelectionKindFromId(key.left(colon)), key.mid(colon + 1).toInt())) {
+				request.excludedObjects.insert(key);
+			}
+		}
+	} else {
+		levelSurfaceQueueTargets(false, &request.faces, &request.patches);
+		if (request.faces.isEmpty() && request.patches.isEmpty()) {
+			return fail(tr("Select brushes or patches, or pick faces, to reset their textures; or reset the whole map."));
+		}
+	}
+	auto archive = m_packageArchive.snapshotReader();
+	if (!archive && m_packageArchive.isOpen()) { archive = std::make_shared<const PackageArchive>(m_packageArchive); }
+	LevelSurfaceWork work;
+	work.document = m_levelMapDocument; work.resetTextures = true; work.reset = std::move(request);
+	work.archive = std::move(archive); work.palette = activePaletteId();
+	if (m_packageStaging.isLoaded()) { work.staging = std::make_shared<const PackageStagingModel>(m_packageStaging); }
+	work.token = ++m_levelSurfaceToken; m_levelSurfaceCurrent = levelSurfaceContextGuard(); m_levelSurfaceResetting = true;
+	if (!m_levelSurfaceWorker->start(std::move(work))) { cancelLevelSurfaceEdits(); return fail(tr("The surface worker is still finishing a previous operation.")); }
+	setMode(StudioMode::Levels);
+	showLevelSidebarPage(QStringLiteral("surfaces"));
+	refreshLevelSurfaceTools();
+	const auto message = tr("Resetting textures…");
+	m_levelSurfaceTools->setStatus(message, true); statusBar()->showMessage(message, 6000);
+	return true;
+}
+
+void ApplicationShell::showLevelTextureResetDialog()
+{
+	if (!m_levelSurfaceTools) { return; }
+	setMode(StudioMode::Levels);
+	if (m_levelMapDocument.format != LevelMapFormat::QuakeMap && m_levelMapDocument.format != LevelMapFormat::Quake3Map) {
+		statusBar()->showMessage(tr("Open a Quake-family map to reset its textures."), 6000);
+		return;
+	}
+	QVector<LevelSurfaceFace> faces;
+	QVector<int> patches;
+	levelSurfaceQueueTargets(false, &faces, &patches);
+	LevelTextureResetDialog dialog(static_cast<int>(faces.size()), static_cast<int>(patches.size()), m_levelPaintMaterial,
+		levelSurfaceDefaultScale(m_levelMapDocument), this);
+	if (dialog.exec() != QDialog::Accepted) { return; }
+	QString error;
+	if (!startLevelTextureReset(dialog.request(), &error)) {
+		m_levelSurfaceTools->setStatus(error, levelSurfaceEditsPending()); statusBar()->showMessage(error, 6000);
+	}
 }
 } // namespace vibestudio

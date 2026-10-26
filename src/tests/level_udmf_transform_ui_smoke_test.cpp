@@ -151,8 +151,9 @@ int main(int argc, char** argv) {
 		driver.setInterval(15);
 		int phase = 0;
 		QObject::connect(&driver, &QTimer::timeout, &shell, [&] {
-			auto* widget = QApplication::activeModalWidget();
-			if (!widget || widget->objectName() != "levelRotationDialog" || phase == 2) {
+			// The rotation window is modeless (NetRadiant Custom's Arbitrary Rotation).
+			auto* widget = shell.findChild<QDialog*>("levelRotationDialog", Qt::FindDirectChildrenOnly);
+			if (!widget || !widget->isVisible() || phase == 2) {
 				return;
 			}
 			auto* dialog = static_cast<LevelRotationDialog*>(widget);
@@ -166,8 +167,8 @@ int main(int argc, char** argv) {
 				return;
 			}
 			phase = 2;
-			expect(dialog->previewValid(), "UDMF numeric rotation preview", dialog->findChild<QLabel*>("rotationStatus")->text());
-			auto* degrees = dialog->findChild<QDoubleSpinBox*>("rotationDegrees");
+			expect(dialog->previewValid(), "UDMF numeric rotation preview", dialog->findChild<QLabel*>("transformStatus")->text());
+			auto* degrees = dialog->findChild<QDoubleSpinBox*>("rotationAngleZ");
 			expect(degrees && QAccessible::queryAccessibleInterface(degrees)->role() == QAccessible::SpinBox &&
 					   !degrees->accessibleDescription().isEmpty() && degrees->focusPolicy() != Qt::NoFocus &&
 					   degrees->layoutDirection() == Qt::LeftToRight,
@@ -183,15 +184,13 @@ int main(int argc, char** argv) {
 			dialog->accept();
 		});
 		driver.start();
-		QTimer::singleShot(30000, &shell, [&] {
-			if (phase != 2) {
-				expect(false, "numeric dialog timeout");
-				if (auto* dialog = shell.findChild<QDialog*>("levelRotationDialog")) {
-					dialog->reject();
-				}
-			}
-		});
 		shell.findChild<QAction*>("map.rotatePrecisely")->trigger();
+		if (!until([&] { return phase == 2; })) {
+			expect(false, "numeric dialog timeout");
+			if (auto* dialog = shell.findChild<QDialog*>("levelRotationDialog")) {
+				dialog->reject();
+			}
+		}
 		driver.stop();
 		expect(phase == 2 && shell.levelDocument().undoStack.size() == 1 && shell.levelDocument().doomVertices[0].x != .25,
 			   "numeric rotation publishes through common worker");
@@ -214,7 +213,7 @@ int main(int argc, char** argv) {
 		noOp.show();
 		expect(until([&] { return noOp.isReady(); }) && !noOp.previewValid() &&
 			   !noOp.findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->isEnabled() &&
-			   noOp.findChild<QLabel*>("rotationStatus")->text().contains("unchanged"), "no-op preview gives actionable feedback");
+			   noOp.findChild<QLabel*>("transformStatus")->text().contains("unchanged"), "no-op preview gives actionable feedback");
 		noOp.reject();
 		// UDMF thing placement uses the same preview and numeric surface as
 		// brush arrays, including fractional height and accessible controls.

@@ -28,7 +28,8 @@ QStringList LevelSurfaceTools::commandIds()
 		QStringLiteral("map.surfaceJustifyTop"), QStringLiteral("map.surfaceJustifyBottom"),
 		QStringLiteral("map.surfaceNatural"), QStringLiteral("map.surfaceFaceAligned"),
 		QStringLiteral("map.surfaceScaleStepLeft"), QStringLiteral("map.surfaceScaleStepRight"),
-		QStringLiteral("map.surfaceScaleStepDown"), QStringLiteral("map.surfaceScaleStepUp")};
+		QStringLiteral("map.surfaceScaleStepDown"), QStringLiteral("map.surfaceScaleStepUp"),
+		QStringLiteral("map.surfaceReset"), QStringLiteral("map.surfaceRadiantReset")};
 }
 LevelSurfaceTools::LevelSurfaceTools(QWidget* parent) : QScrollArea(parent)
 {
@@ -164,6 +165,7 @@ LevelSurfaceTools::LevelSurfaceTools(QWidget* parent) : QScrollArea(parent)
 	pair(16, tr("Justify Left"), tr("Justify Right"));
 	pair(18, tr("Justify Top"), tr("Justify Bottom"));
 	pair(20, tr("Natural"), tr("Align to Face"));
+	pair(26, tr("Reset"), tr("Radiant Reset"));
 	// Bordered like the sidebar's other buttons, so they read as buttons
 	// rather than as the flat tool buttons of a tool bar.
 	for (QToolButton* button : std::as_const(m_buttons)) { button->setProperty("sidebarButton", true); }
@@ -295,6 +297,10 @@ LevelSurfaceRequest LevelSurfaceTools::request(const QString& command) const
 		const double amount = m_scaleStep->value() * (index % 2 ? 1 : -1);
 		result.x = index < 24 ? amount : 0;
 		result.y = index < 24 ? 0 : amount;
+	} else if (index == 26 || index == 27) {
+		// TrenchBroom's Reset Texture Alignment and Radiant's Reset Texture.
+		result.operation = index == 26 ? LevelSurfaceOperation::Reset : LevelSurfaceOperation::RadiantReset;
+		result.x = result.y = m_defaultScale;
 	}
 	return result;
 }

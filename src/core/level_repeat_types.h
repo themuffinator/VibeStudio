@@ -34,6 +34,10 @@ struct LevelRepeatTransforms {
 	// A right-handed turn about rotationAxis (0 = X); -1 for none.
 	int rotationAxis = -1;
 	double rotationDegrees = 0;
+	// Arbitrary Rotation's Euler turn instead, when set: about world X, then
+	// Y, then Z by these degrees (LevelMapRotationRequest::euler).
+	bool rotationEulerXyz = false;
+	std::array<double, 3> rotationEuler{0, 0, 0};
 	std::array<double, 3> scale{1, 1, 1};
 	// Points slide along skewAxis by skewAmount times their skewAlong
 	// coordinate; -1 for none.
@@ -41,7 +45,10 @@ struct LevelRepeatTransforms {
 	int skewAlong = -1;
 	double skewAmount = 0;
 	[[nodiscard]] bool hasTranslation() const { return translation != std::array<double, 3>{0, 0, 0}; }
-	[[nodiscard]] bool hasRotation() const { return rotationAxis >= 0 && rotationDegrees != 0; }
+	[[nodiscard]] bool hasRotation() const
+	{
+		return rotationEulerXyz ? rotationEuler != std::array<double, 3>{0, 0, 0} : rotationAxis >= 0 && rotationDegrees != 0;
+	}
 	[[nodiscard]] bool hasScale() const { return scale != std::array<double, 3>{1, 1, 1}; }
 	[[nodiscard]] bool hasSkew() const { return skewAxis >= 0 && skewAlong >= 0 && skewAmount != 0; }
 	[[nodiscard]] bool isIdentity() const { return !hasTranslation() && !hasRotation() && !hasScale() && !hasSkew(); }

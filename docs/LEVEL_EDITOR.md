@@ -170,7 +170,7 @@ discovery counts and unreviewed rows do not establish complete workflow parity.
 | Display filters by kind of object, with counts | Radiant filters, TrenchBroom view options | Available |
 | Pre-build checklist and worldspawn editor | TrenchBroom's Map inspector, VibeRadiant's globals | Available |
 | Vertex, edge and face editing in the 2D views, with picks shared between views, merging corners and Snap Vertices | Radiant's vertex, edge and face modes; TrenchBroom's vertex tool and Snap Vertices | Available |
-| Hollow with touching walls, and Make Room | NetRadiant Custom | Available |
+| Hollow with touching walls, and Make Room with caulked hidden faces and picked faces left open | NetRadiant Custom | Partial |
 | Patch shapes: plane, cylinder, square cylinder, cone, sphere, bevel, end cap, round ones as exact circles | GtkRadiant and NetRadiant Patch menus, NetRadiant Custom's exact cylinders | Available |
 | Patch rows and columns: insert, add, delete, transpose, re-disperse, smooth; Thicken | Radiant's Patch menu, NetRadiant Custom | Available |
 | Surface alignment and painting; Natural, Align to Face, flips, fit one axis, justify; faces picked in the camera | Radiant's Surface Inspector, TrenchBroom's face tools | Available |
@@ -361,6 +361,63 @@ thickness with the corners filled, and removes the brush, as NetRadiant
 Custom's Make Room does; a brush too thin to hollow inwards can still make a
 room. `map hollow --mode overlap|touch|room`.
 
+`core/level_hollow.h` adds wall options to every mode
+(`LevelMapHollowOptions`, `LevelMapHollowReport`). `caulkTexture` renames every
+wall face except the room-facing one (the new inward face, or Make Room's
+flipped source face), keeping flags and alignment as applying a material does;
+faces on an open face's plane keep that face's material because they line
+the opening. `openFaces` (brush id, zero-based face) get no wall: Touch adds
+no pulled-in plane for them and Room uses their unmoved plane in the grown
+shell, so the neighbouring walls stop flush. An open index outside its brush
+fails the edit, open faces of brushes outside the edit are ignored, and a
+brush with every face open is skipped with its reason. `levelMapCaulkTexture`
+gives `common/caulk` on Quake III maps (`textures/common/caulk` when brushes
+are brushDef3) and `skip` on Quake maps (the Caulk filter's rule, after
+NetRadiant Custom's `GetCommonShader("caulk")` and Quake caulk filter); Quake
+II and Doom have none. **Make Room** reads `LevelRoomPreferences` from the
+`levels/makeRoom/*` settings (caulk and open picked faces on by default, as
+NetRadiant Custom always does), takes `levelPickedSurfaceFaces()` as the open
+faces, and **Make Room Options…** edits them. `map hollow --caulk`,
+`--caulk-texture` and `--open-face` share the service
+(`cli/level_hollow_options.cpp`), and `editor make-room` reads and changes
+the saved options; the dialog, the CLI and the settings reader all check names
+with `levelRoomPreferencesProblem` (a hand-edited bad name reads as the game's
+caulk). Tests: `level-make-room-smoke` (core, settings and CLI) and
+`level-make-room-ui-smoke`. VibeStudio keeps its filled outer corners, which
+NetRadiant Custom's Make Room leaves open; as there, wall faces sharing an
+open face's plane keep its material.
+
+The **CSG Tool** (NetRadiant Custom's `CSG_Tool` window) is the Tools tab's
+`tools.csg` section (`app/level_csg_tool_actions.cpp`). Its options are
+`LevelCsgToolPreferences` under `levels/csgTool/*` (thickness 16, picked faces
+excluded, caulk on, inner brush removed, as NetRadiant Custom starts), saved on
+every change and read by `map.csgShrink`, `map.csgExpand` and
+`map.csgHollowDiagonal|Wrap|Extrude|Pull`, so the palette and keys use them
+too; caulk takes Make Room's material choice. Two hollow modes join
+`LevelMapHollowMode`: `Diagonal` builds wall F as the points of the grown
+shell lying furthest outside F (planes F+t, flipped F, and for each other
+walled face G the bisector `(nG - nF).p <= dG - dF`; an open G bounds it at
+its own plane), so walls tile the shell exactly with mitred joints, after
+`brush_extrudeDiag`; `Extrude` builds a prism between F and F+t with sides
+through F's edges square to it, after `FaceMakeBrush`'s `eExtrude`. Both solve
+their planes once and write each face on its polygon's corners. `wrap` and
+`pull` parse as `Touch` and `Room`. `LevelMapHollowOptions::keepInner` keeps
+the brush (outward modes, its walled faces caulked) or the core with every
+walled face pulled in by the thickness (`Overlap`, `Touch`); the inner piece
+keeps the brush id and file place, and only the walls are selected. Caulk then
+covers the inner faces and joints, and outer faces keep their materials; the
+existing rule (all but room-facing and lining faces) applies without it.
+`levelCsgExcludedFaces` turns the face policy into open faces: the picks, the
+complement of the picks per reached brush, or `levelMapFacesFacingAxis` (the
+faces within 0.001 of the lowest and highest normal-axis dot, NetRadiant
+Custom's -proj/-cam) for the active plan view's axis or the camera's forward
+vector. `offsetLevelMapSelectionFaces` moves each non-excluded face's points
+(and brushDef3 plane distance) by the offset along its outward normal and
+commits through `replaceLevelMapComponentGeometry`, one batch undo step that
+keeps source lines and texture parameters; a brush that would lose a face or
+stop solving is skipped. Hollow and offset both skip hidden brushes. Tests:
+`level-csg-tool-smoke` (core, CLI) and `level-csg-tool-ui-smoke`.
+
 ### Patch shapes and the patch matrix
 
 `createLevelPatch` adds square cylinders, spheres, bevels and end caps, an
@@ -516,9 +573,11 @@ the refusals.
 ## View filters
 
 `src/core/level_view_filters.*` sorts a map's objects into kinds (world
-brushes, entities, brushes, brush entities, func groups, patches, detail, clip,
-hint and skip, caulk, sky, liquids, point entities, lights, triggers, monsters,
-items, player starts, paths and models; Doom thing categories) with counts. The
+brushes, entities, brushes, brush entities, func groups, patches, detail,
+structural, clip, player clip, monster clip, weapon clip, bot clip, hint and
+skip, caulk, nodraw, area portals, cluster portals, light grid, sky, liquids,
+translucent, decals, point entities, lights, triggers, monsters, items, player
+starts, paths and models; Doom thing categories) with counts. The
 View tab's Filters section hides kinds in the 2D views and the camera through
 `MapViewport::setFilteredObjects`, a set separate from objects hidden by hand,
 which Show All Hidden leaves alone. Filters change what is drawn only, never the
@@ -537,13 +596,73 @@ door with no brushes yet is not a point entity, close to NRC's container
 classes. Definitions loaded from a project's .def, .fgd or .ent files do not
 change the split yet.
 
+The texture kinds follow NRC's `BrushFilters_construct` (radiant/brushmanip.cpp)
+and read content bits as well as names. Area Portals takes any areaportal face or
+CONTENTS_AREAPORTAL (0x8000), plus func_areaportal entities. Cluster Portals
+(CONTENTS_CLUSTERPORTAL 0x100000), Light Grid and Bot Clip (botclip, donotenter*,
+CONTENTS_BOTCLIP 0x400000 and CONTENTS_DONOTENTER 0x200000) need every face;
+Decals takes any face under `decals/` (after an optional `textures/`). Those four
+are Quake III only, since Quake II spends the same bits on water currents, and on
+Quake III maps bot clip leaves Clip. Structural is Detail's inverse among brushes:
+on Quake II and III maps every brush without a detail face outside func_detail*,
+on Quake maps (`builtinEntityGameForMap`) worldspawn's brushes and every brush
+entity but func_detail*, as NRC's `filter_entity_not_func_detail` has it. Caulk
+also names faces: `levelViewFilterFaceMatches` gives the caulk faces of brushes
+not caulked all over, and `levelViewFilteredFaces` the ones a switched-off list
+hides, leaving out brushes it hides whole. On Quake maps skip is caulk, not hint,
+as NRC's `g_filter_face_caulk_q1` has it. The shell passes those faces to the camera as
+`LevelPreviewRequest::hiddenFaces` (`LevelMapPreviewMeshOptions::hiddenFaces`),
+so their triangles are neither drawn nor picked; the plan views keep each brush's
+whole outline, as NRC's wireframes ignore face filters (`Brush::update_wireframe`).
+`map filters` reports them as `faceCount` and `filteredFaces`. Tests:
+`level_filter_texture_kinds_smoke_test.cpp` (Quake, Quake II and Quake III
+fixtures, caulk faces, the camera mesh, keys, CLI) and
+`level_filter_texture_kinds_ui_smoke_test.cpp` (commands, check boxes, keys, the
+camera without caulk faces, Quake enablement).
+
+The material kinds read Quake III shader scripts through the material library.
+`scanLevelViewFilterMaterials` scans a package's `scripts/*.shader` and images
+under `textures/` with `scanMaterialLibrary` (Quake III only, no classic
+textures) and keeps each name's winning definition as a
+`LevelViewFilterShader`, Radiant's editor flags in NRC
+`plugins/shaders/shaders.cpp`: qer_trans, surfaceparm fog and fogParms are
+translucent, qer_alphafunc and a stage's alphaFunc alpha-tested, surfaceparm
+water, slime and lava liquid, skyParms or surfaceparm sky a sky, and
+playerclip, monsterclip, botclip, donotenter and nodraw their kinds. An image
+no script defines is a shader with no flags, as Quake III's default shader is.
+Every query takes the result as `LevelViewFilterMaterials` (empty by default):
+on Quake III maps a resolved face goes by its shader (Sky and Liquids by the
+shader alone, so names stop deciding; Radiant's `textures/liquids/` prefix
+still counts), and unresolved faces keep the name rules. Translucent follows
+NRC's `g_filter_brush_translucent` (any face) and `g_filter_patch_translucent`,
+and adds Quake II's SURF_TRANS33/66 (0x10, 0x20) and Quake's `{` fence textures
+(the map tokenizer still reads an unquoted `{` as a brace, so only quoted
+fence names load today).
+Clip keeps every clip kind; Player Clip (CONTENTS_PLAYERCLIP, playerclip, a
+`clip`, playerclip or fullclip texture), Monster Clip (CONTENTS_MONSTERCLIP,
+monsterclip, monsterclip textures, Quake's `clip`) and Weapon Clip (weapclip,
+fullclip) need every face; Clip, its parts and Translucent take patches by
+shader, as NRC's `PatchFilters_construct` does. Nodraw needs every face
+(SURF_NODRAW 0x80, surfaceparm nodraw or a nodraw texture). The shell reads
+the package the camera reads its materials from, staged edits included, on a
+worker keyed by `packageViewKey()`, so a new map, package, staged edit or
+**Reload Shaders** reads again and a newer read cancels an older one; the
+View tab's status line names the shader count or what is missing.
+`map filters --package` runs the same scan. Tests:
+`level_filter_material_kinds_smoke_test.cpp` (shader flags, scan and
+shadowing, Quake, Quake II and Quake III classification with and without
+shaders, keys, CLI) and `level_filter_material_kinds_ui_smoke_test.cpp` (the
+worker and status line, counts, commands, Alt+4, camera, reload, fallbacks).
+
 Every Quake-family kind is also a checkable command, `map.filter<Kind>`
 (`levelViewFilterCommandId`), in **View > Filters** with **Invert Filters**
 (`levelViewFiltersInverted`: every kind the format offers flips, kinds saved for
 other formats stay) and **Show Every Kind**. `src/app/level_view_filter_actions.cpp`
 keeps the commands, the check boxes and the saved `levelView/filtersOff` list in
 step; the NetRadiant Custom and NetRadiant profiles carry Radiant's Filter keys
-(Alt+1 World, Alt+2 Entities and the rest; Ctrl+P stays Go to File). Doom
+(Alt+1 World, Alt+2 Entities, Alt+3 Area Portals, Alt+4 Translucent, Alt+9 Cluster Portals,
+Ctrl+Shift+D Structural, Alt+M Bot Clip, Shift+D Decals and the rest; Ctrl+P
+stays Go to File and Light Grid has no key upstream). Doom
 categories have no commands because the thing table numbers them. `map filters`
 reports kinds, counts, shown state and the hidden objects through the same
 service, and `--saved` reads the View tab's list. Tests:
@@ -2312,6 +2431,79 @@ the NRC profile binds Shift+Page Up/Down and Ctrl+arrows, and those map
 shortcuts win over the plan view's Ctrl+arrow pan whenever their command is
 enabled. The Surface Alignment dialog keeps the centre turn only.
 
+#### Fixed-step texture turns
+
+`LevelSurfaceOperation::ClockwiseRotate` (core/level_surface.h) turns each
+texture `degrees` clockwise as seen from the face's front, the side its outward
+normal faces (a patch: the side its control grid's row-cross-column normal
+faces). It is `RadiantRotate` with the sign each face needs, so it keeps the
+offsets and turns about the texture origin, as TrenchBroom's Rotate Textures
+actions do (workflow reference: TB `MapViewBase::rotateUV` and
+`rotateUVAngle` at `4c756be1`, see docs/CREDITS.md). Since the Radiant turn's
+on-screen direction depends on the face (classic faces turn about the world
+axis they project along whatever their scale signs, Valve 220 faces about their
+stored axes' normal, brush-primitive faces always anticlockwise, and patches
+in texture space, so a mirrored patch texture turns the other way), the
+service turns a copy a quarter turn first and reads the direction from how the
+U gradient moved within the plane (`levelTextureTurnSense()` in
+core/level_camera_texture.h). A mapping whose U gradient has no direction in
+the plane is refused. The six commands in `levelCameraTextureCommands()`
+(`map.rotateTexturesClockwise` and so on) turn 15° (TrenchBroom's fixed
+`Grid::angle()`), 90° for Coarse and 1° for Fine, through the same surface
+queue as the camera texture moves, and need no camera. The TrenchBroom profile
+binds Page Up and Page Down with Shift and Ctrl in the camera's `camera-faces`
+claim layer. `map align-textures --clockwise N` is the CLI route.
+`level-camera-texture-smoke` measures the turn on screen, from the picture's
+own motion, on all four face dialects the right way round and mirrored and on
+a patch.
+
+#### Texture resets
+
+`LevelSurfaceOperation::Reset` and `RadiantReset` (core/level_surface.h) reset
+every face in one pass, whatever its dialect, at x,y map units per texel with
+no shift or rotation, so a mixed selection no longer needs **Natural** and
+**Align to Face** in turn (the latter refuses sloped classic faces). `Reset` is
+TrenchBroom's Reset Texture Alignment (`MapViewBase::resetUV`, `mdl::resetAll`
+with the game's face defaults, at `4c756be1`): classic faces take `Natural`,
+Valve 220 and brush-primitive faces `FaceAligned`, patches the natural spread.
+`RadiantReset` is NetRadiant Custom's `SurfaceInspector_ResetTexture`
+(TextureReset/Cap at `449778b3`): classic faces take `Natural`, Valve 220 and
+brush-primitive faces `levelPlaneBasisTextureProjection()`
+(core/level_texture_mapping.h), the plane's own `ComputeAxisBase` basis that
+`FaceTexdef::setBasis` and `TexDef_Construct_Default` give them (a unit matrix
+over the basis for brush primitives), and patches the planar cap
+(`planarLevelPatchTexture`, Radiant's `Patch::CapTexture`). On floors and
+ceilings that basis runs U along world Y, a quarter turn from `FaceAligned`.
+The default scale is the format's (`levelSurfaceDefaultScale()`: 0.5 for Quake
+III, 1 otherwise) rather than a per-game configuration value. The commands
+`map.surfaceReset` and `map.surfaceRadiantReset` are quick surface commands on
+the picked faces, or the Surfaces target (`queueLevelSurfaceEdit(...,
+cameraTargets = true)`); TrenchBroom binds Shift+R (and Shift+Alt+R to
+`map.surfaceNatural`, its world-aligned reset), NetRadiant Custom Shift+N. CLI:
+`map align-textures --reset-alignment U,V` and `--radiant-reset U,V`.
+
+Reset Textures (`LevelTextureResetRequest`, `levelTextureResetTargets()` and
+`prepareLevelTextureReset()`) is bobToolz's `DoResetTextures`: absolute values
+for each ticked field and an optional rename, on given faces and patches or
+the whole map (visible, unlocked, in the open group, outside
+`excludedObjects`; closed groups stay editable, as Find and Replace Textures
+reads the map), optionally only surfaces using one texture (compared as
+trimmed, slash-normalised, case-folded keys without a leading `textures/`).
+Classic faces take the values as they are; Valve 220 faces take offsets and
+scales and turn their axes about their normal by the rotation's change
+(`Texdef_Assign`/`Valve220_rotate`); brush-primitive faces take them as
+`TexMatToFakeTexCoords` reads the matrix in texels and `BPTexdef_Assign`
+writes it back, so they need the image size. Patches take only the name
+(`levelPatchMaterialToken()`), as bobToolz's `DPatch::ResetTextures` does. The
+plan commits through `commitLevelSurfaceEdit()`, which validates renamed faces
+even when their numbers stay, writes a rename-only face's name without
+rewriting its numbers, and records an `edit-brush` command (rebuilding the
+map's texture list) when names change. The GUI runs it on the surface worker
+(`LevelSurfaceWork::resetTextures`) from the **Reset Textures…** window
+(app/level_texture_reset_dialog.*); the CLI is `map align-textures` with
+`--set-*`, `--rename`, `--only-texture` and `--whole-map`. Limits: 262,144
+faces and 65,536 patches.
+
 ### Surface clipboard
 
 **Copy Surface** in the Surfaces tab captures the inspected brush face's material,
@@ -2650,6 +2842,46 @@ reports image paths, original dimensions, shader scripts and limitations. Open
 the project's asset folder or package explicitly; project package-folder lists
 and installed game packages are not automatically combined for this camera.
 
+### Camera display modes
+
+`core/level_camera_render.h` holds the camera's display as three saved
+choices: textures (images or flat-shaded colours), faces hidden (3D Wireframe)
+and edges (an outline over drawn faces). They are kept in the shell layout
+state under `levelPreviewTextured`, `levelPreviewWireframe` and
+`levelPreviewEdges`, and `ApplicationShell::applyLevelCameraRender()` applies
+them to the camera when it is created and after every preview rebuild, so an
+edit, undo or **Reload** no longer drops wireframe. Hiding the faces keeps the
+other two choices, so turning 3D Wireframe off restores textured or flat faces
+and their edges. **View** > **Camera Display** registers `map.previewTextures`
+and `map.previewEdges` (checkable, always enabled, mirrored by the **View**
+tab's **Display** boxes and the status strip's **Textures** box);
+`map.showCameraTextures`, `map.hideCameraTextures` and `map.hideCameraFaces`
+(TrenchBroom's `MapViewBase::showMaterials`, `hideMaterials` and `hideFaces`
+face-render-mode setters); and `map.nextCameraMode` and
+`map.previousCameraMode`, which step NetRadiant Custom's `CameraModeNext` and
+`CameraModePrev` cycle of Wireframe, Flat Shaded, Textured and Textured with
+Edges, wrapping, and announce `Camera mode N of 4: …` in the status bar. The
+NetRadiant Custom profile binds Shift+] and Shift+[; the NetRadiant baseline
+leaves them unbound because its `camwindow.cpp` has no such commands, and
+TrenchBroom has no default keys for its face modes. Doom 3's lighting mode is
+not part of the cycle, because the camera has no lighting renderer. The
+commands that change the picture at once are enabled while the camera is
+showing, as 3D Wireframe always was. None of them touches the map, its undo
+history, selection, scene locks, hidden objects or the open group, so there is
+no CLI route.
+
+The level camera turns `ModelViewport::setPolygonEdges` on. The preview mesh
+adds every brush face, patch quad and Doom polygon as a fan over its own
+corners, so the only edges two triangles of one surface share are fan
+diagonals. `buildGpuGeometry` marks them per triangle; the surface shader's
+edge overlay skips them (bits 2 to 4 of the corner info, passed on as bits 6
+to 8 of the fragment flags), and the wireframe's stroke list leaves them out,
+so both draw brush polygon edges rather than triangulation diagonals. The
+hovered triangle keeps its full outline. Models and other viewports keep every
+triangle edge, since a model's shared edges are real edges. Placed models in
+the level camera are added triangle by triangle, so their triangle edges still
+show.
+
 Classic and Valve 220 brush coordinates use the original image's width and
 height, even when the preview is downsampled. Brush-primitive matrices and patch
 coordinates already store texture repeats. The same projection service used by
@@ -2759,12 +2991,39 @@ compiler run. No game was launched. Evidence lives under
 ## Numeric Rotation and Texture Lock
 
 **Edit → Rotate Selection…**, also available in the viewport's Transform menu
-and command palette, previews an arbitrary angle around X, Y or Z. Choose the
+and command palette, previews X, Y and Z angles applied as one Euler rotation:
+about world X, then Y, then Z, all about one pivot, as NetRadiant Custom's
+Arbitrary Rotation (`matrix4_rotation_for_euler_xyz`) does. Choose the
 selection centre, world origin or custom coordinates as the pivot. Positive
-angles follow the right-hand rule. Preview work runs on an immutable snapshot
-in a worker; changing a control supersedes the old preview. Apply stays disabled
-until the current request has passed validation. A map reload, edit or selection
-change invalidates the draft at commit. Cancel leaves the document unchanged.
+angles follow the right-hand rule. `LevelMapRotationRequest::euler` carries the
+angles; one nonzero angle is exactly the single-axis service, and several run
+it once per axis about the first turn's pivot and fold the turns into one undo
+step (`collapseLevelMapUndoSteps`), so entity angles, texture lock, Valve 220
+policy and Repeat Last Commands behave as for one turn. Repeat Transforms
+records the whole Euler turn (`LevelRepeatTransforms::rotationEulerXyz`).
+Doom maps refuse turns about X or Y.
+
+**Scale Selection…** shares the same window frame (`LevelTransformDialog`):
+X, Y and Z factors about the same pivot choices, through
+`scaleLevelMapSelection()` and the `Scale` placement operation. A negative
+factor mirrors: an odd number of them swaps two points of each point-defined
+face and reverses patch columns, as Flip does, and entity and thing headings
+reflect as Flip X and Flip Y do; positive factors keep headings, as Resize
+does. Zero and factors beyond ±32768 are refused, and Doom maps need a Z factor
+of 1. Texture Scale Lock decides whether brush textures stretch.
+
+Both windows are modeless. Preview work runs on an immutable snapshot in a
+worker; changing a control supersedes the old preview. OK and Apply stay
+disabled until the current request has passed validation. **Apply** commits
+and keeps the window open; the shell's command refresh
+(`refreshLevelArbitraryTransformDialogs`) hands the window the current map
+after every edit, reload or selection change, so the next preview and Apply use
+the refreshed selection. A commit whose preview no longer matches the map is
+refused and the preview rebuilt. In component mode the windows preview and
+apply the same values to the picked components through the Affine (rotation)
+and Scale component transforms, with the component UV settings and pivot that
+**Transform Components…** uses; with nothing picked they say why they wait.
+Close leaves the document unchanged.
 
 Texture lock preserves the texture coordinates of every point on a brush face.
 Valve 220 axes and brushDef/brushDef3 matrices retain their dialect. Classic

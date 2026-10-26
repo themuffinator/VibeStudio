@@ -235,7 +235,7 @@ LevelMapPreviewMesh buildLevelMapPreviewMesh(const LevelMapDocument& document, c
 			}
 			for (int face = 0; face < brush.faces.size(); ++face) {
 				const MapFacePolygon& polygon = brush.faces.at(face);
-				if (!polygon.isValid()) {
+				if (!polygon.isValid() || (!options.hiddenFaces.isEmpty() && options.hiddenFaces.contains({brush.brushId, polygon.faceIndex}))) {
 					continue;
 				}
 				++preview.brushFaces;

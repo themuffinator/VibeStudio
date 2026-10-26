@@ -1306,6 +1306,17 @@ the tools the open map can use are shown, and the material strip below holds the
   most other profiles fly a first-person camera. Tick **Textures** above the views to draw package images: open the
   game's package or asset folder on the **Packages** page first. **View** > **3D Wireframe** (<kbd>W</kbd>) shows edges
   only.
+- **Choose how the camera draws.** **View** > **Camera Display** and the **View** tab's **Display** section set what the
+  camera draws, and your choice is kept for the next session. **Textures in Camera** (the same as the **Textures** box
+  above the views) switches the faces between package images and flat-shaded colours. **Edges in Camera** outlines
+  every brush face and patch quad, not the triangles they are drawn with. **3D Wireframe** hides the faces and leaves
+  the edges; turn it off and the faces come back as they were, textured or flat. The camera keeps these choices when
+  it redraws after an edit. **Show Textures in Camera**, **Hide Textures in Camera** and **Hide Faces in Camera** set
+  the faces outright, as TrenchBroom's view options do. **Next Camera Mode** and **Previous Camera Mode** step through
+  **Wireframe**, **Flat Shaded**, **Textured** and **Textured with Edges**, and the status bar says which one is
+  showing (<kbd>Shift</kbd>+<kbd>]</kbd> and <kbd>Shift</kbd>+<kbd>[</kbd> in the NetRadiant Custom profile). These
+  commands work while the camera is showing; **Textures in Camera** and **Edges in Camera** can be changed at any time.
+  They change only the picture, never the map. Give any of them a key in **Help** > **Keyboard Shortcuts**.
 - **Aim the camera.** **View** > **Camera** moves only the 3D camera: the 2D views, the map and its undo history stay
   as they are. **Level Camera** keeps the camera where it stands, takes away its pitch and turns its heading to the
   nearest 22.5 degrees, as Radiant's **Center** does (<kbd>End</kbd> in the NetRadiant Custom, NetRadiant, GtkRadiant,
@@ -1344,17 +1355,47 @@ the tools the open map can use are shown, and the material strip below holds the
   (Doom), **Grid**, **Vertices**, **Labels**, **Target Links** and **Linked Groups** (Quake). The **View** tab has the same options with
   the grid, snapping, texture locks, layouts and view links.
 - **Filters.** The **Filters** section of the **View** tab hides whole kinds of object in every view, each with a
-  count: world brushes, entities, brushes, brush entities, func groups, patches, detail, clip, hint and skip, caulk,
-  sky, liquids, point entities, lights, triggers, monsters, items, player starts, paths and models, or on a Doom map
-  each category of thing. A ticked kind is shown. The same kinds are checkable commands under **View** > **Filters**,
+  count: world brushes, entities, brushes, brush entities, func groups, patches, detail, structural, clip, player
+  clip, monster clip, weapon clip, bot clip, hint and skip, caulk, nodraw, area portals, cluster portals, light grid,
+  sky, liquids, translucent, decals, point entities, lights, triggers, monsters, items, player starts, paths and
+  models, or on a Doom map each category of thing. A ticked kind is shown. The same kinds are checkable commands under **View** > **Filters**,
   in the **Filters** submenu of the view bar's **Select** menu and in command search, so you can give them keys;
   the NetRadiant Custom and NetRadiant profiles use theirs: <kbd>Alt+1</kbd> **World Brushes**, <kbd>Alt+2</kbd>
-  **Entities**, <kbd>Alt+5</kbd> **Liquids**, <kbd>Alt+6</kbd> **Caulk**,
-  <kbd>Alt+7</kbd> **Clip**, <kbd>Alt+8</kbd> **Paths**, <kbd>Alt+0</kbd> **Lights**, <kbd>Ctrl+D</kbd> **Detail**,
-  <kbd>Ctrl+H</kbd> **Hint and Skip**, <kbd>Shift+M</kbd> **Models** and <kbd>Ctrl+Shift+T</kbd> **Triggers**
-  (<kbd>Ctrl+P</kbd> stays **Go to File**, so **Patches** has no key). **Invert Filters** hides every kind that is
+  **Entities**, <kbd>Alt+3</kbd> **Area Portals**, <kbd>Alt+4</kbd> **Translucent**, <kbd>Alt+5</kbd> **Liquids**,
+  <kbd>Alt+6</kbd> **Caulk**, <kbd>Alt+7</kbd> **Clip**, <kbd>Alt+8</kbd> **Paths**, <kbd>Alt+9</kbd> **Cluster Portals**, <kbd>Alt+0</kbd>
+  **Lights**, <kbd>Ctrl+D</kbd> **Detail**, <kbd>Ctrl+Shift+D</kbd> **Structural**, <kbd>Ctrl+H</kbd> **Hint and
+  Skip**, <kbd>Shift+M</kbd> **Models**, <kbd>Ctrl+Shift+T</kbd> **Triggers**, <kbd>Alt+M</kbd> **Bot Clip** and
+  <kbd>Shift+D</kbd> **Decals** (<kbd>Ctrl+P</kbd> stays **Go to File**, so **Patches** has no key, and **Light Grid**
+  has none in NetRadiant Custom either). **Invert Filters** hides every kind that is
   shown and shows every kind that is hidden, as Radiant's **Invert filters** does, and **Show Every Kind** brings
   them all back.
+
+  The texture kinds read each face's texture and content flags. **Area Portals** takes a brush with any areaportal
+  face or the area portal flag, and Quake II's func_areaportal entities. **Cluster Portals**, **Light Grid** and
+  **Bot Clip** (botclip or donotenter) take a brush only when every face is of that kind, and **Decals** a brush with
+  any face whose texture is under `decals/`; those four are for Quake III maps, where bot clip also leaves **Clip**.
+  **Structural** is the opposite of **Detail**: on Quake II and III maps every brush without the detail flag outside
+  func_detail, and on Quake maps worldspawn and every brush entity but func_detail. **Caulk** hides brushes caulked on
+  every face, and while it is off the camera also leaves out caulk faces on other brushes, so you see the surfaces
+  players see; the 2D views keep each brush's whole outline, as Radiant's do, and the status bar says how many faces
+  went. On a Quake map, skip counts as caulk rather than as **Hint and Skip**.
+
+  The material kinds read what a surface is made of. On a Quake III map the **Filters** section reads the shader
+  scripts of the package you have open, staged edits included, and says how many shaders it read; press **Reload
+  Shaders** after changing scripts outside the studio (the camera's **Reload** reads them again too). A face whose
+  shader the package defines, or whose image it holds without a script, then goes by that shader: **Translucent**
+  takes a brush or patch with any qer_trans, alphaFunc, qer_alphafunc or fog shader, as Radiant's **Translucent**
+  filter does; **Liquids** takes surfaceparm water, slime or lava, so a lavarock wall stays and a liquid under any
+  name goes; **Sky** takes skyParms or surfaceparm sky; and surfaceparm playerclip, monsterclip, botclip and nodraw
+  feed **Player Clip**, **Monster Clip**, **Bot Clip** and **Nodraw**. Faces the package knows nothing about keep
+  the name rules, and without a package **Translucent** finds nothing on a Quake III map. Quake II maps read each
+  face's own flags instead (the 33% and 66% translucency flags, nodraw and the clip contents), and Quake maps the
+  texture names, so `clip` counts as player and monster clip and a quoted `{` fence texture as translucent.
+
+  **Clip** still hides every kind of clip; **Player Clip**, **Monster Clip** and **Weapon Clip** (weapclip and
+  fullclip, which stop shots too) hide one at a time, and all four take clip-shaded patches as well as brushes made
+  wholly of clip. **Nodraw** hides brushes that draw nothing in game, every face nodraw, so on Quake III maps it also
+  takes caulked, clip and trigger brushes whose shaders are nodraw.
 
   **World Brushes** counts worldspawn, func_group and func_detail as the world, as Radiant does, and **Entities**
   is everything else, doors and triggers included. **Brushes** hides every brush whoever owns it but leaves patches
@@ -1516,12 +1557,12 @@ Most actions are in the **Edit** menu, the right-click menu of the views and the
 | Place models and sounds | The **Models** and **Sounds** tabs list the open package's models and sounds, with a preview of the chosen model and a waveform you can play. Drag one onto a view, or choose **Place in View**, for a `misc_model` or a speaker entity; **Give to Selection** sets the selected entities' `model` or `noise` key instead. The **Place** section names the class it makes in the open map, and says so when your definitions do not declare it: Quake itself has no model or speaker entity, so a Quake mod must provide them. |
 | Duplicate or delete | **Duplicate Selection** copies objects using your profile's placement; **Duplicate with Offset…** previews an exact offset and a **Copies** count for a linear array. <kbd>Delete</kbd> removes the selection; an entity takes its brushes with it. |
 | Move | Drag the selection, nudge it one grid step with the keys your profile gives the **Nudge** commands (see [Nudge the selection](manual/levels.md#nudge-the-selection)), or use **Move Selection…**. |
-| Rotate or flip | **Rotate 90° Left**, **Rotate 90° Right**, **Flip Horizontal** and **Flip Vertical** work as the active view shows the map, the camera included, and **Roll** and **Pitch** turn about the view's other axes; see [Turn and flip from the view](manual/levels.md#turn-and-flip-from-the-view). **Flip X**, **Flip Y**, **Flip Z**, **Rotate X**, **Rotate Y** and **Rotate Z** (**Edit** > **Transform**, the **Transform** menu above the views, or the **Tools** tab) use the world axis whatever view is active, as NetRadiant Custom's commands do: Rotate X and Rotate Z turn -90° and Rotate Y +90°, each clockwise as the side, top or front view shows it. Doom maps flip along X or Y and turn about Z only. No profile gives them keys, as NetRadiant Custom does not; add your own in **Help** > **Keyboard Shortcuts**. In the NetRadiant Custom and TrenchBroom profiles, every quick turn pivots on the grid point nearest the selection's centre while **Snap** is on, so a brush whose sides differ by an odd number of grid steps stays on the grid; it may move by up to half a step. Other profiles turn about the exact centre; **Customize Editor Gestures** changes this for any profile, and a custom component pivot always wins. Flips mirror about the exact centre, except in the TrenchBroom profile, which rounds it to half the grid while **Snap** is on. **Rotate Selection…** previews any angle about the selection centre, the world origin or your own pivot. |
+| Rotate or flip | **Rotate 90° Left**, **Rotate 90° Right**, **Flip Horizontal** and **Flip Vertical** work as the active view shows the map, the camera included, and **Roll** and **Pitch** turn about the view's other axes; see [Turn and flip from the view](manual/levels.md#turn-and-flip-from-the-view). **Flip X**, **Flip Y**, **Flip Z**, **Rotate X**, **Rotate Y** and **Rotate Z** (**Edit** > **Transform**, the **Transform** menu above the views, or the **Tools** tab) use the world axis whatever view is active, as NetRadiant Custom's commands do: Rotate X and Rotate Z turn -90° and Rotate Y +90°, each clockwise as the side, top or front view shows it. Doom maps flip along X or Y and turn about Z only. No profile gives them keys, as NetRadiant Custom does not; add your own in **Help** > **Keyboard Shortcuts**. In the NetRadiant Custom and TrenchBroom profiles, every quick turn pivots on the grid point nearest the selection's centre while **Snap** is on, so a brush whose sides differ by an odd number of grid steps stays on the grid; it may move by up to half a step. Other profiles turn about the exact centre; **Customize Editor Gestures** changes this for any profile, and a custom component pivot always wins. Flips mirror about the exact centre, except in the TrenchBroom profile, which rounds it to half the grid while **Snap** is on. **Rotate Selection…** turns by any X, Y and Z angles about the selection centre, the world origin or your own pivot; see [Rotate and scale by exact values](manual/levels.md#rotate-and-scale-by-exact-values). |
 | Align | **Transform** > **Align Left**, **Align Right**, **Align Top**, **Align Bottom**, **Centre Horizontally** and **Centre Vertically** line the selected objects up on the edge or centre of the whole selection, as the active 2D view shows it, as Hammer does. An entity moves with its brushes. |
 | Shear | Turn on **Transform** > **Shear Tool** and drag the handle in the middle of a side of the selection in any 2D view: that side slides along itself and the opposite side stays put, slanting the selection, as TrenchBroom's shear tool does. <kbd>Escape</kbd> turns the tool off. **Transform** > **Shear…** slants the selection about its centre by an angle you type. Texture lock follows **Texture Lock**; where the map's face format cannot slant textures, the tool shears without it and says so. |
-| Resize | Drag the handles in a 2D view, or the labelled X, Y and Z handles in the 3D view. **Resize Selection…** takes exact sizes and the point that stays in place. |
+| Resize | Drag the handles in a 2D view, or the labelled X, Y and Z handles in the 3D view. **Resize Selection…** takes exact sizes and the point that stays in place. **Scale Selection…** multiplies the size by factors, and a negative factor mirrors; see [Rotate and scale by exact values](manual/levels.md#rotate-and-scale-by-exact-values). |
 | Cut with a plane | Turn on the **Clip Tool** (<kbd>X</kbd>), place or drag two or three points in any view, use <kbd>Tab</kbd> to choose sides, then <kbd>Enter</kbd> to apply the checked result. **Clip Selection…** accepts an axis plane or three exact XYZ points, with **Preview** before applying. |
-| Hollow | **Hollow…** turns each selected brush into walls of the thickness you choose, one per face, overlapping at the edges. **Hollow Touching…** makes walls that meet without overlapping, and **Make Room** builds walls one grid step thick around the outside of each brush and removes it, so the brush becomes the room, as NetRadiant Custom does. |
+| Hollow | **Hollow…** turns each selected brush into walls of the thickness you choose, one per face, overlapping at the edges. **Hollow Touching…** makes walls that meet without overlapping, and **Make Room** builds walls one grid step thick around the outside of each brush and removes it, so the brush becomes the room, as NetRadiant Custom does. See [Make a room with caulk and openings](manual/levels.md#make-a-room-with-caulk-and-openings). |
 | Carve (CSG subtract) | **Carve** cuts the selected brushes out of every brush they overlap. The carving brushes stay selected, ready to delete; hidden brushes are left alone. |
 | Intersect (CSG) | **Intersect** replaces the selected brushes with the one brush where they all overlap, as TrenchBroom does; each face keeps the texture of the face it came from. |
 | Make detail | **Make Detail** stops brushes sealing the map or splitting its visibility: in Quake II and Quake III maps it sets each face's detail flag, and in Quake maps it moves the brushes into a `func_detail` for VibeMap2, as ericw-tools expects. **Make Structural** undoes it, taking only the selected brushes out of a `func_detail`. In the TrenchBroom profile (<kbd>Alt</kbd>+<kbd>S</kbd>) it also moves the selected brushes out of any brush entity to the world, into the open group or current layer, as TrenchBroom does; other flag-based tags stay as they are. |
@@ -1529,7 +1570,7 @@ Most actions are in the **Edit** menu, the right-click menu of the views and the
 | Round to the grid | **Round Selection to Grid** rounds every brush vertex, patch control point and point-entity origin of the selection onto the grid on its own, as Radiant's Snap To Grid does, so off-grid shapes are cleaned up where they stand; brush entities round their brushes and keep their origin key. In **Edit Vertices**, **Edit Edges** or **Edit Faces** it rounds only the picked components. It is one undo step, follows **Lock Component UVs**, and leaves a brush the grid would collapse as it was, saying why. The NetRadiant Custom profile runs it with <kbd>Ctrl</kbd>+<kbd>G</kbd>; **Snap Selection to Grid** instead moves each object whole so its corner or origin lands on the grid. In Doom-format maps it snaps objects as **Snap Selection to Grid** does. |
 | Merge brushes | **Merge Brushes…** previews their convex union and lets you choose where conflicting materials, mappings and flags come from. |
 | Apply a texture | Select brushes or patches and choose **Apply Texture…**, or press <kbd>Enter</kbd> on a tile on the **Textures** tab. **Find and Replace Textures…** finds or swaps one texture across the map, the selection or the picked faces, and **Reveal Material** shows the selection's texture on the **Textures** tab; see [Find, replace and reveal textures](manual/levels.md#find-replace-and-reveal-textures). |
-| Align textures | Edit a classic or Valve 220 face's shift, rotation and scale on the **Inspector** tab, or use the **Surfaces** tab. In Face mode, both targets use exactly the [picked face components](manual/levels.md#edit-surfaces-from-component-faces). In object mode, **Target** chooses the selection, patches included, or **Picked Faces**: the faces you pick in the camera with your profile's face-pick click, holding its add key to gather more, or else the face in the **Inspector**. **Adjust** shifts, rotates, scales, fits or centres in steps, adds or subtracts a Radiant **Scale step** (see [Step textures by Radiant increments](manual/levels.md#step-textures-by-radiant-increments)), and has one-click **Flip U** and **Flip V**, **Fit U** and **Fit V** (one repeat across that axis only), **Justify Left**, **Right**, **Top** and **Bottom**, **Natural** (the texture at its natural scale, square to the world, as Radiant's Natural does) and **Align to Face** (the texture laid along the face's own slope). **Copy and Paste** carries one face's material, mapping and flags to others. **Surface Alignment…** gives a detailed preview. |
+| Align textures | Edit a classic or Valve 220 face's shift, rotation and scale on the **Inspector** tab, or use the **Surfaces** tab. In Face mode, both targets use exactly the [picked face components](manual/levels.md#edit-surfaces-from-component-faces). In object mode, **Target** chooses the selection, patches included, or **Picked Faces**: the faces you pick in the camera with your profile's face-pick click, holding its add key to gather more, or else the face in the **Inspector**. **Adjust** shifts, rotates, scales, fits or centres in steps, adds or subtracts a Radiant **Scale step** (see [Step textures by Radiant increments](manual/levels.md#step-textures-by-radiant-increments)), and has one-click **Flip U** and **Flip V**, **Fit U** and **Fit V** (one repeat across that axis only), **Justify Left**, **Right**, **Top** and **Bottom**, **Natural** (the texture at its natural scale, square to the world, as Radiant's Natural does), **Align to Face** (the texture laid along the face's own slope), and **Reset** and **Radiant Reset** (see [Reset textures](manual/levels.md#reset-textures)). **Copy and Paste** carries one face's material, mapping and flags to others. **Surface Alignment…** gives a detailed preview. To move or flip textures the way the camera shows them, see [Move and flip textures from the camera](manual/levels.md#move-and-flip-textures-from-the-camera). |
 | Paint materials | Choose a material in the **Material** box above the views, set the camera tool to **Paint**, then click or drag across surfaces in the 3D view. Each stroke is one undo step. **Sample** picks up a surface's material instead. |
 | Reshape a brush | Turn on **Edit Vertices**, **Edit Edges** or **Edit Faces** (**Geometry** or **Tools > Vertices**) to show corners, edge middles or face centres in the plan views and camera. Picks are shared between panes. In a plan view, click stacked handles, use the profile's add/toggle modifier or drag a selection band, then drag them or nudge them with your profile's **Nudge** keys (<kbd>Shift</kbd>: eight grid steps; see [Nudge the selection](manual/levels.md#nudge-the-selection)). The camera supports visible/X-ray picks and XYZ movement; see [camera components](manual/levels.md#move-components-in-the-camera). A corner moved onto another merges with it; **Undo** restores it. **Snap Vertices to Grid** rounds brush corners onto the grid. **Edit Brush Components…** provides exact numbers and a preview. |
 | Make curves (Quake III) | **Add Patch…** creates a plane, cylinder, square cylinder, cone, sphere, bevel or end cap, its cylinders, cones and spheres true circles of as many spans as you choose; the **Shapes** tab draws them too. **Edit Patch Control Points…**, **Stitch Patches…** and **Cap Patch…** reshape, join and close patches, and **Edit Vertices** drags their control points in the plan views and camera. The **Patch Rows and Columns** commands, also in the patch editor, insert, add or delete rows and columns without changing the surface, **Transpose**, **Re-disperse** and **Smooth** them, as Radiant's Patch menu does, and **Thicken Patch…** gives patches a back and walls along their open edges, as NetRadiant Custom does. |
@@ -1739,6 +1780,38 @@ not **Roll** or **Pitch**, which would tip the map out of its plane.
 To turn or flip from a script, use `map view-transform`, which resolves the same axes for a plan view or a camera;
 see [the command line](manual/cli.md).
 
+#### Rotate and scale by exact values
+
+Use **Rotate Selection…** and **Scale Selection…** (the **Edit** menu, the **Transform** menu above the views, the
+right-click menu's **Transform** submenu, the **Tools** tab or command search) to type exact values, as NetRadiant Custom's **Arbitrary
+Rotation** and **Arbitrary Scale** windows do. In the NetRadiant Custom profile they open with <kbd>Shift</kbd>+<kbd>R</kbd>
+and <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>; **Save Map As** keeps <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>, so
+the keys do not clash. Other profiles give them no keys; add your own in **Help** > **Keyboard Shortcuts**.
+
+1. Select the objects.
+2. Open the window. **Rotate Selection…** takes **About X**, **About Y** and **About Z** angles in degrees and turns the
+   selection about X, then Y, then Z, following the right-hand rule. It opens with 45° about the axis of the plan view
+   you used last. **Scale Selection…** takes **X factor**, **Y factor** and **Z factor**: 2 doubles the size along that
+   axis, 0.5 halves it, and a negative factor mirrors the selection along it. Brush faces and patches still face
+   outward after a mirror, and entity and Doom thing headings reflect as **Flip** does.
+3. Choose the **Pivot**: the **Selection centre**, the **World origin**, or **Custom coordinates** that you type.
+4. Check the preview. **Lock textures to faces** (rotation) and **Stretch textures with the selection** (scale, the
+   **Texture Scale Lock** setting) start from your settings; **Allow Valve 220 conversion** lets a locked texture that
+   classic faces cannot hold convert the map's classic faces, keeping how they look.
+5. Choose **Apply** to make the change and keep the window open, or **OK** to make it and close the window.
+
+The windows do not block the rest of the studio. After **Apply**, and whenever you change the selection or the map, the
+preview rebuilds from the current selection, so pressing **Apply** again turns or scales by the same amount once more.
+Each **Apply** is one undo step, and **Repeat Transforms** repeats the whole X, Y and Z turn or the factors. A locked
+object, or one outside the open group, refuses the change with the reason, and hidden objects stay where they are. Doom
+maps turn about Z only and scale in the top view, so their other fields are off. In **Edit Vertices**, **Edit Edges** or
+**Edit Faces** the windows turn or scale the picked components instead, about the pivot you choose or your component
+pivot, following **Lock Component UVs** rather than the texture options; with nothing picked they wait and say why.
+
+To do the same from a script, use `map rotate --euler x,y,z` or `map resize --factors x,y,z` with an optional
+`--pivot`; see [the command line](manual/cli.md). This workflow is **Partial**: it is tested in offscreen and command-line
+checks, not yet with native input on macOS or Linux or in long real-project sessions.
+
 #### Repeat object commands
 
 Use **Edit > Repeat > Repeat Last Commands**, **Tools > Transform**, or the command
@@ -1934,6 +2007,97 @@ Do not combine explicit axis/sign and camera options. Two-point JSON reports
 `planeAxis`, `planeDirection` and `cameraPlane`; the first two can replay the
 result without a camera. The synthetic third point still never joins wrap/merge.
 
+#### Make a room with caulk and openings
+
+**Status: Partial.** Draw a brush the size of the room you want, select it and choose **Make Room**
+(**Geometry** menu, or the **Brush** section of the **Tools** tab). VibeStudio
+builds a wall one grid step thick outside each face and removes the brush, so
+its volume becomes the room. The walls fill the outer corners, where NetRadiant
+Custom leaves them open. It is one undo step.
+
+As in NetRadiant Custom, two options start on:
+
+- **Caulk the wall faces the room does not see**: every wall face except the
+  one facing the room takes the game's caulk material, so the compiler leaves
+  it out. That is `common/caulk` in Quake III and `skip` in Quake, the same
+  faces the **Caulk** filter hides. Quake II has no caulk material, so the walls
+  keep their textures until you name one.
+- **Leave picked faces open**: faces you pick in face mode (**Edit Faces**), in
+  the camera or with **Select Textured** get no wall, so they become openings
+  such as doorways or a skylight. The walls beside an opening stop flush with
+  it, and the wall faces that line it keep the open face's material.
+
+To change them, choose **Make Room Options…**. Leave **Caulk material** empty
+for the game's own caulk, or name a material your game's assets provide. The
+line under the options shows which material Make Room will use on the open map.
+**Restore Defaults** brings back NetRadiant Custom's behaviour. The options are
+saved with your settings, and `editor make-room` reads or changes them from
+the command line.
+
+From the command line, `map hollow --mode room` does the same. Add `--caulk`
+for the game's caulk or `--caulk-texture NAME` for your own, and repeat
+`--open-face face:brushId:faceNumber` (one-based, as `map select-textured`
+prints faces) for each opening. The same options also work with
+`--mode overlap` and `--mode touch`:
+
+```text
+vibestudio --cli map hollow maps/start.map --object brush:12 --mode room --thickness 16 --caulk --open-face face:12:6 --output maps/start-room.map --json
+```
+
+#### Hollow, shrink and expand with the CSG Tool
+
+The **CSG Tool** section of the **Tools** tab, after **Brush**, works like
+NetRadiant Custom's CSG Tool window. Choose **CSG Tool** (**Geometry** menu or
+the command palette) to open the section with the thickness ready to type. Set
+the options once; every button, menu item and key then uses them, and they are
+saved with your settings.
+
+- **Thickness**: how thick the walls are, and how far **Shrink Brushes** and
+  **Expand Brushes** move each face. **Use Grid** copies the grid size.
+- **Faces**: which faces of each brush the tool leaves alone. **All but the
+  picked faces** skips the faces you pick in face mode, in the camera or with
+  **Select Textured**. **Only the picked faces** works on those alone; a brush
+  with none picked is left as it is. **All but those facing the 2D view** skips
+  the faces at either end along the active 2D view's axis (in the top view, the
+  floor and ceiling), and **All but those facing the camera** does the same
+  along the 3D camera's view, so hollowing makes a shaft or a passage.
+- **Caulk hidden faces**: hidden faces take the material **Make Room Options…**
+  names, or the game's own caulk. The line under the options shows which.
+- **Keep inner brush**: keeps the brush instead of removing it. The room is
+  then solid, so caulk goes on the faces between the walls and the brush, and
+  the outside keeps its materials.
+
+Select brushes, or a brush entity, then choose one of these. Each is one undo
+step; a skipped face gets no wall, or stays where it is, and the walls beside
+it stop flush with it.
+
+- **Shrink Brushes** and **Expand Brushes** move every face in or out by the
+  thickness. Textures stay where they are in the world. A brush a shrink would
+  flatten is left as it was, and the status bar says why.
+- **Hollow with Diagonal Joints** builds the walls outside each brush, so the
+  brush becomes the room. Neighbouring walls meet on a mitred joint, with no
+  overlap and no gap.
+- **Hollow by Wrapping** builds the walls inside each brush, each stopping at
+  the walls before it, like **Hollow Touching…**.
+- **Hollow by Extruding Faces** builds a wall straight out from each face, its
+  sides square to the face, so the outer edges stay open.
+- **Hollow by Pulling Faces** builds the walls outside with the corners filled,
+  like **Make Room**.
+
+Hidden brushes, and brushes in locked layers or groups, are left as they are.
+From the command line, `map hollow` takes `--mode diagonal`, `--mode extrude`,
+`--mode wrap` (the same as `touch`) and `--mode pull` (the same as `room`), with
+`--keep-inner`. `--exclude-face face:brushId:faceNumber` and `--only-face`
+choose faces as **Faces** does with picked faces, and `--exclude-facing x`,
+`y`, `z` or a direction such as `0.7,0.7,0` skips the faces facing it.
+`map shrink-brushes` and `map expand-brushes` take the same face options with
+`--thickness`:
+
+```text
+vibestudio --cli map hollow maps/start.map --object brush:12 --mode diagonal --thickness 16 --exclude-facing z --caulk --output maps/start-shaft.map --json
+vibestudio --cli map expand-brushes maps/start.map --object brush:12 --thickness 8 --exclude-face face:12:6 --output maps/start-wide.map --json
+```
+
 #### Wrap brushes or picked components
 
 **Wrap/Merge** in **Geometry**, the selection context menu and **Tools > Brush**
@@ -2125,9 +2289,10 @@ all affected brushes and patches. **Use a custom pivot** supplies exact XYZ.
 numeric transform. Coincident corners merge only with **Allow coincident
 vertices to merge**; every brush must remain a three-dimensional convex solid.
 
-**Rotate 90° Left/Right**, **Rotate Selection…**, **Resize Selection…**,
-**Shear…**, mirroring and grid snapping target picked components
-while component mode is active. Resize opens component scale controls.
+**Rotate 90° Left/Right**, **Rotate Selection…**, **Scale Selection…**,
+**Resize Selection…**, **Shear…**, mirroring and grid snapping target picked
+components while component mode is active. Resize opens component scale
+controls; **Rotate Selection…** turns the picks about X, Y and Z at once.
 No picked handles means no edit. Surviving handles stay selected after a
 successful transform. Brushes and patch control points share one atomic undo
 step; a locked object, invalid solid or changed selection cancels the batch.
@@ -3010,7 +3175,7 @@ vibestudio --cli map move ./maps/start.map --object brush:12 --delta 16,0,0 --ou
 | `map round-to-grid` | Round each brush vertex, patch control point and point-entity origin of `--object` objects onto `--grid`, or only `--set` components, as **Round Selection to Grid** does; optional `--uv-lock off\|on\|fit` |
 | `map repeat` | Replay an exported JSON recipe on the current object targets as one checked edit |
 | `map add-shape` | Add a shape of the **Shapes** tab, or replace brushes with one |
-| `map clip`, `map hollow`, `map carve`, `map intersect`, `map merge-brushes`, `map wrap-merge`, `map snap-vertices` | Brush tools; **Wrap/Merge** fills a convex hull from objects or components; `map hollow --mode touch` or `room` hollows as **Hollow Touching…** or **Make Room** does |
+| `map clip`, `map hollow`, `map carve`, `map intersect`, `map merge-brushes`, `map wrap-merge`, `map snap-vertices` | Brush tools; **Wrap/Merge** fills a convex hull from objects or components; `map hollow --mode touch` or `room` hollows as **Hollow Touching…** or **Make Room** does, with `--caulk`, `--caulk-texture` and `--open-face` for its caulk and openings |
 | `map brush-components`, `map move-components`, `map insert-vertices`, `map remove-components`, `map split-components` | Inspect current component IDs, move components, insert corners with repeated `--position x,y,z`, remove incident vertices, or split edges/faces with `--kind edge\|face`, repeated `--component` IDs and `--delta x,y,z`; edits require `--brush` and `--output` |
 | `map transform-components` | Move, rotate, scale or shear brush components and patch control points in one batch, or `snap` one geometric brush vertex to `--target brush:ID/vertex/ID`; repeat `--set object:id/kind/component,component`, choose `--operation`, and supply `--output`; shared validation, undo policy and exact UV lock |
 | `map select-components` | Read-only conversion, Grow, Shrink or Connected queries with repeated `--set`; conversion requires `--to` and accepts complete/touching coverage; Grow/Shrink accept `--steps 1..256`; JSON selectors feed component transforms |
@@ -3259,6 +3424,155 @@ increments, and **--degrees N --anchor origin** turns about the texture origin
 ```sh
 vibestudio --cli map align-textures room.map --object brush:12 --scale-step 0,0.5 --output scaled.map --json
 vibestudio --cli map align-textures room.map --object brush:12 --degrees 45 --anchor origin --output turned.map
+```
+
+### Move and flip textures from the camera
+
+**Status: Partial.** These commands move and mirror textures the way the 3D
+camera shows them, as TrenchBroom's camera texture keys do, rather than along
+each face's own U and V. They are in the **Surfaces** menu under **Move
+Textures from Camera**, on the **Tools** tab and in the command palette:
+
+- **Move Textures Up**, **Down**, **Left** and **Right** move the texture one
+  grid size, in texels, up, down, left or right on screen.
+- The **(Coarse)** forms move twice the grid size; the **(Fine)** forms move
+  one texel, whatever the grid.
+- **Flip Textures Horizontally** mirrors the texture axis that runs across the
+  view, and **Flip Textures Vertically** the one that runs up it, about the
+  middle of each face, as **Flip U** and **Flip V** do.
+
+For each face, the texture axis that runs most nearly across the view counts
+as horizontal, so a turned or mirrored texture still moves the way you see it,
+on classic, Valve 220 and brush-primitive faces and on patches. A patch uses
+the direction its texture runs at its middle control point.
+
+The commands act on the faces you picked in the camera or with **Select
+Textured**. With no face picked they act on the **Surfaces** tab's target, as
+the other quick adjustments do. Each command, or a quick burst of them, is one
+undo step. Brush-primitive faces and patches need the material's image size
+from the open package to move; flips need none. Hidden objects are not
+targets, and a locked layer refuses the edit, with the reason on the
+**Surfaces** tab.
+
+The TrenchBroom profile gives them its keys in the camera: the arrow keys
+move by the grid, <kbd>Shift</kbd>+arrows coarsely, <kbd>Ctrl</kbd>+arrows
+finely, <kbd>Ctrl</kbd>+<kbd>F</kbd> flips horizontally and
+<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd> vertically. These keys move
+textures only while a face is picked and you are not editing vertices, edges
+or faces; otherwise they still nudge, copy and flip the selection. Other
+profiles leave the commands without keys; give them your own in
+**Help** > **Keyboard Shortcuts**.
+
+On the command line, **map align-textures --camera-shift RIGHT,UP** and
+**--camera-flip horizontal|vertical** do the same for a camera named by
+**--camera-yaw** and **--camera-pitch**:
+
+```sh
+vibestudio --cli map align-textures room.map --face 12:3 --camera-shift 16,0 --camera-yaw 90 --output moved.map --json
+```
+
+### Rotate textures by fixed steps
+
+**Status: Partial.** These commands turn textures by a fixed angle, as
+TrenchBroom's texture rotation keys do, whatever the **Surfaces** tab's
+**Rotation step** says. They are in the **Surfaces** menu under **Rotate
+Textures**, on the **Tools** tab and in the command palette:
+
+- **Rotate Textures Clockwise** and **Rotate Textures Counter-clockwise** turn
+  the texture 15°.
+- The **(Coarse)** forms turn it a quarter turn, 90°; the **(Fine)** forms
+  turn it 1°.
+
+Each texture turns the named way as you see the face from the front, the side
+the camera shows, on classic, Valve 220 and brush-primitive faces and on
+patches, whether the texture reads the right way round or mirrored. The turn
+keeps the texture's offsets, so it pivots about the texture origin rather
+than the middle of the face; use **Rotate −** and **Rotate +** with **Face
+centre** to keep the middle in place.
+
+The commands act on the faces you picked in the camera or with **Select
+Textured**, or with no face picked on the **Surfaces** tab's target. Each
+command, or a quick burst of them, is one undo step. Patches need the
+material's image size from the open package; faces need none. Hidden objects
+are not targets, and a locked layer refuses the turn, with the reason on the
+**Surfaces** tab.
+
+The TrenchBroom profile gives them its keys in the camera: <kbd>Page Up</kbd>
+turns clockwise and <kbd>Page Down</kbd> counter-clockwise, with
+<kbd>Shift</kbd> for the coarse turns and <kbd>Ctrl</kbd> for the fine ones.
+Like the texture moves, these keys turn textures only while a face is picked
+and you are not editing vertices, edges or faces; otherwise they still nudge
+and copy the selection along the depth axis. Other profiles leave the commands
+without keys.
+
+On the command line, **map align-textures --clockwise N** turns N degrees
+clockwise, or counter-clockwise for a negative N:
+
+```sh
+vibestudio --cli map align-textures room.map --object brush:12 --clockwise 15 --output turned.map --json
+```
+
+### Reset textures
+
+**Status: Partial.** Two commands reset a texture's mapping in one pass,
+whatever format each face is written in. They are on the **Surfaces** tab as
+**Reset** and **Radiant Reset**, in the **Surfaces** menu, on the **Tools** tab
+and in the command palette:
+
+- **Reset Texture Alignment** gives every face no shift and no rotation at
+  the default scale (0.5 in Quake III, 1 otherwise) and keeps its kind, as
+  TrenchBroom's reset does: classic faces get their natural numbers, Valve 220
+  and brush-primitive faces are laid in their own plane, as **Align to Face**
+  lays them, and patches get their natural spread.
+- **Radiant Texture Reset** resets as NetRadiant Custom's **Reset Texture**
+  does: classic faces get their natural numbers, Valve 220 and
+  brush-primitive faces take their plane's own basis, and patches are capped,
+  projected along their average normal. On floors and ceilings the plane's
+  basis runs a quarter turn from **Align to Face**.
+
+Unlike **Align to Face**, neither refuses a sloped classic face, so a
+selection that mixes formats needs one pass. Both act on the faces you picked
+in the camera or with **Select Textured**, or with no face picked on the
+**Surfaces** tab's target, as one undo step. Brush-primitive faces and
+patches need the material's image size from the open package. Hidden objects
+are not targets, and a locked layer refuses the reset.
+
+The TrenchBroom profile binds <kbd>Shift</kbd>+<kbd>R</kbd> to **Reset Texture
+Alignment** and <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd> to **Natural
+Texture Mapping**, its reset to world-aligned textures. The NetRadiant Custom
+profile binds <kbd>Shift</kbd>+<kbd>N</kbd> to **Radiant Texture Reset**.
+
+#### Set texture values across the map
+
+**Reset Textures…**, in the **Surfaces** menu and on the **Tools** tab, sets
+absolute values, as bobToolz's window of that name does:
+
+1. In **Apply to**, choose **Selection** (the **Surfaces** tab's target, or
+   the picked faces) or **Whole map**: every visible, unlocked surface in the
+   open group. What the views hide stays as it is.
+2. Tick **Only faces using** and name a texture to change only the surfaces
+   that use it. Case and a leading `textures/` do not matter.
+3. Tick **Rename to** to give the surfaces another texture.
+4. Tick each of **Scale U**, **Scale V**, **Shift U**, **Shift V** and
+   **Rotation** you want to set, and give its value. Unticked values stay as
+   they are.
+5. Choose **Reset**.
+
+Each face keeps its format. Valve 220 faces keep their axes for a new scale
+and turn them by the change of rotation. Brush-primitive faces take the values
+as Radiant's Surface Inspector reads such a face, which needs the material's
+image size. Patches store no scale, shift or rotation, so they take only the
+new name. The whole reset is one undo step; a locked target refuses it.
+
+On the command line, **map align-textures** takes **--reset-alignment U,V** and
+**--radiant-reset U,V**, and the Reset Textures values as **--set-scale-u**,
+**--set-scale-v**, **--set-shift-u**, **--set-shift-v**, **--set-rotation**
+and **--rename**, for the **--object** selection or the **--whole-map**,
+optionally **--only-texture NAME**:
+
+```sh
+vibestudio --cli map align-textures room.map --object brush:12 --radiant-reset 0.5,0.5 --output reset.map --json
+vibestudio --cli map align-textures room.map --whole-map --only-texture base_wall/concrete --rename base_wall/metal --set-rotation 0 --output retextured.map
 ```
 
 ### Select textured surfaces
@@ -3951,9 +4265,11 @@ ID `netradiant-custom`. 3D camera beside a 2D view, 16-unit grid. 3D camera: fir
 | Maximize or Restore Active View | <kbd>F12</kbd> |
 | Frame Selection | <kbd>&#96;</kbd> |
 | Level Camera | <kbd>End</kbd> |
+| Next Camera Mode / Previous Camera Mode | <kbd>Shift</kbd>+<kbd>]</kbd> / <kbd>Shift</kbd>+<kbd>[</kbd> |
 | Carve | <kbd>Shift</kbd>+<kbd>U</kbd> |
 | Round Selection to Grid | <kbd>Ctrl</kbd>+<kbd>G</kbd> |
 | Repeat Transforms | <kbd>Ctrl</kbd>+<kbd>R</kbd> |
+| Rotate Selection… / Scale Selection… | <kbd>Shift</kbd>+<kbd>R</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> |
 | Move to Camera | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> |
 | Connect Entities | <kbd>Ctrl</kbd>+<kbd>K</kbd> |
 | KillConnect Entities (Quake, Nexuiz or Xonotic context) | <kbd>Shift</kbd>+<kbd>K</kbd> |
@@ -8839,6 +9155,83 @@ JSON reports `operation` (`scale-step` or `degrees`) and, for turns, `anchor`
 `texture-origin`). See
 [Step textures by Radiant increments](manual/levels.md#step-textures-by-radiant-increments).
 
+### Move and flip textures as a camera sees them
+
+`map align-textures` also takes the Levels camera's texture moves and flips,
+for a camera looking along **--camera-yaw** degrees (0 along +X, turning
+anticlockwise) and **--camera-pitch** degrees (up positive, -90 to 90), both 0
+when left out. **--camera-shift RIGHT,UP** moves each selected face's texture
+RIGHT texels across the view and UP texels up it, along whichever of the
+face's texture axes runs most nearly that way. **--camera-flip horizontal** or
+**vertical** mirrors the axis running across or up the view, about the middle
+of each face:
+
+```sh
+vibestudio --cli map align-textures room.map --face 12:3 --camera-shift 0,16 --camera-yaw 90 --camera-pitch -20 --output moved.map --json
+vibestudio --cli map align-textures room.map --object brush:12 --camera-flip horizontal --camera-yaw 45 --output flipped.map
+```
+
+Brush-primitive faces and patches need **--package** or **--texture-size** for
+a move; flips need no image. **--camera-yaw** and **--camera-pitch** go only
+with these two operations. JSON reports `operation` (`camera-shift` or
+`camera-flip`), `cameraYaw` and `cameraPitch`. See
+[Move and flip textures from the camera](manual/levels.md#move-and-flip-textures-from-the-camera).
+
+### Turn textures clockwise by fixed steps
+
+`map align-textures --clockwise N` turns each selected face's texture N
+degrees clockwise as seen from the face's front, about the texture origin, as
+the Levels **Rotate Textures** commands do. A negative N turns
+counter-clockwise. The direction holds on classic, Valve 220 and
+brush-primitive faces and on patches, whether the texture reads the right way
+round or mirrored:
+
+```sh
+vibestudio --cli map align-textures room.map --object brush:12 --clockwise 15 --output turned.map --json
+vibestudio --cli map align-textures room.map --face 12:3 --clockwise -90 --output turned.map
+```
+
+Patches need **--package** or **--texture-size**; faces need no image.
+**--anchor** and the camera options do not go with **--clockwise**. JSON
+reports `operation` `clockwise`, `anchor` `origin` and `clockwiseDegrees`. See
+[Rotate textures by fixed steps](manual/levels.md#rotate-textures-by-fixed-steps).
+
+### Reset textures
+
+`map align-textures` resets every selected face in one pass, whatever its
+format, at U,V map units per texel with no shift or rotation.
+**--reset-alignment U,V** keeps each face's kind, as the Levels **Reset Texture
+Alignment** command does: classic faces natural, Valve 220 and brush-primitive
+faces in their own plane, patches their natural spread. **--radiant-reset U,V**
+resets as **Radiant Texture Reset** does: Valve 220 and brush-primitive faces
+take their plane's own basis and patches are capped:
+
+```sh
+vibestudio --cli map align-textures room.map --object brush:12 --reset-alignment 1,1 --output reset.map --json
+vibestudio --cli map align-textures room.map --object entity:4 --radiant-reset 0.5,0.5 --package ./assets --output reset.map
+```
+
+Instead of an operation, Reset Textures values set absolute numbers, as the
+Levels **Reset Textures…** window does: **--set-scale-u N**, **--set-scale-v N**,
+**--set-shift-u N**, **--set-shift-v N** and **--set-rotation N** for each value
+to set, and **--rename NAME** for a new texture. They act on the **--object**
+and **--face** selection, or on the **--whole-map** (its visible, unlocked
+surfaces in the open group), and **--only-texture NAME** keeps them to the
+surfaces using one texture, ignoring case and a leading `textures/`. Patches
+take only the new name:
+
+```sh
+vibestudio --cli map align-textures room.map --whole-map --only-texture base_wall/concrete --rename base_wall/metal --set-scale-u 0.5 --set-scale-v 0.5 --output retextured.map --json
+```
+
+Brush-primitive faces need **--package** or **--texture-size** for a reset or
+for values, as patches do for a reset. A scale of 0, a texture name with spaces
+or quotes, and a request that sets nothing are refused. JSON reports
+`operation` (`reset-alignment`, `radiant-reset` or `reset-textures`), and for
+Reset Textures `scope` (`selection` or `map`), `targetFaces`, `targetPatches`,
+`renamed` and the `set` values. See
+[Reset textures](manual/levels.md#reset-textures).
+
 ### Round level geometry to the grid
 
 `map round-to-grid` rounds each brush vertex, patch control point and
@@ -8998,6 +9391,120 @@ or `--set editing.flipSnapsPivot=on` changes them.
 **Status: Partial.** The CLI and the Levels commands share one rotation and
 mirror service. See [Edit Quake-family maps](manual/levels.md#edit-quake-family-maps).
 
+### Rotate and scale level objects by exact values
+
+`map rotate --euler x,y,z` turns the objects about world X, then Y, then Z by
+those degrees, as one step: the command line form of **Rotate Selection…** and
+NetRadiant Custom's **Arbitrary Rotation**. It replaces **--axis**,
+**--degrees** and **--turns**, and takes the same **--pivot**, **--pivot-grid**,
+**--texture-lock** and **--allow-valve220**. `map resize --factors x,y,z`
+multiplies the objects' size along each axis about their centre, or about
+**--pivot x,y,z**, as **Scale Selection…** and **Arbitrary Scale** do. A
+negative factor mirrors along its axis, and faces keep facing outward. Two
+numbers leave z at 1, which Doom maps need. **--factors** replaces **--size**
+and **--mins**/**--maxs**, and **--pivot** goes only with it:
+
+```sh
+vibestudio --cli map rotate room.map --object brush:12 --euler 15,0,45 --pivot 0,0,0 --output turned.map --json
+vibestudio --cli map resize room.map --object brush:12 --factors -1,2,1 --texture-lock on --output mirrored.map --json
+```
+
+JSON adds `eulerXyz` for a rotation and `factors`, `mirrored`, `pivot` (when
+given) and the old and new bounds for a scale. A zero factor, a factor beyond
+±32768, a Doom Z factor other than 1 or a Doom turn about X or Y fails with
+the reason and writes nothing.
+
+**Status: Partial.** The CLI and the Levels windows share the same services.
+See [Rotate and scale by exact values](manual/levels.md#rotate-and-scale-by-exact-values).
+
+### Make rooms with caulk and openings
+
+`map hollow --mode room` is **Make Room**: walls `--thickness` units thick
+outside each `--object` brush, which is removed so it becomes the room. Two
+options match **Make Room Options…**, and also work with `--mode overlap` and
+`--mode touch`:
+
+- **--caulk** puts the game's caulk material on every wall face except the one
+  facing the room: `common/caulk` in Quake III (`textures/common/caulk` for
+  brushDef3 brushes) and `skip` in Quake. Quake II has none, so there
+  **--caulk** fails and you name a material with **--caulk-texture NAME**,
+  which also works on its own.
+- **--open-face face:brushId:faceNumber**, repeatable, leaves that face open,
+  with no wall. Faces are numbered from 1, as `map select-textured` prints
+  them, and must belong to a brush `--object` selects. The walls beside an
+  opening stop flush with it, and the faces lining it keep its material.
+
+```sh
+vibestudio --cli map hollow room.map --object brush:12 --mode room --thickness 16 --caulk --open-face face:12:6 --output room-made.map --json
+```
+
+JSON adds `caulkTexture`, `caulkedFaces` (wall faces that now carry it),
+`wallCount`, `openFaces` (the selectors given) and `openFaceCount` (faces left
+open on the hollowed brushes). A bad material name, a face the brush does not
+have or a face on another brush is a usage error (exit 2) and writes nothing; a
+brush with every face open is left as it was and listed under `skipped`.
+
+`map hollow` takes its options as flags. To see or change the options the
+Levels editor's **Make Room** uses, the ones **Make Room Options…** saves, use
+`editor make-room`:
+
+```sh
+vibestudio --cli editor make-room --json
+vibestudio --cli editor make-room --set caulkTexture=common/nodraw --set openPickedFaces=off --dry-run --json
+vibestudio --cli editor make-room --reset
+```
+
+Repeat `--set` with `caulk=on|off`, `caulkTexture=NAME` (leave the name out,
+as in `caulkTexture=`, for the game's own caulk) and `openPickedFaces=on|off`.
+`--reset` brings back NetRadiant Custom's behaviour, and `--dry-run` shows the
+result without saving. JSON reports `values`, `applied` and `dryRun`. A field,
+value or material name the editor would refuse is a usage error (exit 2).
+
+**Status: Partial.** The CLI and the Levels editor share the same service.
+See [Make a room with caulk and openings](manual/levels.md#make-a-room-with-caulk-and-openings).
+
+### Hollow, shrink and expand as the CSG Tool does
+
+`map hollow` also builds the walls of the **CSG Tool**'s other hollows.
+`--mode diagonal` puts them outside each brush, meeting on mitred joints with
+no overlap or gap; `--mode extrude` builds a wall straight out from each face,
+its sides square to the face. `--mode wrap` is another name for `touch`, and
+`--mode pull` for `room`, as NetRadiant Custom names them.
+
+- **--keep-inner** keeps the brush instead of removing it: as it was for the
+  outward modes, or what the walls leave of it for `overlap` and `touch`. With
+  **--caulk**, the faces between the walls and the brush take caulk and the
+  outside keeps its materials.
+- **--exclude-face face:brushId:faceNumber**, repeatable, leaves a face alone,
+  as **--open-face** does.
+- **--only-face face:brushId:faceNumber**, repeatable, works on the named
+  faces only; every other face of the brushes `--object` reaches is left open.
+- **--exclude-facing x|y|z** or **dx,dy,dz** leaves alone each brush's faces
+  at either end along that direction, as the **Faces** choices for the 2D view
+  and the camera do.
+
+`map shrink-brushes` and `map expand-brushes` move every face of the
+`--object` brushes `--thickness` units in or out, with the same three face
+options. Textures stay where they are in the world. A brush a shrink would
+flatten, or rob of a face, is left as it was and listed under `skipped`; when
+no brush can change, the command fails (exit 1) and writes nothing. `--context`
+opens a group first.
+
+```sh
+vibestudio --cli map hollow room.map --object brush:12 --mode diagonal --thickness 16 --exclude-facing z --keep-inner --caulk --output shaft.map --json
+vibestudio --cli map shrink-brushes room.map --object brush:12 --thickness 8 --exclude-face face:12:6 --output thinner.map --json
+vibestudio --cli map expand-brushes room.map --object entity:3 --thickness 4 --output wider.map --json
+```
+
+`map hollow` JSON adds `keepInner` and `innerKept`. The shrink and expand JSON
+reports `operation`, `thickness`, `offset` (negative for a shrink), `changed`,
+`movedFaces`, `excludedFaces` and `skipped`. An unknown mode, a bad direction
+or a face selector that does not fit the selection is a usage error (exit 2).
+
+**Status: Partial.** The CLI and the Levels editor's **CSG Tool** share the
+same services. See
+[Hollow, shrink and expand with the CSG Tool](manual/levels.md#hollow-shrink-and-expand-with-the-csg-tool).
+
 ### Query connected level entities
 
 `map select-connected <map> --object patch:2` adds one hop of incoming and
@@ -9064,12 +9571,28 @@ list the View tab saved in the settings store (choose another store with
 **--settings-file**), leaving out kinds saved for other formats. **--invert**
 then applies **Invert Filters**. **--objects** adds each kind's object
 selectors. `filteredObjects` and `filteredCount` report what the views would
-hide; `off` is the final list. Use **--map MAP02** for a map in a Doom or Hexen
-WAD and **--engine** for the usual engine hint.
+hide; `off` is the final list. Each kind's `faceCount` counts the faces it hides
+one at a time on brushes it does not hide whole: **Caulk**'s caulk faces (and
+Quake's skip) on otherwise textured brushes, which the camera leaves out.
+`filteredFaces` and `filteredFaceCount` list those faces for the final list as
+`face:brushId:faceNumber` selectors, numbered from one as `map select-textured`
+prints them, and **--objects** adds each kind's `faces`. Use **--map MAP02** for
+a map in a Doom or Hexen WAD and **--engine** for the usual engine hint.
+
+**--package baseq3** reads a Quake III map's shader scripts from a package or
+folder, as the View tab reads the open package's: **Translucent**, **Liquids**,
+**Sky**, **Clip** with **Player Clip** and **Monster Clip**, **Bot Clip** and
+**Nodraw** then go by each face's shader (qer_trans, alphaFunc, fog, surfaceparm
+water, playerclip, nodraw and the rest, skyParms), and textures the package does
+not hold keep the name rules. `shaders` reports the package, how many `scripts`
+and `shaders` were read and any `warnings`, and each kind says whether it
+`readsShaders`. Without **--package**, and on Quake and Quake II maps, which
+carry their own face flags, the kinds go by flags and texture names.
 
 ```text
 vibestudio --cli map filters start.map --json
 vibestudio --cli map filters start.map --off world --invert --objects
+vibestudio --cli map filters q3dm1.map --package baseq3 --off translucent --objects
 ```
 
 The query writes nothing: the map, `mapWritten: false`, and the saved filters

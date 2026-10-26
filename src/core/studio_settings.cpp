@@ -1,6 +1,7 @@
 #include "core/studio_settings.h"
 
 #include "core/editor_profiles.h"
+#include "core/level_hollow.h"
 #include "core/level_navigation.h"
 #include "core/localization.h"
 #include "core/package_draft_storage.h"
@@ -1485,6 +1486,62 @@ bool StudioSettings::setLevelClipperPreferences(const LevelClipperPreferences& p
 	auto check = preferences; const auto values = levelClipperPreferencesJson(preferences);
 	if (!updateLevelClipperPreferences(values,&check)) { return false; }
 	writeValue(QStringLiteral("levels/clipper"),values.toVariantMap()); sync(); return status() == QSettings::NoError;
+}
+
+LevelRoomPreferences StudioSettings::levelRoomPreferences() const
+{
+	LevelRoomPreferences result;
+	result.caulk = m_settings->value(QStringLiteral("levels/makeRoom/caulk"), result.caulk).toBool();
+	result.caulkTexture = m_settings->value(QStringLiteral("levels/makeRoom/caulkTexture")).toString().trimmed().left(1024);
+	result.openPickedFaces = m_settings->value(QStringLiteral("levels/makeRoom/openPickedFaces"), result.openPickedFaces).toBool();
+	// A hand-edited name no map could hold falls back to the game's caulk.
+	if (!levelRoomPreferencesProblem(result).isEmpty()) {
+		result.caulkTexture.clear();
+	}
+	return result;
+}
+
+bool StudioSettings::setLevelRoomPreferences(const LevelRoomPreferences& preferences)
+{
+	const QString texture = preferences.caulkTexture.trimmed();
+	if (!levelRoomPreferencesProblem(preferences).isEmpty()) {
+		return false;
+	}
+	writeValue(QStringLiteral("levels/makeRoom/caulk"), preferences.caulk);
+	writeValue(QStringLiteral("levels/makeRoom/caulkTexture"), texture);
+	writeValue(QStringLiteral("levels/makeRoom/openPickedFaces"), preferences.openPickedFaces);
+	sync();
+	return status() == QSettings::NoError;
+}
+
+LevelCsgToolPreferences StudioSettings::levelCsgToolPreferences() const
+{
+	LevelCsgToolPreferences result;
+	bool numeric = false;
+	const double thickness = m_settings->value(QStringLiteral("levels/csgTool/thickness"), result.thickness).toDouble(&numeric);
+	LevelCsgToolPreferences read = result;
+	read.thickness = thickness;
+	// A hand-edited thickness out of range falls back to the default.
+	if (numeric && levelCsgToolPreferencesProblem(read).isEmpty()) {
+		result.thickness = thickness;
+	}
+	parseLevelCsgFacePolicy(m_settings->value(QStringLiteral("levels/csgTool/facePolicy")).toString(), &result.facePolicy);
+	result.caulk = m_settings->value(QStringLiteral("levels/csgTool/caulk"), result.caulk).toBool();
+	result.keepInner = m_settings->value(QStringLiteral("levels/csgTool/keepInner"), result.keepInner).toBool();
+	return result;
+}
+
+bool StudioSettings::setLevelCsgToolPreferences(const LevelCsgToolPreferences& preferences)
+{
+	if (!levelCsgToolPreferencesProblem(preferences).isEmpty()) {
+		return false;
+	}
+	writeValue(QStringLiteral("levels/csgTool/thickness"), preferences.thickness);
+	writeValue(QStringLiteral("levels/csgTool/facePolicy"), levelCsgFacePolicyId(preferences.facePolicy));
+	writeValue(QStringLiteral("levels/csgTool/caulk"), preferences.caulk);
+	writeValue(QStringLiteral("levels/csgTool/keepInner"), preferences.keepInner);
+	sync();
+	return status() == QSettings::NoError;
 }
 
 void StudioSettings::setLevelComponentUvLock(bool enabled)

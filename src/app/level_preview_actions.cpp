@@ -3,6 +3,7 @@
 #include "app/map_viewport.h"
 #include "app/model_viewport.h"
 #include "app/studio_layout.h"
+#include "core/level_view_filters.h"
 
 #include <QAction>
 #include <QCheckBox>
@@ -16,6 +17,8 @@
 #include <QStatusBar>
 #include <QToolButton>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace vibestudio
 {
@@ -40,20 +43,20 @@ QWidget *ApplicationShell::buildLevelPreviewStatus()
 	textured->setObjectName(QStringLiteral("levelPreviewTextured"));
 	textured->setAccessibleName(tr("Show textures in the level camera"));
 	textured->setToolTip(tr("Use package images and static shader previews on brushes, patches and placed models."));
-	const bool showTextures = m_settings.shellLayoutState(QStringLiteral("levelPreviewTextured")) != QByteArrayLiteral("off");
-	textured->setChecked(showTextures);
-	m_levelPreviewTextured = new QAction(tr("Textures in Camera"), this);
-	m_levelPreviewTextured->setToolTip(textured->toolTip());
-	m_levelPreviewTextured->setCheckable(true);
-	m_levelPreviewTextured->setChecked(showTextures);
-	connect(textured, &QCheckBox::toggled, m_levelPreviewTextured, &QAction::setChecked);
-	connect(m_levelPreviewTextured, &QAction::toggled, this, [this](bool enabled) {
-		m_settings.setShellLayoutState(QStringLiteral("levelPreviewTextured"),
-									   enabled ? QByteArrayLiteral("on") : QByteArrayLiteral("off"));
-		if (m_levelMap3D) {
-			m_levelMap3D->setRenderMode(enabled ? ModelViewportRenderMode::Textured : ModelViewportRenderMode::FlatShaded);
-		}
-	});
+	textured->setChecked(m_levelCameraRender.textures);
+	// The box is the map.previewTextures command (level_camera_render_actions.cpp),
+	// so it follows the View tab, the palette and profile keys, and they follow it.
+	if (m_levelPreviewTextured) {
+		connect(textured, &QCheckBox::toggled, this, [this](bool checked) {
+			if (m_levelPreviewTextured->isChecked() != checked) {
+				m_levelPreviewTextured->trigger();
+			}
+		});
+		connect(m_levelPreviewTextured, &QAction::toggled, textured, [textured](bool checked) {
+			const QSignalBlocker blocker(textured);
+			textured->setChecked(checked);
+		});
+	}
 	layout->addWidget(textured);
 	const auto button = [&](const QString &name, const QString &text, const QString &help) {
 		auto *control = new QToolButton;
@@ -68,6 +71,8 @@ QWidget *ApplicationShell::buildLevelPreviewStatus()
 						  tr("Reload material images from the current package and staged changes."));
 	connect(reload, &QToolButton::clicked, this, [this] {
 		++m_levelPreviewReload;
+		// The material view filters read the same shader scripts again.
+		refreshLevelViewFilterMaterials();
 		refreshLevelMap3D();
 	});
 	auto *details = button(QStringLiteral("levelPreviewDetails"), tr("Details"),
@@ -182,9 +187,8 @@ void ApplicationShell::refreshLevelMap3D()
 			m_levelMap3D->clearSkin();
 			m_levelMap3D->setMesh(result.preview.mesh, result.sourceKey == m_levelMap3DSource);
 			m_levelMap3D->setSurfaceSkins(levelPreviewSurfaceImages(result.preview.mesh, result.assets));
-			m_levelMap3D->setRenderMode(m_levelPreviewTextured && m_levelPreviewTextured->isChecked()
-											? ModelViewportRenderMode::Textured
-											: ModelViewportRenderMode::FlatShaded);
+			// The saved face mode and edges outlast every rebuild, wireframe included.
+			applyLevelCameraRender();
 			m_levelMap3DSource = result.sourceKey;
 			m_levelMap3DOwners = result.preview.owners;
 			m_levelMap3DFaces = result.preview.ownerFaces;
@@ -249,6 +253,18 @@ void ApplicationShell::refreshLevelMap3D()
 		for (const auto &line : request.document.doomLinedefs) {
 			add('l', line.id);
 		}
+	}
+	// Caulk faces on otherwise textured brushes leave the camera while Caulk
+	// is off, as Radiant's caulk face filter does; the plan views keep each
+	// brush's whole outline, as Radiant's wireframes do.
+	QVector<LevelSurfaceFace> hiddenFaces = levelViewFilteredFaces(m_levelMapDocument, m_levelFiltersOff, currentLevelFilterMaterials());
+	std::sort(hiddenFaces.begin(), hiddenFaces.end(), [](const LevelSurfaceFace &a, const LevelSurfaceFace &b) {
+		return a.brushId != b.brushId ? a.brushId < b.brushId : a.faceIndex < b.faceIndex;
+	});
+	hash.addData(QByteArrayView("faces", 5));
+	for (const auto &face : std::as_const(hiddenFaces)) {
+		request.hiddenFaces.insert({face.brushId, face.faceIndex});
+		hash.addData(QByteArray::number(face.brushId) + ':' + QByteArray::number(face.faceIndex) + ',');
 	}
 	const QString key = QString::fromLatin1(hash.result().toHex());
 	if (key == m_levelPreviewRequestKey) {

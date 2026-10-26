@@ -12,7 +12,8 @@
 //   kind; Show Every Kind brings them all back; Show All Hidden leaves
 //   filters alone; with Qt Test, Alt+1 reaches the command from a plan view;
 // - the saved list comes back in a new shell, kinds saved for other formats
-//   survive an invert, and a Quake map without patches disables Patches.
+//   survive an invert, and a Quake map disables Patches and the other
+//   Quake III kinds.
 // Owned offscreen widgets, settings in a temporary folder and synthetic key
 // events only.
 
@@ -138,7 +139,10 @@ int main(int argc, char** argv)
 		{QStringLiteral("liquids"), QStringLiteral("Alt+5")}, {QStringLiteral("caulk"), QStringLiteral("Alt+6")}, {QStringLiteral("clip"), QStringLiteral("Alt+7")},
 		{QStringLiteral("paths"), QStringLiteral("Alt+8")}, {QStringLiteral("lights"), QStringLiteral("Alt+0")}, {QStringLiteral("detail"), QStringLiteral("Ctrl+D")},
 		{QStringLiteral("hint"), QStringLiteral("Ctrl+H")}, {QStringLiteral("models"), QStringLiteral("Shift+M")},
-		{QStringLiteral("triggers"), QStringLiteral("Ctrl+Shift+T")}};
+		{QStringLiteral("triggers"), QStringLiteral("Ctrl+Shift+T")}, {QStringLiteral("areaportals"), QStringLiteral("Alt+3")},
+		{QStringLiteral("clusterportals"), QStringLiteral("Alt+9")}, {QStringLiteral("structural"), QStringLiteral("Ctrl+Shift+D")},
+		{QStringLiteral("botclip"), QStringLiteral("Alt+M")}, {QStringLiteral("decals"), QStringLiteral("Shift+D")},
+		{QStringLiteral("translucent"), QStringLiteral("Alt+4")}};
 
 	for (const char* profile : {"netradiant-custom", "trenchbroom", "vibestudio-default"}) {
 		for (int scale : {100, 200}) {
@@ -316,7 +320,7 @@ int main(int argc, char** argv)
 	}
 
 	// The saved list comes back in a new shell; kinds saved for other formats
-	// survive an invert; a Quake map without patches disables Patches.
+	// survive an invert; a Quake map disables the Quake III kinds.
 	{
 		phase = QStringLiteral("persistence");
 		settings.setSelectedEditorProfileId(QStringLiteral("vibestudio-default"));
@@ -360,9 +364,10 @@ int main(int argc, char** argv)
 			action(QStringLiteral("shell.mode.levels"))->trigger();
 			if (expect(until([&] { return shell.levelDocument().sourcePath == quakePath && shell.levelDocument().brushes.size() == 1; }), "Quake map ready")
 				&& expect(shell.levelDocument().format == LevelMapFormat::QuakeMap, "opens as a Quake map")) {
-				expect(!action(QStringLiteral("map.filterPatches"))->isEnabled() && action(QStringLiteral("map.filterWorld"))->isEnabled()
+				expect(!action(QStringLiteral("map.filterPatches"))->isEnabled() && !action(QStringLiteral("map.filterDecals"))->isEnabled()
+						&& action(QStringLiteral("map.filterWorld"))->isEnabled() && action(QStringLiteral("map.filterStructural"))->isEnabled()
 						&& action(QStringLiteral("map.invertFilters"))->isEnabled(),
-					"a map without patches disables Patches only");
+					"a Quake map disables Patches and the other Quake III kinds only");
 				expect(!shell.findChild<QCheckBox*>(QStringLiteral("levelFilter-patches")) || !shell.findChild<QCheckBox*>(QStringLiteral("levelFilter-patches"))->isVisible(),
 					"no Patches check box for a Quake map");
 			}

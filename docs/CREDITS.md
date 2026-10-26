@@ -702,6 +702,35 @@ the GtkRadiant contributors), compatible with this GPL-3.0 repository:
 - [`radiant/csg.cpp`](https://github.com/Garux/netradiant-custom/blob/8216133984031afaa9a857b56ea66dd9c3d54b26/radiant/csg.cpp): `CSG_Hollow`'s wrapped walls
   (`eWrap`), which meet without overlapping, and `CSG_MakeRoom`, which builds
   the walls outside the brush.
+- Make Room's caulk and open-face options (2026-10-24) follow
+  [`CSG_MakeRoom`, `HollowSettings` and `CaulkFace`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/csg.cpp)
+  (every wall face but the room's caulked, faces picked in component mode left
+  open), with the game caulk names after
+  [`GetCommonShader`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/filterbar.cpp)
+  and the Quake caulk filter in
+  [`brushmanip.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brushmanip.cpp),
+  revision `449778b3840f8f2062daab15c87cb012f2ac945c`, GPL-2.0-or-later, reviewed
+  before implementation. `core/level_hollow.*`, the options in
+  `hollowLevelMapSelection`, `cli/level_hollow_options.*`, **Make Room
+  Options…** and `editor make-room` are original VibeStudio implementations;
+  no upstream code was copied. As upstream, wall faces sharing an open face's
+  plane keep its material; unlike upstream, VibeStudio fills the outer corners
+  and makes both options switchable.
+- The CSG Tool (2026-10-25) follows
+  [`CSG_Tool`, `CSGdlg_getSettings`, `CSG_Hollow`, `HollowSettings`, `FaceMakeBrush`, `brush_extrudeDiag`, `FaceOffset` and `CSGdlg_BrushShrink`/`CSGdlg_BrushExpand`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/csg.cpp)
+  at revision `449778b3840f8f2062daab15c87cb012f2ac945c`, GPL-2.0-or-later,
+  reviewed before implementation: the thickness with its Grid button, the
+  -faces, +faces, -proj and -cam face policies (faces at either end of the
+  axis), Caulk and Remove inner brush, Shrink and Expand, and the diagonal,
+  wrap, extrude and pull hollows. The Tools tab's **CSG Tool** section
+  (`app/level_csg_tool_actions.cpp`), the Diagonal and Extrude modes and
+  keep-inner option of `hollowLevelMapSelection`, `levelCsgExcludedFaces`,
+  `offsetLevelMapSelectionFaces` and `map shrink-brushes`/`expand-brushes` are
+  original VibeStudio implementations; no upstream code was copied. Diagonal
+  walls are built as the points of the grown shell furthest outside their
+  face rather than by sewing windings; with Keep inner brush, caulk covers the
+  faces between the walls and the brush and leaves the outside's materials,
+  and the pull hollow keeps Make Room's filled corners.
 
 The patch shapes, square cylinder, bevel and end cap follow the Patch menu of
 [GtkRadiant](https://github.com/TTimo/GtkRadiant) 1.5; Region Set XY, Region
@@ -3008,6 +3037,69 @@ helpers in `src/core/level_view_filters.*`, `src/app/level_view_filter_actions.c
 `map filters` (`src/cli/level_view_filters.*`) and the `level-view-filters`
 tests are original VibeStudio work.
 
+Reviewed on 2026-10-24. The texture kinds follow the same revisions. Area
+Portals (any areaportal face), Cluster Portals, Light Grid and Bot Clip (every
+face botclip or donotenter), Decals (any face under `textures/decals/`), the
+caulk brush and face filters with Quake's skip as caulk, and the keys
+<kbd>Alt+3</kbd> Areaportals, <kbd>Alt+9</kbd> Clusterportals,
+<kbd>Ctrl+Shift+D</kbd> Structural, <kbd>Alt+M</kbd> BotClips and
+<kbd>Shift+D</kbd> Decals follow `BrushFilters_construct` in
+[`radiant/brushmanip.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brushmanip.cpp)
+and `ConstructFilters` in
+[`radiant/filters.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/filters.cpp);
+Structural as the inverse of Detail, by entity on Quake maps, follows
+`filter_entity_not_func_detail` in
+[`plugins/entity/entity.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/plugins/entity/entity.cpp);
+and the camera leaving filtered caulk faces out while the 2D wireframes keep
+every edge follows `FaceInstance::render` and `BrushInstance::evaluateViewDependent`
+in [`radiant/brush.h`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brush.h)
+(all NetRadiant Custom `449778b3840f8f2062daab15c87cb012f2ac945c`,
+GPL-2.0-or-later). Xonotic NetRadiant's
+[`radiant/filters.cpp`](https://github.com/xonotic/netradiant/blob/b4b295d7a37797cc2752e48aa8ce42492e7016f0/radiant/filters.cpp)
+at `b4b295d7a37797cc2752e48aa8ce42492e7016f0` binds the same five keys, so the
+NetRadiant profile keeps them. The content bits CONTENTS_AREAPORTAL,
+CONTENTS_CLUSTERPORTAL, CONTENTS_DONOTENTER and CONTENTS_BOTCLIP are the values
+of Quake III Arena's `code/game/surfaceflags.h` (id Software, GPL-2.0-or-later);
+only the numbers are used. The matching rules, `levelViewFilterFaceMatches()`,
+`levelViewFilteredFaces()`, the camera's `hiddenFaces` option and the
+`level-filter-texture-kinds` tests are original VibeStudio work.
+
+Reviewed on 2026-10-24. The material kinds follow the same NetRadiant Custom
+revision. Translucent (any face whose shader carries QER_TRANS or
+QER_ALPHATEST, and translucent patches), Liquids (QER_LIQUID and the
+`textures/liquids/` prefix), Sky (QER_SKY), and Clip taking clip-shaded
+patches and `textures/common/weapclip`, `common/clip` and `common/fullclip`
+brushes follow `BrushFilters_construct` in
+[`radiant/brushmanip.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brushmanip.cpp)
+and `PatchFilters_construct` in
+[`radiant/patchmanip.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/patchmanip.cpp);
+which shader keywords set those flags (qer_trans and surfaceparm fog for
+QER_TRANS, qer_alphafunc for QER_ALPHATEST, skyparms for QER_SKY, surfaceparm
+water, lava and slime for QER_LIQUID, playerclip, botclip and nodraw) follows
+the Quake III shader parser in
+[`plugins/shaders/shaders.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/plugins/shaders/shaders.cpp);
+and the <kbd>Alt+4</kbd> FilterTranslucent key follows `ConstructFilters` in
+[`radiant/filters.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/filters.cpp)
+(all NetRadiant Custom `449778b3840f8f2062daab15c87cb012f2ac945c`,
+GPL-2.0-or-later), which Xonotic NetRadiant's
+[`radiant/filters.cpp`](https://github.com/xonotic/netradiant/blob/b4b295d7a37797cc2752e48aa8ce42492e7016f0/radiant/filters.cpp)
+at `b4b295d7a37797cc2752e48aa8ce42492e7016f0` binds too. The Nodraw kind and
+the player clip part follow the NoDraw and ActorClip toggles of NRC's UFO:AI
+plugin in
+[`contrib/ufoaiplug/ufoai.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/contrib/ufoaiplug/ufoai.cpp)
+and [`ufoai_filters.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/contrib/ufoaiplug/ufoai_filters.cpp)
+(SURF_NODRAW 0x80 and CONTENTS_ACTORCLIP 0x10000), judged here on every face. Quake II's
+SURF_TRANS33, SURF_TRANS66 and SURF_NODRAW and the CONTENTS_PLAYERCLIP and
+CONTENTS_MONSTERCLIP values are those of the id Software Quake II source
+(`qcommon/qfiles.h`, GPL-2.0-or-later); only the numbers are used. VibeStudio's
+additions (a stage's alphaFunc, surfaceparm monsterclip and donotenter, images
+without a script as plain shaders, Quake's `{` fence textures, the player,
+monster and weapon clip split), `levelViewFilterShader()`,
+`levelViewFilterMaterials()`, `scanLevelViewFilterMaterials()`, the shell's
+background read and status line, `map filters --package` and the
+`level-filter-material-kinds` tests are original VibeStudio work over its own
+material library; no source was copied.
+
 ## Level camera levelling, focus and zoom reset
 
 Reviewed on 2026-10-22. **Level Camera** (pitch to zero, heading to the nearest
@@ -3046,6 +3138,32 @@ Tab acting only during mouse look, `src/core/level_camera_focus.*`,
 `src/app/level_camera_focus_actions.cpp`, `map camera-focus`
 (`src/cli/level_camera_focus.*`) and the `level-camera-focus` tests are
 original VibeStudio work.
+
+## Level camera display modes
+
+Reviewed on 2026-10-25. **Show Textures in Camera**, **Hide Textures in
+Camera** and **Hide Faces in Camera** (textured, flat or no faces, with no
+default keys) and **Edges in Camera** (an edge overlay over the faces) follow
+the "Controls/Map view/View Filter > Show textures", "Hide textures", "Hide
+faces" and "Show edges" actions in
+[`lib/TbUiLib/src/ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp)
+and `MapViewBase::showMaterials`, `hideMaterials`, `hideFaces` and
+`toggleShowEdges` of TrenchBroom v2026.2
+(`4c756be1a54a28d921d18c77716a5f170bdc31d0`, Kristian Duske and contributors,
+GPL-3.0-or-later). **Next Camera Mode** and **Previous Camera Mode** (a
+wrapping cycle of wireframe, flat, textured and textured with edges, saved, on
+<kbd>Shift</kbd>+<kbd>]</kbd> and <kbd>Shift</kbd>+<kbd>[</kbd>) follow
+`CameraModeNext`, `CameraModePrev` and the `CameraRenderMode` preference in
+[`radiant/camwindow.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/camwindow.cpp)
+of NetRadiant Custom revision `449778b3840f8f2062daab15c87cb012f2ac945c`
+(GPL-2.0-or-later). Both licences are compatible with VibeStudio's
+GPL-3.0-or-later licence. Only behavioural and key facts were used; no source
+was copied. The three saved choices, 3D Wireframe keeping the textures and
+edges choices, the status announcements, polygon-edge outlines that leave fan
+diagonals out of the edge overlay and wireframe (`ModelViewport::setPolygonEdges`
+and the surface shader's diagonal bits), `src/core/level_camera_render.*`,
+`src/app/level_camera_render_actions.cpp` and the `level-camera-render` tests
+are original VibeStudio work.
 
 ## Plan pane visibility
 
@@ -3095,3 +3213,104 @@ the `map align-textures --scale-step` and `--anchor` options and the
 `level-surface-step` tests are original VibeStudio work. Patches turn in texels
 rather than NRC's normalised coordinates; see
 [EDITOR_PROFILES.md](EDITOR_PROFILES.md#nrc-texture-steps).
+
+## Camera-relative texture moves and flips
+
+Reviewed on 2026-10-24. **Move Textures Up**, **Down**, **Left** and **Right**,
+their **(Coarse)** and **(Fine)** forms, and **Flip Textures Horizontally** and
+**Vertically** follow TrenchBroom's "Move textures ..." and "Flip textures ..."
+actions, their 3D-view, face-selection context and their default keys (the
+arrows, <kbd>Shift</kbd>+arrows, <kbd>Ctrl</kbd>+arrows,
+<kbd>Ctrl</kbd>+<kbd>F</kbd> and <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd>) in
+[`lib/TbUiLib/src/ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp),
+and the distances (the grid size, twice it, or one unit) and the camera up and
+right vectors handed on by `MapViewBase::moveUV`, `moveUVOffset`,
+`moveUVDistance` and `flipUV` in
+[`lib/TbUiLib/src/MapViewBase.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapViewBase.cpp)
+of TrenchBroom v2026.2 (`4c756be1a54a28d921d18c77716a5f170bdc31d0`, Kristian
+Duske and contributors, GPL-3.0-or-later), whose licence is VibeStudio's own.
+Only behavioural and key facts were used; no source was copied. The pinned
+checkout does not include TrenchBroom's model library, so its per-face axis
+choice and mirror anchor were not compared. The axis choice in
+`src/core/level_camera_texture.*`, the `CameraShift` and `CameraFlip`
+operations in `src/core/level_surface.*` (patches included), the camera claim
+layer in `StudioCommandRegistry`, `app/level_camera_texture_actions.cpp`,
+`map align-textures --camera-shift` and `--camera-flip`, and the
+`level-camera-texture` tests are original VibeStudio work.
+
+**Rotate Textures Clockwise** and **Counter-clockwise**, with their
+**(Coarse)** and **(Fine)** forms, were added on 2026-10-25 from the same
+revision: the "Rotate textures clockwise / counter-clockwise" actions and
+their keys (<kbd>Page Up</kbd> and <kbd>Page Down</kbd>, with
+<kbd>Shift</kbd> and <kbd>Ctrl</kbd>) in `ActionManager.cpp`, and the angles
+(the grid angle, 15°, then 90° and 1°) and sign in `MapViewBase::rotateUV` and
+`rotateUVAngle` in `MapViewBase.cpp`. Only those behavioural and key facts
+were used; no source was copied. TrenchBroom's `mdl::rotateUV` is not in the
+pinned checkout, so its per-format direction was not compared.
+`ClockwiseRotate` in `src/core/level_surface.*`, `levelTextureTurnSense()` in
+`src/core/level_camera_texture.*`, `map align-textures --clockwise` and the
+on-screen direction checks are original VibeStudio work.
+
+## Texture resets
+
+The texture resets were added on 2026-10-25 from behavioural and key facts
+only; no source was copied. **Reset Texture Alignment** follows TrenchBroom
+v2026.2 (`4c756be1a54a28d921d18c77716a5f170bdc31d0`, GPL-3.0-or-later): the
+"Reset texture alignment" (<kbd>Shift</kbd>+<kbd>R</kbd>) and "Reset texture
+alignment to world aligned" (<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd>)
+actions in
+[`lib/TbUiLib/src/ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp)
+and `MapViewBase::resetUV` and `resetUVToWorld` in
+[`lib/TbUiLib/src/MapViewBase.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapViewBase.cpp);
+TrenchBroom's `mdl::resetAll` is not in the pinned checkout, so its per-format
+axes were not compared. **Radiant Texture Reset** and **Reset Textures…**
+follow NetRadiant Custom at `449778b3840f8f2062daab15c87cb012f2ac945c`
+(GPL-2.0-or-later, compatible with VibeStudio's GPL-3.0-or-later licence):
+`SurfaceInspector_ResetTexture` and its "TextureReset/Cap"
+(<kbd>Shift</kbd>+<kbd>N</kbd>) registration in
+[`radiant/surfacedialog.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/surfacedialog.cpp),
+`Face::SetTexdef` and `FaceTexdef::setBasis` in
+[`radiant/brush.h`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brush.h),
+`ComputeAxisBase` in
+[`radiant/brush_primit.h`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brush_primit.h),
+`TexDef_Construct_Default`, `FakeTexCoordsToTexMat`, `TexMatToFakeTexCoords`,
+`Texdef_Assign`, `BPTexdef_Assign` and `Valve220_rotate` in
+[`radiant/brush_primit.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brush_primit.cpp),
+`Patch::CapTexture` in
+[`radiant/patch.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/patch.cpp),
+and bobToolz's Reset Textures window and edit (`DoResetTextureBox`,
+`DoResetTextures`, `DBrush::ResetTextures`, `DEntity::ResetTextures`,
+`DMap::ResetTextures` and `DPatch::ResetTextures`) in
+[`contrib/bobtoolz`](https://github.com/Garux/netradiant-custom/tree/449778b3840f8f2062daab15c87cb012f2ac945c/contrib/bobtoolz).
+The `Reset` and `RadiantReset` operations and `prepareLevelTextureReset` in
+`src/core/level_surface.*`, `levelPlaneBasisTextureProjection()` in
+`src/core/level_texture_mapping.*`, the Reset Textures window in
+`src/app/level_texture_reset_dialog.*`, the `map align-textures` options and
+the `level-texture-reset` tests are original VibeStudio work; the plane basis
+reuses the `ComputeAxisBase` convention already credited for
+`level_texture_mapping.cpp`.
+
+## Arbitrary rotation and scale
+
+NetRadiant Custom's **Arbitrary Rotation** and **Arbitrary Scale** windows were
+reviewed on 2026-10-24 at revision `449778b3840f8f2062daab15c87cb012f2ac945c`
+(William Joseph and other contributors, GPL-2.0-or-later): `RotateDialog`,
+`ScaleDialog`, `DoRotateDlg`, `DoScaleDlg`, `Select_Scale` and the
+`"ArbitraryRotation"` (<kbd>Shift</kbd>+<kbd>R</kbd>) and `"ArbitraryScale"`
+(<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) registrations in
+[radiant/select.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp),
+the `SaveMapAs` registration without a key in
+[radiant/map.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/map.cpp),
+and the X-then-Y-then-Z order of `matrix4_rotation_for_euler_xyz` in
+[libs/math/matrix.h](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/libs/math/matrix.h).
+The licence is compatible with VibeStudio's GPL-3.0-or-later licence. Only the
+window workflow (X, Y and Z fields, Apply that keeps the window open, OK that
+applies and closes, negative factors that mirror), the rotation order and the
+key bindings were used as behavioural facts; no source was copied. The Euler
+path of `rotateLevelMapSelection()` and `scaleLevelMapSelection()` in
+`src/core/level_map.*`, the Euler slot of the repeatable transforms in
+`src/core/level_repeat.*`, `src/app/level_transform_dialog.*`,
+`src/app/level_rotation_dialog.*`, `src/app/level_scale_dialog.*`,
+`src/app/level_rotation_actions.cpp`, `map rotate --euler`,
+`map resize --factors` and the `level-arbitrary-transform` tests are original
+VibeStudio work.

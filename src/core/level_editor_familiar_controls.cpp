@@ -315,11 +315,14 @@ static LevelEditorControls familiarLevelControlsWithoutNudges(const QString& id)
 			QStringLiteral("map.thickenPatch"), QStringLiteral("map.patchSmoothColumns"), QStringLiteral("map.surfaceFlipV"), QStringLiteral("map.textureLock"),
 			QStringLiteral("map.makeDetail"), QStringLiteral("map.makeStructural"), QStringLiteral("map.centerOnSelection"),
 			QStringLiteral("map.movePrimitivesToEntity"), QStringLiteral("map.roundToGrid"), QStringLiteral("map.moveToLayer"),
-			QStringLiteral("map.expandSelectionToLayers"),
+			QStringLiteral("map.expandSelectionToLayers"), QStringLiteral("map.rotatePrecisely"), QStringLiteral("map.scaleSelection"),
 			// The texture step keys, their turn direction, the 45° increment and
 			// the origin anchor were audited against NRC 449778b3 only.
 			QStringLiteral("map.surfaceRotateLeft"), QStringLiteral("map.surfaceRotateRight"), QStringLiteral("map.surfaceScaleStepUp"),
-			QStringLiteral("map.surfaceScaleStepDown"), QStringLiteral("map.surfaceScaleStepLeft"), QStringLiteral("map.surfaceScaleStepRight")};
+			QStringLiteral("map.surfaceScaleStepDown"), QStringLiteral("map.surfaceScaleStepLeft"), QStringLiteral("map.surfaceScaleStepRight"),
+			// Shift+] and Shift+[ step NRC's camera modes (CameraModeNext and
+			// CameraModePrev, 449778b3); NetRadiant's camwindow.cpp has neither.
+			QStringLiteral("map.nextCameraMode"), QStringLiteral("map.previousCameraMode")};
 		controls.keys.erase(std::remove_if(controls.keys.begin(), controls.keys.end(),
 			[&nrcOnly](const LevelEditorKeyBinding& binding) { return nrcOnly.contains(binding.commandId); }), controls.keys.end());
 		controls.surfaceRotationStep = LevelEditorControls{}.surfaceRotationStep;

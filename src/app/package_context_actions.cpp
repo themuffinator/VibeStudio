@@ -40,6 +40,9 @@ void ApplicationShell::refreshWorkspacePackageContext()
 
 void ApplicationShell::refreshLevelTextureAudit()
 {
+	// A new package or staged edit can change the shaders the material view
+	// filters read.
+	refreshLevelViewFilterMaterials();
 	if (!m_levelTextureAudit || !m_levelMapValidation) { return; }
 	const QString key = QStringLiteral("%1|%2|%3|%4").arg(packageViewKey()).arg(m_levelMapLoadSerial)
 		.arg(m_levelMapDocument.revision).arg(int(m_levelMapDocument.format));

@@ -347,6 +347,10 @@ QWidget* ApplicationShell::buildLevelViewOptions()
 	if (QAction* wireframe = m_commands ? m_commands->action(QStringLiteral("map.previewWireframe")) : nullptr) {
 		layout->addWidget(actionCheckBox(wireframe, QStringLiteral("levelViewWireframe"), this));
 	}
+	// Brush and patch outlines over the camera's faces (level_camera_render_actions.cpp).
+	if (QAction* edges = m_commands ? m_commands->action(QStringLiteral("map.previewEdges")) : nullptr) {
+		layout->addWidget(actionCheckBox(edges, QStringLiteral("levelViewEdges"), this));
+	}
 
 	// The grid and snapping, mirrored from the view bar so either one works.
 	auto* gridRow = new QWidget;

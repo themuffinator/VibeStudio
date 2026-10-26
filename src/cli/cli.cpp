@@ -26,6 +26,7 @@
 #include "cli/level_view_transform.h"
 #include "cli/level_entity_create.h"
 #include "cli/level_face_transform.h"
+#include "cli/level_hollow_options.h"
 #include "cli/level_material_paint.h"
 #include "core/level_material_find.h"
 #include "cli/level_surface_clipboard.h"
@@ -104,6 +105,7 @@
 #include "core/level_dependencies.h"
 #include "core/level_materials.h"
 #include "core/level_surface.h"
+#include "core/level_nudge.h"
 #include "core/level_primitive.h"
 #include "core/level_doom_align.h"
 #include "core/level_doom_shapes.h"
@@ -370,8 +372,8 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("map"), QStringLiteral("place-sound"), QStringLiteral("Validate a package WAV and place a Quake II/III speaker in a separate map output. Supports --game quake2|quake3, --mode loop-on|loop-off|triggered and --targetname; inactive sounds require a target name."), {QStringLiteral("vibestudio --cli map place-sound ./maps/start.map --package ./assets --sound sound/ambient/hum.wav --game quake3 --origin 64,0,96 --output ./maps/start-sound.map --dry-run --json")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("delete"), QStringLiteral("Delete entities, brushes, or patches from a Quake-family .map, or things, vertices, linedefs, or sectors from a Doom or Hexen map, and save to a new path."), {QStringLiteral("vibestudio --cli map delete ./maps/start.map --object entity:3 --object brush:12 --output ./maps/start-trimmed.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("replace-texture"), QStringLiteral("Replace every use of one texture with another across a map, only repeated --object objects, or only repeated --face face:brushId:faceNumber picks (optional --context), and save to a new path. Hidden and locked uses stay and are reported as skipped."), {QStringLiteral("vibestudio --cli map replace-texture ./maps/start.map --from base/wall --to base/metal --output ./maps/start-metal.map"),QStringLiteral("vibestudio --cli map replace-texture ./maps/start.map --from base/wall --to base/metal --face face:3:1 --face face:3:4 --output ./maps/start-metal.map")}, true, true, true},
-		{QStringLiteral("map"), QStringLiteral("rotate"), QStringLiteral("Rotate map objects by --degrees or --turns with --texture-lock on|off (default on), an optional --pivot or grid-rounded --pivot-grid centre, and explicit --allow-valve220 conversion."), {QStringLiteral("vibestudio --cli map rotate ./maps/start.map --object brush:0 --axis z --degrees 30 --texture-lock on --allow-valve220 --output ./maps/start-turned.map"), QStringLiteral("vibestudio --cli map rotate ./maps/start.map --object brush:0 --axis x --turns -1 --pivot-grid 16 --output ./maps/start-rotate-x.map")}, true, true, true},
-		{QStringLiteral("map"), QStringLiteral("align-textures"), QStringLiteral("Align brush surfaces and patches with exactly one of --fit U,V (0 keeps an axis), --shift U,V, --scale U,V, --scale-step U,V (Radiant increments added to each face's texture scale about the texture origin, flipping sign at zero), --degrees N (--anchor centre, the default, or origin as Radiant turns), --align U,V, --natural U,V or --face-aligned U,V (map units per texel; 0.5,0.5 is Quake III's default), or --flip u|v. Select --object brush:id, patch:id or entity:id, or --face brushId:faceNumber (one-based), repeatable. Resolve sizes from --package or an explicit --texture-size W,H."), {QStringLiteral("vibestudio --cli map align-textures ./maps/start.map --object brush:0 --fit 1,1 --package ./assets --output ./maps/start-fitted.map"), QStringLiteral("vibestudio --cli map align-textures ./maps/start.map --face 0:1 --align center,minimum --texture-size 128,64 --output ./maps/start-aligned.map"), QStringLiteral("vibestudio --cli map align-textures ./maps/start.map --object brush:0 --scale-step 0,0.5 --output ./maps/start-scaled.map")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("rotate"), QStringLiteral("Rotate map objects by --degrees or --turns about --axis, or by --euler x,y,z degrees about X, then Y, then Z as one step (NetRadiant Custom's Arbitrary Rotation), with --texture-lock on|off (default on), an optional --pivot or grid-rounded --pivot-grid centre, and explicit --allow-valve220 conversion."), {QStringLiteral("vibestudio --cli map rotate ./maps/start.map --object brush:0 --axis z --degrees 30 --texture-lock on --allow-valve220 --output ./maps/start-turned.map"), QStringLiteral("vibestudio --cli map rotate ./maps/start.map --object brush:0 --axis x --turns -1 --pivot-grid 16 --output ./maps/start-rotate-x.map"), QStringLiteral("vibestudio --cli map rotate ./maps/start.map --object brush:0 --euler 15,0,45 --pivot 0,0,0 --output ./maps/start-euler.map")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("align-textures"), QStringLiteral("Align brush surfaces and patches with exactly one of --fit U,V (0 keeps an axis), --shift U,V, --scale U,V, --scale-step U,V (Radiant increments added to each face's texture scale about the texture origin, flipping sign at zero), --degrees N (--anchor centre, the default, or origin as Radiant turns), --clockwise N (degrees clockwise as seen from each face's front, about the texture origin, as the Levels Rotate Textures commands turn; negative turns counter-clockwise), --align U,V, --natural U,V or --face-aligned U,V (map units per texel; 0.5,0.5 is Quake III's default), --reset-alignment U,V (each face keeps its projection kind: classic faces natural, Valve 220 and brush-primitive faces in their plane, patches their natural spread, as the Levels Reset Texture Alignment command does) or --radiant-reset U,V (classic faces natural, Valve 220 and brush-primitive faces in their plane's own basis, patches capped, as Radiant Texture Reset does), --flip u|v, or, as a camera looking along --camera-yaw and --camera-pitch degrees (default 0) sees each face, --camera-shift RIGHT,UP (texels across and up the view, as the Levels Move Textures commands move them) or --camera-flip horizontal|vertical. Select --object brush:id, patch:id or entity:id, or --face brushId:faceNumber (one-based), repeatable. Resolve sizes from --package or an explicit --texture-size W,H. Reset Textures mode instead sets absolute values on the selection or the --whole-map (visible, unlocked surfaces in the open group), optionally --only-texture NAME: --set-scale-u N, --set-scale-v N, --set-shift-u N, --set-shift-v N and --set-rotation N, and --rename NAME; patches take only the new name."), {QStringLiteral("vibestudio --cli map align-textures ./maps/start.map --object brush:0 --fit 1,1 --package ./assets --output ./maps/start-fitted.map"), QStringLiteral("vibestudio --cli map align-textures ./maps/start.map --face 0:1 --align center,minimum --texture-size 128,64 --output ./maps/start-aligned.map"), QStringLiteral("vibestudio --cli map align-textures ./maps/start.map --object brush:0 --scale-step 0,0.5 --output ./maps/start-scaled.map"), QStringLiteral("vibestudio --cli map align-textures ./maps/start.map --face 0:2 --camera-shift 0,16 --camera-yaw 90 --camera-pitch -20 --output ./maps/start-moved.map --json"), QStringLiteral("vibestudio --cli map align-textures ./maps/start.map --object brush:0 --clockwise 15 --output ./maps/start-turned.map"), QStringLiteral("vibestudio --cli map align-textures ./maps/start.map --object brush:0 --radiant-reset 0.5,0.5 --output ./maps/start-reset.map"), QStringLiteral("vibestudio --cli map align-textures ./maps/start.map --whole-map --only-texture base_wall/concrete --rename base_wall/metal --set-scale-u 0.5 --set-scale-v 0.5 --set-rotation 0 --output ./maps/start-retextured.map --json")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("flip"), QStringLiteral("Mirror map objects; --connected expands Doom/Hexen/UDMF geometry. UDMF retains fractional coordinates. Quake brush textures lock by default; --texture-lock off retains source parameters and --allow-valve220 permits conversion."), {QStringLiteral("vibestudio --cli map flip ./maps/start.map --object entity:3 --axis x --output ./maps/start-flipped.map"), QStringLiteral("vibestudio --cli map flip ./maps/arena.wad --object linedef:0 --connected --axis x --output ./maps/arena-mirrored.wad")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("apply-texture"), QStringLiteral("Put a texture on every face of the given brushes and patches of a Quake-family .map, and save to a new path."), {QStringLiteral("vibestudio --cli map apply-texture ./maps/start.map --object brush:12 --object entity:3 --texture base_wall/metal --output ./maps/start-metal.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("split-linedef"), QStringLiteral("Split linedefs of a Doom or Hexen map at their middles, and save to a new WAD."), {QStringLiteral("vibestudio --cli map split-linedef ./maps/e1.wad --map E1M1 --object linedef:12 --output ./maps/e1-split.wad")}, true, true, true},
@@ -391,7 +393,7 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("map"), QStringLiteral("explode-entity"), QStringLiteral("Give every brush and patch of the given brush entities an entity of its own with identical keys; --rename-targetnames gives each new piece its own targetname. Save to a new path."), {QStringLiteral("vibestudio --cli map explode-entity ./maps/start.map --object entity:4 --output ./maps/start-exploded.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("entity-colour"), QStringLiteral("Set the _color key of the given entities, and of the entities holding the given brushes and patches, to --colour (0-1, 0-255 or #rrggbb), or --normalise it so the brightest channel is 1, as NetRadiant Custom's Set Entity Colour and Normalise Entity Colour do: the last object's colour goes to all of them, or with --each every entity normalises its own. --where picks the objects by query; --key names another colour key. One undo step; save to a new path."), {QStringLiteral("vibestudio --cli map entity-colour ./maps/start.map --object entity:3 --object brush:12 --colour \"1 0.5 0\" --output ./maps/start-orange.map"), QStringLiteral("vibestudio --cli map entity-colour ./maps/start.map --where class=light --normalise --each --output ./maps/start-normalised.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("select-region"), QStringLiteral("Query region selection with --policy bounds, trenchbroom or radiant; optionally save consumed selection volumes with --output and --dry-run."), {QStringLiteral("vibestudio --cli map select-region ./maps/start.map --object brush:12 --mode complete-tall --json")}, true, true, true},
-		{QStringLiteral("map"), QStringLiteral("filters"), QCoreApplication::translate("LevelViewFiltersCli", "List the Levels view filters a map's format offers, with how many objects each names and the command that toggles it. World Brushes counts worldspawn, func_group and func_detail as world, as Radiant does. --off world,clip states the switched-off kinds and --saved adds the View tab's saved ones; --invert applies Invert Filters; --objects lists each kind's object selectors. Reports filteredObjects, what the views would hide. No map or setting is written."), {QStringLiteral("vibestudio --cli map filters ./maps/start.map --json"), QStringLiteral("vibestudio --cli map filters ./maps/start.map --off world --invert --objects")}, true, true, false},
+		{QStringLiteral("map"), QStringLiteral("filters"), QCoreApplication::translate("LevelViewFiltersCli", "List the Levels view filters a map's format offers, with how many objects each names and the command that toggles it. World Brushes counts worldspawn, func_group and func_detail as world, as Radiant does. --off world,clip states the switched-off kinds and --saved adds the View tab's saved ones; --invert applies Invert Filters; --objects lists each kind's object selectors and caulk faces. Reports filteredObjects and filteredFaces, what the views would hide, and each kind's faceCount. --package reads a Quake III map's shader scripts for Translucent, Liquids, Clip, Sky and Nodraw, as the View tab does with the open package. No map or setting is written."), {QStringLiteral("vibestudio --cli map filters ./maps/start.map --json"), QStringLiteral("vibestudio --cli map filters ./maps/start.map --off world --invert --objects"), QStringLiteral("vibestudio --cli map filters ./maps/q3dm1.map --package ./baseq3 --off translucent --objects")}, true, true, false},
 		{QStringLiteral("map"), QStringLiteral("visibility"), QStringLiteral("Query session visibility with --mode inspect, hide, show-all or isolate, repeated --object, --hidden and --shown selectors, --policy flat or inherited, and optional --context group. Choose --profile ID for insertion visibility and default hide policy. Preview transfers with --mode move --node GROUP or --mode assign --object SELECTOR and optional --parent NODE (default for the Default layer). Preview --mode duplicate with --object and optional --offset x,y,z. No map is written."), {QStringLiteral("vibestudio --cli map visibility ./maps/start.map --mode isolate --object brush:12 --json")}, true, true, false},
 		{QStringLiteral("map"), QStringLiteral("camera-focus"), QCoreApplication::translate("LevelCameraFocusCli", "Report where the Levels View > Camera commands would put the 3D camera, through the same service. Focus on repeated --object selectors (optional --context group): the camera keeps --camera-yaw and --camera-pitch (degrees, default 0) and backs off along its view until the objects' box fits a --fov vertical field of view (default 90) at --aspect width to height (default 4:3), at least 64 units from the box centre; --offset N applies N free-focus wheel notches (8 halve the distance). --level first levels the camera as Level Camera does: no pitch, heading to the nearest 22.5 degrees, at --camera-position x,y,z when nothing is focused. Hidden objects are refused. No map is written."), {QStringLiteral("vibestudio --cli map camera-focus ./maps/start.map --object brush:12 --camera-yaw 45 --camera-pitch -30 --fov 100 --aspect 16:9 --json"), QStringLiteral("vibestudio --cli map camera-focus ./maps/start.map --level --camera-yaw 50 --camera-pitch 20 --camera-position 0,0,64")}, true, true, false},
 		{QStringLiteral("map"), QStringLiteral("select-siblings"), QStringLiteral("Query selectable objects sharing the --object selectors' parents. Optional --context group and repeated --exclude selectors; no map is written."), {QStringLiteral("vibestudio --cli map select-siblings ./maps/start.map --object brush:12 --json")}, true, true, false},
@@ -413,12 +415,14 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("map"), QStringLiteral("region"), QStringLiteral("Write a region of a Quake-family map as a map of its own for a quick compile, as Radiant's regions and Hammer's cordon do: what lies outside --mins/--maxs (or the --object bounds) removed, the box sealed by six brushes, and a player start added if it has none."), {QStringLiteral("vibestudio --cli map region ./maps/start.map --mins -512,-512,-64 --maxs 512,512,256 --start 0,0,32 --output ./maps/start-region.map --json")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("intersect"), QStringLiteral("Replace the given overlapping brushes with the brush where they all overlap, and save to a new path."), {QStringLiteral("vibestudio --cli map intersect ./maps/start.map --object brush:12 --object brush:13 --output ./maps/start-overlap.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("carve"), QStringLiteral("Carve the given brushes of a Quake-family .map out of every brush they overlap, and save to a new path."), {QStringLiteral("vibestudio --cli map carve ./maps/start.map --object brush:12 --output ./maps/start-doorway.map")}, true, true, true},
-		{QStringLiteral("map"), QStringLiteral("hollow"), QStringLiteral("Turn brushes of a Quake-family .map into walls of a thickness, one per face, and save to a new path. --mode overlap (walls meet at the edges), touch (walls stop at each other) or room (walls built outside the brush, as Make Room does)."), {QStringLiteral("vibestudio --cli map hollow ./maps/start.map --object brush:12 --thickness 8 --output ./maps/start-room.map")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("hollow"), QStringLiteral("Turn brushes of a Quake-family .map into walls of a thickness, one per face, and save to a new path. --mode overlap (walls meet at the edges), touch or wrap (walls stop at each other), room or pull (walls built outside the brush, as Make Room does), diagonal (outside, meeting on mitred joints) or extrude (outside, straight out from each face), as NetRadiant Custom's CSG Tool offers. --caulk puts the game's caulk (common/caulk in Quake III, skip in Quake) on every wall face but the room's, or --caulk-texture NAME a material you name; --keep-inner keeps the brush, or what the walls leave of it, and caulks the faces against it instead. Repeat --open-face or --exclude-face face:brushId:faceNumber (one-based, as map select-textured prints it) to leave faces open, the walls beside them stopping flush; --only-face keeps walls on the named faces only; --exclude-facing x|y|z or dx,dy,dz leaves open each brush's faces facing that way at either end."), {QStringLiteral("vibestudio --cli map hollow ./maps/start.map --object brush:12 --thickness 8 --output ./maps/start-room.map"), QStringLiteral("vibestudio --cli map hollow ./maps/start.map --object brush:12 --mode room --thickness 16 --caulk --open-face face:12:6 --output ./maps/start-room.map --json"), QStringLiteral("vibestudio --cli map hollow ./maps/start.map --object brush:12 --mode diagonal --thickness 16 --exclude-facing z --output ./maps/start-shaft.map --json")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("shrink-brushes"), QStringLiteral("Move every face of the --object brushes of a Quake-family .map --thickness units in, as NetRadiant Custom's CSG Tool Shrink does, and save to a new path. --exclude-face, --only-face and --exclude-facing x|y|z or dx,dy,dz leave faces where they are; a brush the shrink would flatten or rob of a face is left as it was. Textures stay put in the world; one undo step; --context opens a group first."), {QStringLiteral("vibestudio --cli map shrink-brushes ./maps/start.map --object brush:12 --thickness 8 --output ./maps/start-thin.map"), QStringLiteral("vibestudio --cli map shrink-brushes ./maps/start.map --object brush:12 --thickness 8 --exclude-face face:12:6 --output ./maps/start-thin.map --json")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("expand-brushes"), QStringLiteral("Move every face of the --object brushes of a Quake-family .map --thickness units out, as NetRadiant Custom's CSG Tool Expand does, and save to a new path. --exclude-face, --only-face and --exclude-facing x|y|z or dx,dy,dz leave faces where they are. Textures stay put in the world; one undo step; --context opens a group first."), {QStringLiteral("vibestudio --cli map expand-brushes ./maps/start.map --object brush:12 --thickness 8 --output ./maps/start-wide.map"), QStringLiteral("vibestudio --cli map expand-brushes ./maps/start.map --object entity:3 --thickness 4 --exclude-facing z --output ./maps/start-wide.map --json")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("merge-brushes"), QStringLiteral("Merge an exact convex union of brushes, with explicit choices for conflicting surfaces, and save to a new path."), {QStringLiteral("vibestudio --cli map merge-brushes ./maps/start.map --object brush:0 --object brush:1 --output ./maps/merged.map --dry-run --json")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("sweep"), QStringLiteral("Sweep picked brush faces into separate convex sections. Repeat --set brush:ID/face/IDs; --delta x,y,z, --axis x,y,z, --angle degrees and --scale x,y,z set the destination cap. --path arc|straight|s-bend; --segments 1..64 (8), --iterations 1..8 (1), --alignment integer|free (integer). Requires --texture and --output. Retains source faces and ownership; reports skipped degenerate sections. --dry-run validates without writing."), {QStringLiteral("vibestudio --cli map sweep arena.map --set brush:0/face/5 --delta 0,0,128 --segments 8 --texture stone/wall --output swept.map --dry-run --json")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("wrap-merge"), QStringLiteral("Build a convex hull, filling gaps. Repeat --object for whole brushes to replace, or --set brush:ID/vertex|edge|face/IDs and patch:ID/vertex/IDs to keep sources and create a component hull. Requires --texture and --output; up to three optional --point x,y,z values. Uses normal owner/group protection, linked propagation and undo. --dry-run checks without writing."), {QStringLiteral("vibestudio --cli map wrap-merge ./maps/start.map --set brush:0/vertex/0,1,2,4 --texture stone/wall --output ./maps/hull.map --dry-run --json")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("clip"), QStringLiteral("Atomically cut selected Quake-family brushes, keeping front, back or both. Remove wholly discarded brushes and empty owners; unsafe geometry or source text refuses the entire edit. Choose --axis with --at, or three --points. --cut-texture sets cut material (default inherits). --wrap-merge with --wrap-texture accepts one to three actual --points and builds a convex hull when no cut is made; Two-point cuts accept --view-axis x|y|z with --view-sign 1|-1, or --camera-eye x,y,z and --camera-forward x,y,z for NRC view-axis/outer-face correction. Wrap defaults to a positive Z extrusion. Save to --output."), {QStringLiteral("vibestudio --cli map clip ./maps/start.map --object brush:12 --axis x --at 64 --keep below --cut-texture common/caulk --output ./maps/start-clipped.map"), QStringLiteral("vibestudio --cli map clip ./maps/start.map --object entity:3 --points \"0,0,0 64,64,0 0,0,64\" --keep both --output ./maps/start-split.map")}, true, true, true},
-		{QStringLiteral("map"), QStringLiteral("resize"), QStringLiteral("Resize map objects to new bounds or a size; --texture-lock on stretches brush textures (default off). --allow-valve220 permits required conversion."), {QStringLiteral("vibestudio --cli map resize ./maps/start.map --object brush:12 --size 128,64,32 --output ./maps/start-wider.map"), QStringLiteral("vibestudio --cli map resize ./maps/start.map --object entity:3 --mins 0,0,0 --maxs 256,128,64 --output ./maps/start-resized.map")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("resize"), QStringLiteral("Resize map objects to new bounds or a size, or scale them by --factors x,y,z about their centre or --pivot x,y,z, where a negative factor mirrors (NetRadiant Custom's Arbitrary Scale); --texture-lock on stretches brush textures (default off). --allow-valve220 permits required conversion."), {QStringLiteral("vibestudio --cli map resize ./maps/start.map --object brush:12 --size 128,64,32 --output ./maps/start-wider.map"), QStringLiteral("vibestudio --cli map resize ./maps/start.map --object entity:3 --mins 0,0,0 --maxs 256,128,64 --output ./maps/start-resized.map"), QStringLiteral("vibestudio --cli map resize ./maps/start.map --object brush:12 --factors -1,2,1 --pivot 0,0,0 --output ./maps/start-mirrored.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("snap"), QStringLiteral("Snap objects independently, preserving owner assemblies and shared Doom vertices. Brush textures lock by default; --texture-lock off keeps source parameters."), {QStringLiteral("vibestudio --cli map snap ./maps/start.map --object entity:3 --object brush:12 --grid 16 --output ./maps/start-snapped.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("snap-vertices"), QStringLiteral("Round every vertex of the --object brushes, or of entities' brushes, onto --grid and rebuild them, as TrenchBroom's Snap Vertices does; a brush the grid would collapse is left as it was, with its reason."), {QStringLiteral("vibestudio --cli map snap-vertices ./maps/start.map --object brush:12 --grid 8 --output ./maps/start-clean.map --json")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("nudge"), QCoreApplication::translate("LevelNudgeCli", "Nudge the --object selection, or repeated --set brush:ID/vertex|edge|face/IDs or patch:ID/vertex/IDs components, --steps grid steps of --grid units (default 1 and 16) towards --direction left, right, forward, back, depth-up, depth-down, z-up or z-down, as the Levels nudge keys do: along a --view top, front or side plan view (default top), or a camera looking along --camera-yaw and --camera-pitch degrees. Objects keep --texture-lock on|off (default on); components take --uv-lock off|on|fit and --allow-collapse; --allow-valve220 and --context GROUP. Doom maps nudge along X and Y only. With --duplicate the --object selection is copied first and the copies move, as Duplicate and Move does. One undo step; requires --output."), {QStringLiteral("vibestudio --cli map nudge ./maps/start.map --object brush:12 --direction depth-up --view front --grid 8 --output ./maps/start-nudged.map --json"), QStringLiteral("vibestudio --cli map nudge ./maps/start.map --set brush:0/face/2 --direction forward --camera-yaw 60 --uv-lock on --output ./maps/start-nudged.map"), QStringLiteral("vibestudio --cli map nudge ./maps/start.map --object brush:12 --direction right --duplicate --grid 32 --output ./maps/start-copied.map --json")}, true, true, true},
@@ -509,6 +513,7 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("editor"), QStringLiteral("select"), QStringLiteral("Select an editor interaction profile."), {QStringLiteral("vibestudio --cli editor select trenchbroom")}},
 		{QStringLiteral("editor"), QStringLiteral("gestures"), QStringLiteral("Inspect, customize, reset, import or export per-profile pointer gestures and camera keys with validation."), {QStringLiteral("vibestudio --cli editor gestures hammer --json"), QStringLiteral("vibestudio --cli editor gestures hammer --set plan.panButtons=right+middle --dry-run --json")}},
 		{QStringLiteral("editor"), QStringLiteral("clipper"), QStringLiteral("Inspect or change clipper preferences: material=inherit|current|custom, customTexture, resetPoints=on|off, resetSide=on|off, twoPointsInPlan=on|off and doubleClick=none|clip|split. Repeat --set; --reset restores defaults; --dry-run previews."), {QStringLiteral("vibestudio --cli editor clipper --json"), QStringLiteral("vibestudio --cli editor clipper --set material=custom --set customTexture=common/caulk --dry-run --json")}},
+		{QStringLiteral("editor"), QStringLiteral("make-room"), QStringLiteral("Inspect or change the options the Levels editor's Make Room uses (Make Room Options...): caulk=on|off, caulkTexture=NAME (empty for the game's own caulk) and openPickedFaces=on|off. Repeat --set; --reset restores NetRadiant Custom's defaults; --dry-run previews. map hollow takes the same options as --caulk, --caulk-texture and --open-face."), {QStringLiteral("vibestudio --cli editor make-room --json"), QStringLiteral("vibestudio --cli editor make-room --set caulkTexture=common/nodraw --set openPickedFaces=off --dry-run --json")}, true, true, true},
 		{QStringLiteral("editor"), QStringLiteral("layout"), QStringLiteral("Read or choose the level view layout: profile, single-2d, single-3d, camera-and-plan, four-views, camera-above-plans or camera-beside-plans; --panes chooses the plan panes three-plan layouts show."), {QStringLiteral("vibestudio --cli editor layout four-views --json"), QStringLiteral("vibestudio --cli editor layout profile"), QStringLiteral("vibestudio --cli editor layout four-views --panes front,side --json")}},
 		{QStringLiteral("editor"), QStringLiteral("controls"), QStringLiteral("Print how the Levels views answer the mouse and keys under an editor profile: layout, 2D view, 3D camera, and keys."), {QStringLiteral("vibestudio --cli editor controls trenchbroom"), QStringLiteral("vibestudio --cli editor controls netradiant-custom --json")}},
 		{QStringLiteral("editor"), QStringLiteral("keys"), QStringLiteral("List the keys the user gave commands in place of their defaults; --reset puts every default back."), {QStringLiteral("vibestudio --cli editor keys --json"), QStringLiteral("vibestudio --cli editor keys --reset")}},
@@ -749,6 +754,10 @@ QStringList commandTokens(const QStringList& args)
 			QStringLiteral("--no-archive"), QStringLiteral("--no-record"), QStringLiteral("--no-changelog"), QStringLiteral("--readme"),
 			// map entity-colour
 			QStringLiteral("--normalise"), QStringLiteral("--normalize"), QStringLiteral("--each"),
+			// map hollow
+			QStringLiteral("--caulk"), QStringLiteral("--keep-inner"),
+			// map align-textures (Reset Textures)
+			QStringLiteral("--whole-map"),
 	};
 
 	static const QSet<QString> valueFlags = {
@@ -798,6 +807,8 @@ QStringList commandTokens(const QStringList& args)
 			QStringLiteral("--rotate"),
 			QStringLiteral("--scale"),
 			QStringLiteral("--pivot"),
+			QStringLiteral("--euler"),
+			QStringLiteral("--factors"),
 			QStringLiteral("--pivot-grid"),
 			QStringLiteral("--degrees"),
 			QStringLiteral("--texture-lock"),
@@ -984,7 +995,15 @@ QStringList commandTokens(const QStringList& args)
 			// map align-textures, patch-matrix and find
 			QStringLiteral("--natural"),
 			QStringLiteral("--face-aligned"),
+			QStringLiteral("--reset-alignment"), QStringLiteral("--radiant-reset"), QStringLiteral("--only-texture"),
+			QStringLiteral("--set-scale-u"), QStringLiteral("--set-scale-v"), QStringLiteral("--set-shift-u"), QStringLiteral("--set-shift-v"),
+			QStringLiteral("--set-rotation"),
 			QStringLiteral("--flip"),
+			QStringLiteral("--camera-shift"),
+			QStringLiteral("--camera-flip"),
+			QStringLiteral("--clockwise"),
+			QStringLiteral("--camera-yaw"),
+			QStringLiteral("--camera-pitch"),
 			QStringLiteral("--op"),
 			QStringLiteral("--number"),
 			QStringLiteral("--plane"),
@@ -1080,6 +1099,9 @@ QStringList commandTokens(const QStringList& args)
 			// release and install register (cli/release.cpp)
 			QStringLiteral("--scope"), QStringLiteral("--register"), QStringLiteral("--release-version"), QStringLiteral("--package-name"),
 			QStringLiteral("--notes-file"), QStringLiteral("--date"), QStringLiteral("--add"), QStringLiteral("--category"),
+			// map hollow, shrink-brushes and expand-brushes
+			QStringLiteral("--caulk-texture"), QStringLiteral("--open-face"), QStringLiteral("--exclude-face"), QStringLiteral("--only-face"),
+			QStringLiteral("--exclude-facing"),
 	};
 
 	QStringList tokens;
@@ -9046,6 +9068,10 @@ int runMapRotateCommand(const QString& commandName, const QString& path, const Q
 	if (objects.isEmpty()) {
 		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --object kind:id, repeatable.").arg(commandName), format);
 	}
+	const bool euler = hasOption(args, QStringLiteral("--euler"));
+	if (euler && (hasOption(args, QStringLiteral("--axis")) || hasOption(args, QStringLiteral("--degrees")) || hasOption(args, QStringLiteral("--turns")))) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1: --euler x,y,z replaces --axis, --degrees and --turns.").arg(commandName), format);
+	}
 	const QString axisText = hasOption(args, QStringLiteral("--axis")) ? optionValue(args, QStringLiteral("--axis")).trimmed().toLower() : QStringLiteral("z");
 	const int axis = QStringList {QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("z")}.indexOf(axisText);
 	if (axis < 0) {
@@ -9090,6 +9116,15 @@ int runMapRotateCommand(const QString& commandName, const QString& path, const Q
 				QStringLiteral("--pivot-grid takes a grid size from above 0 to 65536 units and cannot be combined with --pivot."), format);
 		}
 	}
+	if (euler) {
+		// NetRadiant Custom's Arbitrary Rotation: X, then Y, then Z.
+		const auto value = optionValue(args, QStringLiteral("--euler"));
+		rotation.euler = true;
+		if (value.split(QRegularExpression(QStringLiteral(R"([,\s]+)")), Qt::SkipEmptyParts).size() != 3
+			|| !parseLevelMapDelta(value, &rotation.eulerDegrees[0], &rotation.eulerDegrees[1], &rotation.eulerDegrees[2])) {
+			return printCliError(commandName, CliExitCode::Usage, QStringLiteral("--euler takes x,y,z degrees."), format);
+		}
+	}
 	rotation.textureLock = textures.enabled;
 	rotation.allowValve220 = textures.allowValve220;
 	const QString outputPath = optionValue(args, QStringLiteral("--output"));
@@ -9110,9 +9145,13 @@ int runMapRotateCommand(const QString& commandName, const QString& path, const Q
 	}
 	const LevelMapSaveReport report = saveLevelMapAs(document, outputPath, hasOption(args, QStringLiteral("--dry-run")), hasOption(args, QStringLiteral("--overwrite")));
 	QJsonObject extra;
-	extra.insert(QStringLiteral("axis"), axisText);
-	extra.insert(QStringLiteral("turns"), turns);
-	extra.insert(QStringLiteral("degrees"), rotation.degrees);
+	if (euler) {
+		extra.insert(QStringLiteral("eulerXyz"), QJsonArray {rotation.eulerDegrees[0], rotation.eulerDegrees[1], rotation.eulerDegrees[2]});
+	} else {
+		extra.insert(QStringLiteral("axis"), axisText);
+		extra.insert(QStringLiteral("turns"), turns);
+		extra.insert(QStringLiteral("degrees"), rotation.degrees);
+	}
 	extra.insert(QStringLiteral("textureLockPolicy"), rotation.textureLock ? QStringLiteral("locked") : QStringLiteral("source-parameters"));
 	extra.insert(QStringLiteral("allowValve220"), rotation.allowValve220);
 	if (rotation.pivot.valid) { extra.insert(QStringLiteral("pivot"), levelMapVec3Json(rotation.pivot)); }
@@ -9177,6 +9216,136 @@ int runMapFlipCommand(const QString& commandName, const QString& path, const QSt
 	return printLevelMapSaveResult(commandName, document, report, format, extra);
 }
 
+// map align-textures in Reset Textures mode (bobToolz's Reset Textures, as the
+// Levels Reset Textures window sets it): absolute --set-scale-u/v,
+// --set-shift-u/v and --set-rotation values and an optional --rename, for the
+// --object/--face selection or the --whole-map, optionally --only-texture NAME.
+int runMapTextureResetCommand(const QString& path, const QString& output, const QStringList& args, CliOutputFormat format)
+{
+	const QString command = QStringLiteral("map align-textures");
+	const auto usage = [&](const QString& message) { return printCliError(command, CliExitCode::Usage, message, format); };
+	LevelTextureResetRequest reset;
+	reset.wholeMap = hasOption(args, QStringLiteral("--whole-map"));
+	const struct {
+		const char* option;
+		bool* set;
+		double* value;
+	} values[] {{"--set-scale-u", &reset.setScaleU, &reset.scaleU}, {"--set-scale-v", &reset.setScaleV, &reset.scaleV},
+		{"--set-shift-u", &reset.setShiftU, &reset.shiftU}, {"--set-shift-v", &reset.setShiftV, &reset.shiftV},
+		{"--set-rotation", &reset.setRotation, &reset.rotation}};
+	for (const auto& value : values) {
+		const QString option = QString::fromLatin1(value.option);
+		if (!hasOption(args, option)) { continue; }
+		bool ok = false;
+		*value.value = optionValues(args, option).size() == 1 ? optionValue(args, option).toDouble(&ok) : 0.0;
+		if (!ok || !std::isfinite(*value.value)) { return usage(QStringLiteral("%1 needs one finite number.").arg(option)); }
+		*value.set = true;
+	}
+	for (const auto& option : {QStringLiteral("--only-texture"), QStringLiteral("--rename")}) {
+		if (hasOption(args, option) && (optionValues(args, option).size() != 1 || optionValue(args, option).trimmed().isEmpty())) {
+			return usage(QStringLiteral("%1 needs one texture name.").arg(option));
+		}
+	}
+	reset.onlyTexture = optionValue(args, QStringLiteral("--only-texture")).trimmed();
+	reset.renameTo = optionValue(args, QStringLiteral("--rename")).trimmed();
+	if (!reset.changesSomething()) {
+		return usage(QStringLiteral("Reset Textures needs --rename NAME or at least one of --set-scale-u, --set-scale-v, --set-shift-u, --set-shift-v and --set-rotation."));
+	}
+	QSize explicitSize;
+	if (hasOption(args, QStringLiteral("--texture-size"))) {
+		const auto parts = optionValue(args, QStringLiteral("--texture-size")).split(QRegularExpression(QStringLiteral("[,\\s]+")), Qt::SkipEmptyParts);
+		bool a = false, b = false;
+		const int width = parts.value(0).toInt(&a), height = parts.value(1).toInt(&b);
+		if (parts.size() != 2 || !a || !b || width < 1 || height < 1 || width > 16384 || height > 16384) {
+			return usage(QStringLiteral("--texture-size takes whole width,height values from 1 through 16384."));
+		}
+		explicitSize = QSize(width, height);
+	}
+	QVector<LevelMapSelectionRef> objects;
+	QString error;
+	if (!levelMapObjectsFromArgs(args, &objects, &error)) { return usage(QStringLiteral("Unknown object selector: %1").arg(error)); }
+	if (reset.wholeMap && (!objects.isEmpty() || hasOption(args, QStringLiteral("--face")))) {
+		return usage(QStringLiteral("--whole-map replaces --object and --face; give one or the other."));
+	}
+	for (const auto& object : objects) {
+		if (object.kind != LevelMapSelectionKind::QuakeBrush && object.kind != LevelMapSelectionKind::Entity
+			&& object.kind != LevelMapSelectionKind::QuakePatch) {
+			return usage(QStringLiteral("Reset Textures selects brush faces, brushes, patches, or the brushes and patches of entities."));
+		}
+	}
+	LevelMapDocument document;
+	const auto load = levelMapLoadRequestFromArgs(path, args);
+	if (!loadLevelMap(load, &document, &error)) { return printCliError(command, levelMapLoadFailureCode(load), error, format); }
+	if (!reset.wholeMap) {
+		if (!setLevelMapSelection(&document, objects, &error)) { return usage(error); }
+		reset.faces = levelMapSelectedSurfaces(document);
+		reset.patches = levelMapSelectedPatchIds(document);
+		for (const auto& token : optionValues(args, QStringLiteral("--face"))) {
+			const auto parts = token.split(':');
+			bool brushOk = false, faceOk = false;
+			const int brush = parts.value(0).toInt(&brushOk), face = parts.value(1).toInt(&faceOk);
+			if (parts.size() != 2 || !brushOk || !faceOk || brush < 0 || face < 1) {
+				return usage(QStringLiteral("--face takes brushId:faceNumber; face numbers start at one."));
+			}
+			if (!reset.faces.contains(LevelSurfaceFace{brush, face - 1})) { reset.faces.append({brush, face - 1}); }
+		}
+		if (reset.faces.isEmpty() && reset.patches.isEmpty()) {
+			return usage(QStringLiteral("Select brush faces or patches with --object or --face, or reset the --whole-map."));
+		}
+	}
+	QVector<LevelSurfaceFace> faces;
+	QVector<int> patches;
+	QStringList sized;
+	if (!levelTextureResetTargets(document, reset, &faces, &patches, &sized, &error)) {
+		return printCliError(command, CliExitCode::ValidationFailed, error, format);
+	}
+	// Brush-primitive faces read their values in texels, so they need sizes.
+	LevelMapDocument assetsDocument;
+	assetsDocument.format = document.format;
+	assetsDocument.engineFamily = document.engineFamily;
+	for (const auto& name : sized) {
+		LevelMapBrush brush;
+		LevelMapBrushFace face;
+		face.textureName = name;
+		brush.faces << face;
+		assetsDocument.brushes << brush;
+	}
+	LevelPreviewAssets assets;
+	const auto packagePath = optionValue(args, QStringLiteral("--package"));
+	if (hasOption(args, QStringLiteral("--package"))) {
+		PackageArchive archive;
+		if (packagePath.isEmpty() || !archive.load(packagePath, &error)) {
+			return printCliError(command, CliExitCode::NotFound, error.isEmpty() ? QStringLiteral("Missing package path.") : error, format);
+		}
+		LevelPreviewAssetOptions options;
+		options.paletteId = optionValue(args, QStringLiteral("--palette"));
+		assets = resolveLevelPreviewAssets(assetsDocument, archive, options);
+	}
+	auto sizes = levelPreviewTextureSizes(assets);
+	if (explicitSize.isValid()) {
+		for (const auto& name : sized) { sizes.insert(name, explicitSize); }
+	}
+	LevelSurfaceEditPlan plan;
+	if (!prepareLevelTextureReset(document, reset, sizes, &plan, &error) || !commitLevelSurfaceEdit(&document, plan, &error)) {
+		return printCliError(command, CliExitCode::ValidationFailed, error, format);
+	}
+	const auto saved = saveLevelMapAs(document, output, hasOption(args, QStringLiteral("--dry-run")), hasOption(args, QStringLiteral("--overwrite")));
+	QJsonObject extra {{QStringLiteral("operation"), QStringLiteral("reset-textures")}, {QStringLiteral("scope"), reset.wholeMap ? QStringLiteral("map") : QStringLiteral("selection")},
+		{QStringLiteral("targetFaces"), static_cast<int>(faces.size())}, {QStringLiteral("targetPatches"), static_cast<int>(patches.size())},
+		{QStringLiteral("facesChanged"), plan.faceCount()}, {QStringLiteral("brushesChanged"), plan.brushCount()},
+		{QStringLiteral("patchesChanged"), plan.patchCount()}, {QStringLiteral("renamed"), plan.renamedCount()},
+		{QStringLiteral("explicitTextureSize"), explicitSize.isValid()}};
+	if (!reset.onlyTexture.isEmpty()) { extra.insert(QStringLiteral("onlyTexture"), reset.onlyTexture); }
+	if (!reset.renameTo.isEmpty()) { extra.insert(QStringLiteral("rename"), reset.renameTo); }
+	QJsonObject set;
+	for (const auto& value : values) {
+		if (*value.set) { set.insert(QString::fromLatin1(value.option).mid(6), *value.value); }
+	}
+	extra.insert(QStringLiteral("set"), set);
+	if (!packagePath.isEmpty()) { extra.insert(QStringLiteral("materials"), levelPreviewAssetsJson(assets)); }
+	return printLevelMapSaveResult(command, document, saved, format, extra);
+}
+
 int runMapSurfaceCommand(const QString& path, const QStringList& args, CliOutputFormat format)
 {
 	const QString command = QStringLiteral("map align-textures");
@@ -9185,20 +9354,34 @@ int runMapSurfaceCommand(const QString& path, const QStringList& args, CliOutput
 	if (path.trimmed().isEmpty() || output.trimmed().isEmpty()) {
 		return usage(QStringLiteral("map align-textures requires a map path and --output <save-as path>."));
 	}
-	// In LevelSurfaceOperation order, then --flip, which is a scale of -1.
-	// --scale-step is RadiantScale; --degrees with --anchor origin is RadiantRotate.
+	const QStringList resetOptions {QStringLiteral("--whole-map"), QStringLiteral("--only-texture"), QStringLiteral("--rename"),
+		QStringLiteral("--set-scale-u"), QStringLiteral("--set-scale-v"), QStringLiteral("--set-shift-u"), QStringLiteral("--set-shift-v"),
+		QStringLiteral("--set-rotation")};
+	const bool resetTextures = std::any_of(resetOptions.cbegin(), resetOptions.cend(), [&args](const QString& option) { return hasOption(args, option); });
+	// In LevelSurfaceOperation order, with --flip, a scale of -1, standing in
+	// for RadiantRotate, which is --degrees with --anchor origin; --scale-step
+	// is RadiantScale. --camera-shift and --camera-flip work as a camera at
+	// --camera-yaw and --camera-pitch sees each face (core/level_camera_texture.h).
+	// --clockwise is ClockwiseRotate, the Levels Rotate Textures turn.
+	// --reset-alignment and --radiant-reset are Reset and RadiantReset, the
+	// Levels Reset Texture Alignment and Radiant Texture Reset commands.
 	const QStringList operations {QStringLiteral("--shift"), QStringLiteral("--scale"), QStringLiteral("--degrees"), QStringLiteral("--fit"),
-		QStringLiteral("--align"), QStringLiteral("--natural"), QStringLiteral("--face-aligned"), QStringLiteral("--scale-step"), QStringLiteral("--flip")};
+		QStringLiteral("--align"), QStringLiteral("--natural"), QStringLiteral("--face-aligned"), QStringLiteral("--scale-step"), QStringLiteral("--flip"),
+		QStringLiteral("--camera-shift"), QStringLiteral("--camera-flip"), QStringLiteral("--clockwise"), QStringLiteral("--reset-alignment"),
+		QStringLiteral("--radiant-reset")};
 	int operation = -1;
 	for (int i = 0; i < operations.size(); ++i) {
 		if (!hasOption(args, operations[i])) { continue; }
-		if (operation >= 0 || optionValues(args, operations[i]).size() != 1) {
-			return usage(QStringLiteral("Choose exactly one surface operation: --shift, --scale, --scale-step, --degrees, --fit, --align, --natural, --face-aligned or --flip."));
+		if (operation >= 0 || resetTextures || optionValues(args, operations[i]).size() != 1) {
+			return usage(QStringLiteral("Choose exactly one surface operation: --shift, --scale, --scale-step, --degrees, --clockwise, --fit, --align, --natural, --face-aligned, --reset-alignment, --radiant-reset, --flip, --camera-shift or --camera-flip, or Reset Textures values (--set-* and --rename)."));
 		}
 		operation = i;
 	}
+	if (resetTextures) {
+		return runMapTextureResetCommand(path, output, args, format);
+	}
 	if (operation < 0) {
-		return usage(QStringLiteral("Choose --shift U,V, --scale U,V, --scale-step U,V, --degrees N, --fit U,V, --align U,V, --natural U,V, --face-aligned U,V or --flip u|v."));
+		return usage(QStringLiteral("Choose --shift U,V, --scale U,V, --scale-step U,V, --degrees N, --clockwise N, --fit U,V, --align U,V, --natural U,V, --face-aligned U,V, --reset-alignment U,V, --radiant-reset U,V, --flip u|v, --camera-shift RIGHT,UP or --camera-flip horizontal|vertical, or Reset Textures values (--set-scale-u, --set-scale-v, --set-shift-u, --set-shift-v, --set-rotation, --rename)."));
 	}
 	QString anchor;
 	if (hasOption(args, QStringLiteral("--anchor"))) {
@@ -9209,6 +9392,7 @@ int runMapSurfaceCommand(const QString& path, const QStringList& args, CliOutput
 		}
 	}
 	const bool flip = operations[operation] == QStringLiteral("--flip");
+	const bool cameraFlip = operations[operation] == QStringLiteral("--camera-flip");
 	LevelSurfaceRequest surface;
 	surface.operation = flip ? LevelSurfaceOperation::Scale : static_cast<LevelSurfaceOperation>(operation);
 	if (flip) {
@@ -9216,6 +9400,30 @@ int runMapSurfaceCommand(const QString& path, const QStringList& args, CliOutput
 		if (axis != QStringLiteral("u") && axis != QStringLiteral("v")) { return usage(QStringLiteral("--flip takes u or v.")); }
 		surface.x = axis == QStringLiteral("u") ? -1 : 1;
 		surface.y = axis == QStringLiteral("v") ? -1 : 1;
+	}
+	const bool cameraOperation = surface.operation == LevelSurfaceOperation::CameraShift || surface.operation == LevelSurfaceOperation::CameraFlip;
+	double cameraYaw = 0, cameraPitch = 0;
+	if (!cameraOperation && (hasOption(args, QStringLiteral("--camera-yaw")) || hasOption(args, QStringLiteral("--camera-pitch")))) {
+		return usage(QStringLiteral("--camera-yaw and --camera-pitch go with --camera-shift or --camera-flip."));
+	}
+	if (cameraOperation) {
+		// The camera's frame, as map nudge and map view-transform name it.
+		bool yawOk = true, pitchOk = true;
+		if (hasOption(args, QStringLiteral("--camera-yaw"))) { cameraYaw = optionValue(args, QStringLiteral("--camera-yaw")).toDouble(&yawOk); }
+		if (hasOption(args, QStringLiteral("--camera-pitch"))) { cameraPitch = optionValue(args, QStringLiteral("--camera-pitch")).toDouble(&pitchOk); }
+		LevelMapVec3 forward;
+		if (!yawOk || !pitchOk || cameraPitch < -90 || cameraPitch > 90
+			|| !levelCameraBasis(cameraYaw, cameraPitch, &forward, &surface.cameraRight, &surface.cameraUp)) {
+			return usage(QStringLiteral("--camera-yaw takes finite degrees and --camera-pitch degrees from -90 to 90."));
+		}
+	}
+	if (cameraFlip) {
+		const QString axis = optionValue(args, QStringLiteral("--camera-flip")).trimmed().toLower();
+		if (axis != QStringLiteral("horizontal") && axis != QStringLiteral("vertical")) {
+			return usage(QStringLiteral("--camera-flip takes horizontal or vertical."));
+		}
+		surface.x = axis == QStringLiteral("horizontal") ? 1 : 0;
+		surface.y = axis == QStringLiteral("vertical") ? 1 : 0;
 	}
 	const auto pair = [](const QString& value, double* x, double* y) {
 		const auto values = value.trimmed().split(QRegularExpression(QStringLiteral("[,\\s]+")), Qt::SkipEmptyParts);
@@ -9230,6 +9438,11 @@ int runMapSurfaceCommand(const QString& path, const QStringList& args, CliOutput
 		if (!ok || !std::isfinite(surface.degrees)) { return usage(QStringLiteral("--degrees needs a finite angle.")); }
 		// About the texture origin, as Radiant's Surface Inspector turns.
 		if (anchor == QStringLiteral("origin")) { surface.operation = LevelSurfaceOperation::RadiantRotate; }
+	} else if (surface.operation == LevelSurfaceOperation::ClockwiseRotate) {
+		// Degrees clockwise as seen from each face's front, about the texture origin.
+		bool ok = false;
+		surface.degrees = optionValue(args, operations[operation]).toDouble(&ok);
+		if (!ok || !std::isfinite(surface.degrees)) { return usage(QStringLiteral("--clockwise needs a finite angle in degrees.")); }
 	} else if (surface.operation == LevelSurfaceOperation::Align) {
 		const auto values = optionValue(args, operations[operation]).toLower().split(',', Qt::KeepEmptyParts);
 		const QStringList modes {QStringLiteral("keep"), QStringLiteral("minimum"), QStringLiteral("center"), QStringLiteral("maximum")};
@@ -9238,8 +9451,9 @@ int runMapSurfaceCommand(const QString& path, const QStringList& args, CliOutput
 		}
 		surface.alignU = static_cast<LevelSurfaceAlignment>(modes.indexOf(values[0].trimmed()));
 		surface.alignV = static_cast<LevelSurfaceAlignment>(modes.indexOf(values[1].trimmed()));
-	} else if (!flip && !pair(optionValue(args, operations[operation]), &surface.x, &surface.y)) {
-		return usage(QStringLiteral("%1 needs two finite U,V values.").arg(operations[operation]));
+	} else if (!flip && !cameraFlip && !pair(optionValue(args, operations[operation]), &surface.x, &surface.y)) {
+		return usage(cameraOperation ? QStringLiteral("--camera-shift needs two finite RIGHT,UP texel values.")
+			: QStringLiteral("%1 needs two finite U,V values.").arg(operations[operation]));
 	}
 	QSize explicitSize;
 	if (hasOption(args, QStringLiteral("--texture-size"))) {
@@ -9307,6 +9521,14 @@ int runMapSurfaceCommand(const QString& path, const QStringList& args, CliOutput
 		{QStringLiteral("explicitTextureSize"), explicitSize.isValid()}};
 	if (operations[operation] == QStringLiteral("--degrees")) {
 		extra.insert(QStringLiteral("anchor"), surface.operation == LevelSurfaceOperation::RadiantRotate ? QStringLiteral("origin") : QStringLiteral("centre"));
+	}
+	if (surface.operation == LevelSurfaceOperation::ClockwiseRotate) {
+		extra.insert(QStringLiteral("anchor"), QStringLiteral("origin"));
+		extra.insert(QStringLiteral("clockwiseDegrees"), surface.degrees);
+	}
+	if (cameraOperation) {
+		extra.insert(QStringLiteral("cameraYaw"), cameraYaw);
+		extra.insert(QStringLiteral("cameraPitch"), cameraPitch);
 	}
 	if (!packagePath.isEmpty()) { extra.insert(QStringLiteral("materials"), levelPreviewAssetsJson(assets)); }
 	return printLevelMapSaveResult(command, document, saved, format, extra);
@@ -10823,7 +11045,7 @@ int runMapHollowCommand(const QString& commandName, const QString& path, const Q
 	}
 	LevelMapHollowMode mode = LevelMapHollowMode::Overlap;
 	if (hasOption(args, QStringLiteral("--mode")) && !parseLevelMapHollowMode(optionValue(args, QStringLiteral("--mode")), &mode)) {
-		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("--mode takes overlap, touch or room."), format);
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("--mode takes overlap, touch (or wrap), room (or pull), diagonal or extrude."), format);
 	}
 	const QString outputPath = optionValue(args, QStringLiteral("--output"));
 	if (outputPath.trimmed().isEmpty()) {
@@ -10838,11 +11060,31 @@ int runMapHollowCommand(const QString& commandName, const QString& path, const Q
 	if (!setLevelMapSelection(&document, objects, &error)) {
 		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("Unable to select map objects: %1").arg(error), format);
 	}
-	int hollowed = 0;
-	QStringList skipped;
-	if (!hollowLevelMapSelection(&document, thickness, mode, &hollowed, &error, &skipped)) {
+	// --caulk, --caulk-texture, --open-face (or --exclude-face), --only-face,
+	// --exclude-facing and --keep-inner (cli/level_hollow_options.cpp).
+	LevelMapHollowOptions options;
+	if (!cli::levelHollowOptionsFromArgs(document, hasOption(args, QStringLiteral("--caulk")), hasOption(args, QStringLiteral("--caulk-texture")),
+			optionValue(args, QStringLiteral("--caulk-texture")), optionValues(args, QStringLiteral("--open-face")), &options, &error)) {
+		return printCliError(commandName, CliExitCode::Usage, error, format);
+	}
+	QVector<LevelSurfaceFace> policyFaces;
+	if (!cli::levelCsgExcludedFacesFromArgs(document, optionValues(args, QStringLiteral("--exclude-face")), optionValues(args, QStringLiteral("--only-face")),
+			hasOption(args, QStringLiteral("--exclude-facing")),
+			optionValue(args, QStringLiteral("--exclude-facing")), &policyFaces, &error)) {
+		return printCliError(commandName, CliExitCode::Usage, error, format);
+	}
+	for (const LevelSurfaceFace& face : std::as_const(policyFaces)) {
+		if (!options.openFaces.contains(face)) {
+			options.openFaces.append(face);
+		}
+	}
+	options.keepInner = hasOption(args, QStringLiteral("--keep-inner"));
+	LevelMapHollowReport hollowReport;
+	if (!hollowLevelMapSelection(&document, thickness, mode, options, &hollowReport, &error)) {
 		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to hollow: %1").arg(error), format);
 	}
+	const int hollowed = hollowReport.hollowed;
+	const QStringList& skipped = hollowReport.skipped;
 	const LevelMapSaveReport report = saveLevelMapAs(document, outputPath, hasOption(args, QStringLiteral("--dry-run")), hasOption(args, QStringLiteral("--overwrite")));
 	QJsonArray walls;
 	for (const LevelMapSelectionRef& ref : document.selection) {
@@ -10852,6 +11094,9 @@ int runMapHollowCommand(const QString& commandName, const QString& path, const Q
 		std::cout << text((hollowed == 1 ? QStringLiteral("Hollowed 1 brush into %2 walls") : QStringLiteral("Hollowed %1 brushes into %2 walls").arg(hollowed))
 					  .arg(walls.size()))
 			  << "\n";
+		for (const QString& line : cli::levelHollowDetailLines(options, hollowReport)) {
+			std::cout << text(line) << "\n";
+		}
 		for (const QString& reason : skipped) {
 			std::cout << text(QStringLiteral("Left as it was: %1").arg(reason)) << "\n";
 		}
@@ -10862,6 +11107,7 @@ int runMapHollowCommand(const QString& commandName, const QString& path, const Q
 	extra.insert(QStringLiteral("thickness"), thickness);
 	extra.insert(QStringLiteral("mode"), levelMapHollowModeId(mode));
 	extra.insert(QStringLiteral("walls"), walls);
+	cli::addLevelHollowDetails(options, hollowReport, &extra);
 	return printLevelMapSaveResult(commandName, document, report, format, extra);
 }
 
@@ -11218,8 +11464,35 @@ int runMapResizeCommand(const QString& commandName, const QString& path, const Q
 	}
 	const bool bySize = hasOption(args, QStringLiteral("--size"));
 	const bool byBounds = hasOption(args, QStringLiteral("--mins")) || hasOption(args, QStringLiteral("--maxs"));
-	if (bySize == byBounds) {
-		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires either --size x,y,z or --mins x,y,z with --maxs x,y,z.").arg(commandName), format);
+	const bool byFactors = hasOption(args, QStringLiteral("--factors"));
+	if (int(bySize) + int(byBounds) + int(byFactors) != 1) {
+		return printCliError(commandName, CliExitCode::Usage,
+			QStringLiteral("%1 requires exactly one of --size x,y,z, --mins x,y,z with --maxs x,y,z, or --factors x,y,z.").arg(commandName), format);
+	}
+	if (hasOption(args, QStringLiteral("--pivot")) && !byFactors) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1: --pivot goes with --factors.").arg(commandName), format);
+	}
+	// NetRadiant Custom's Arbitrary Scale: factors about the centre or a
+	// pivot; two numbers leave z at 1, which suits Doom maps.
+	LevelMapScaleRequest scale;
+	scale.textures = textures;
+	if (byFactors) {
+		const QString value = optionValue(args, QStringLiteral("--factors"));
+		const int count = static_cast<int>(value.split(QRegularExpression(QStringLiteral(R"([,\s]+)")), Qt::SkipEmptyParts).size());
+		if ((count != 2 && count != 3) || !parseLevelMapDelta(value, &scale.factors[0], &scale.factors[1], &scale.factors[2])) {
+			return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1: --factors takes x,y,z scale factors.").arg(commandName), format);
+		}
+		if (count == 2) {
+			scale.factors[2] = 1;
+		}
+		if (hasOption(args, QStringLiteral("--pivot"))) {
+			const QString pivot = optionValue(args, QStringLiteral("--pivot"));
+			scale.pivot.valid = true;
+			if (pivot.split(QRegularExpression(QStringLiteral(R"([,\s]+)")), Qt::SkipEmptyParts).size() != 3
+				|| !parseLevelMapDelta(pivot, &scale.pivot.x, &scale.pivot.y, &scale.pivot.z)) {
+				return printCliError(commandName, CliExitCode::Usage, QStringLiteral("--pivot takes x,y,z coordinates."), format);
+			}
+		}
 	}
 	const QString outputPath = optionValue(args, QStringLiteral("--output"));
 	if (outputPath.trimmed().isEmpty()) {
@@ -11254,6 +11527,28 @@ int runMapResizeCommand(const QString& commandName, const QString& path, const Q
 	};
 	LevelMapVec3 mins = oldMins;
 	LevelMapVec3 maxs = oldMaxs;
+	if (byFactors) {
+		if (!scaleLevelMapSelection(&document, scale, &error)) {
+			return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to scale map objects: %1").arg(error), format);
+		}
+		levelMapSelectionBounds(document, &mins, &maxs);
+		const LevelMapSaveReport report = saveLevelMapAs(document, outputPath, hasOption(args, QStringLiteral("--dry-run")), hasOption(args, QStringLiteral("--overwrite")));
+		if (format != CliOutputFormat::Json) {
+			std::cout << text(QStringLiteral("Scaled by %1, %2, %3").arg(scale.factors[0], 0, 'g', 10).arg(scale.factors[1], 0, 'g', 10).arg(scale.factors[2], 0, 'g', 10))
+				  << "\n";
+		}
+		QJsonObject extra;
+		extra.insert(QStringLiteral("textureLockPolicy"), textures.enabled ? QStringLiteral("locked") : QStringLiteral("source-parameters"));
+		extra.insert(QStringLiteral("allowValve220"), textures.allowValve220);
+		extra.insert(QStringLiteral("factors"), QJsonArray {scale.factors[0], scale.factors[1], scale.factors[2]});
+		extra.insert(QStringLiteral("mirrored"), scale.factors[0] * scale.factors[1] * scale.factors[2] < 0);
+		if (scale.pivot.valid) { extra.insert(QStringLiteral("pivot"), levelMapVec3Json(scale.pivot)); }
+		extra.insert(QStringLiteral("fromMins"), levelMapVec3Json(oldMins));
+		extra.insert(QStringLiteral("fromMaxs"), levelMapVec3Json(oldMaxs));
+		extra.insert(QStringLiteral("mins"), levelMapVec3Json(mins));
+		extra.insert(QStringLiteral("maxs"), levelMapVec3Json(maxs));
+		return printLevelMapSaveResult(commandName, document, report, format, extra);
+	}
 	if (bySize) {
 		LevelMapVec3 size {oldMaxs.x - oldMins.x, oldMaxs.y - oldMins.y, oldMaxs.z - oldMins.z, true};
 		if (!readVector(QStringLiteral("--size"), size, &size)) {
@@ -15964,6 +16259,18 @@ int runSubcommand(const QStringList& args)
 		if (action == QStringLiteral("hollow") || action == QStringLiteral("make-hollow")) {
 			return runMapHollowCommand(QStringLiteral("map hollow"), mapPath, args, format);
 		}
+		// The CSG Tool's Shrink and Expand (cli/level_hollow_options.cpp).
+		if (action == QStringLiteral("shrink-brushes") || action == QStringLiteral("expand-brushes")) {
+			const auto result = cli::runLevelBrushOffset(args, action == QStringLiteral("shrink-brushes"));
+			const QString command = QStringLiteral("map ") + action;
+			if (result.exitCode) { return printCliError(command, static_cast<CliExitCode>(result.exitCode), result.error, format); }
+			if (format == CliOutputFormat::Json) {
+				auto output = cliResultJson(command);
+				for (auto it = result.payload.begin(); it != result.payload.end(); ++it) { output.insert(it.key(), it.value()); }
+				printJson(output);
+			} else { std::cout << text(result.lines.join(QLatin1Char('\n'))) << '\n'; }
+			return 0;
+		}
 		if (action == QStringLiteral("merge-brushes")) { return runMapMergeBrushesCommand(mapPath, args, format); }
 		if (action == QStringLiteral("wrap-merge")) { return runMapWrapCommand(mapPath, args, format); }
 		if (action == QStringLiteral("sweep")) { return runMapSweepCommand(args,format); }
@@ -16574,6 +16881,18 @@ int runSubcommand(const QStringList& args)
 			if (format == CliOutputFormat::Json) {
 				auto output = cliResultJson(command);
 				for (auto it = result.payload.begin(); it != result.payload.end(); ++it) { output.insert(it.key(),it.value()); }
+				printJson(output);
+			} else { std::cout << text(result.lines.join(QLatin1Char('\n'))) << '\n'; }
+			return 0;
+		}
+		if (action == QStringLiteral("make-room")) {
+			// Make Room's saved options (cli/level_hollow_options.cpp).
+			const auto result = cli::runLevelRoomOptions(args);
+			const auto command = QStringLiteral("editor make-room");
+			if (result.exitCode != 0) { return printCliError(command, static_cast<CliExitCode>(result.exitCode), result.error, format); }
+			if (format == CliOutputFormat::Json) {
+				auto output = cliResultJson(command);
+				for (auto it = result.payload.begin(); it != result.payload.end(); ++it) { output.insert(it.key(), it.value()); }
 				printJson(output);
 			} else { std::cout << text(result.lines.join(QLatin1Char('\n'))) << '\n'; }
 			return 0;

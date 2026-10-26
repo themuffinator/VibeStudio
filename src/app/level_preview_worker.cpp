@@ -185,6 +185,7 @@ void LevelPreviewWorker::startPending()
 			options.textureSizes = levelPreviewTextureSizes(work->result.assets);
 			options.isCancelled = [work] { return work->cancelled.load(); };
 			options.brushGeometryCache = &work->geometryCache;
+			options.hiddenFaces = request.hiddenFaces;
 			work->result.preview = buildLevelMapPreviewMesh(request.document, options);
 			work->result.geometryCache = work->geometryCache.statistics();
 		} catch (const std::exception &error) {

@@ -28,14 +28,14 @@ const QList<ToolGroup>& toolGroups()
 		{"clipboard", QT_TRANSLATE_NOOP("VibeStudioLevelTools", "Clipboard"),
 			{"map.copySelection", "map.cutSelection", "map.copySurface", "map.paste", "map.pasteAtOriginal", "map.pasteAtCursor", "map.pasteToCamera", "map.pasteWithOffset", "map.pasteSurface"}},
 		{"brush", QT_TRANSLATE_NOOP("VibeStudioLevelTools", "Brush"),
-			{"map.clipTool", "map.quickClip", "map.clipSelection", "map.clipperOptions", "map.hollowSelection", "map.hollowTouching", "map.makeRoom", "map.carve", "map.mergeBrushes",
+			{"map.clipTool", "map.quickClip", "map.clipSelection", "map.clipperOptions", "map.hollowSelection", "map.hollowTouching", "map.makeRoom", "map.makeRoomOptions", "map.carve", "map.mergeBrushes",
 				"map.wrapMerge", "map.wrapMergePoints", "map.intersect", "map.editBrushComponents", "map.makeDetail", "map.makeStructural"}},
 		{"vertices", QT_TRANSLATE_NOOP("VibeStudioLevelTools", "Vertices"),
 			{"map.vertexTool", "map.edgeTool", "map.faceTool", "map.componentMoveTool", "map.componentRotateTool", "map.componentScaleTool", "map.componentShearTool", "map.componentPivotTool", "map.componentResetPivot", "map.componentGizmoOptions", "map.transformComponents", "map.snapPickedVertex", "map.componentUvLock", "map.componentUvFit", "map.componentXray", "map.insertVertexTool", "map.splitComponents", "map.extrudeFaces", "map.extrudeSplit", "map.extrudePrecisely", "map.sweepTool", "map.sweepApply", "map.sweepDecreaseScale", "map.sweepIncreaseScale", "map.sweepFaces", "map.removeComponents", "map.snapVertices"}},
 		{"component-selection", QT_TRANSLATE_NOOP("VibeStudioLevelTools", "Component Selection"),
 			{"map.nextComponent", "map.previousComponent", "map.componentTouchingEdges", "map.componentTouchingFaces", "map.growComponents", "map.shrinkComponents", "map.connectedComponents"}},
 		{"transform", QT_TRANSLATE_NOOP("VibeStudioLevelTools", "Transform"),
-			{"map.moveSelection", "map.resizeSelection", "map.rotatePrecisely", "map.rotateLeft", "map.rotateRight", "map.rollClockwise",
+			{"map.moveSelection", "map.resizeSelection", "map.scaleSelection", "map.rotatePrecisely", "map.rotateLeft", "map.rotateRight", "map.rollClockwise",
 				"map.rollCounterclockwise", "map.pitchClockwise", "map.pitchCounterclockwise", "map.flipHorizontal",
 				"map.flipVertical", "map.flipX", "map.flipY", "map.flipZ", "map.rotateX", "map.rotateY", "map.rotateZ", "map.shearTool", "map.shearSelection", "map.snapToGrid", "map.roundToGrid", "map.dropToFloor", "map.duplicateWithOffset", "map.duplicateUnique",
 				"map.repeat", "map.clearRepeat", "map.copyRepeatRecipe", "map.repeatTransforms", "map.resetRepeatTransforms"}},
@@ -60,7 +60,16 @@ const QList<ToolGroup>& toolGroups()
 		{"groups", QT_TRANSLATE_NOOP("VibeStudioLevelTools", "Groups"),
 			{"map.openGroup", "map.closeGroup", "map.closeAllGroups", "map.moveToLayer", "map.createLinkedDuplicate", "map.selectLinkedGroups", "map.updateLinkedGroups", "map.separateLinkedGroups", "map.addProtectedProperty", "map.clearProtectedProperties", "map.extractLinkedGroups"}},
 		{"surfaces", QT_TRANSLATE_NOOP("VibeStudioLevelTools", "Surfaces"),
-			{"map.applyTexture", "map.replaceTexture", "map.revealMaterial", "map.alignSurfaces", "map.paintMaterial", "map.sampleMaterial"}},
+			{"map.applyTexture", "map.replaceTexture", "map.revealMaterial", "map.alignSurfaces", "map.paintMaterial", "map.sampleMaterial",
+				"map.surfaceReset", "map.surfaceRadiantReset", "map.resetTextures"}},
+		{"camera-textures", QT_TRANSLATE_NOOP("VibeStudioLevelTools", "Move Textures from Camera"),
+			{"map.moveTexturesUp", "map.moveTexturesDown", "map.moveTexturesLeft", "map.moveTexturesRight", "map.moveTexturesUpCoarse",
+				"map.moveTexturesDownCoarse", "map.moveTexturesLeftCoarse", "map.moveTexturesRightCoarse", "map.moveTexturesUpFine",
+				"map.moveTexturesDownFine", "map.moveTexturesLeftFine", "map.moveTexturesRightFine", "map.flipTexturesHorizontally",
+				"map.flipTexturesVertically"}},
+		{"rotate-textures", QT_TRANSLATE_NOOP("VibeStudioLevelTools", "Rotate Textures"),
+			{"map.rotateTexturesClockwise", "map.rotateTexturesClockwiseCoarse", "map.rotateTexturesClockwiseFine",
+				"map.rotateTexturesCounterclockwise", "map.rotateTexturesCounterclockwiseCoarse", "map.rotateTexturesCounterclockwiseFine"}},
 		{"patches", QT_TRANSLATE_NOOP("VibeStudioLevelTools", "Patches"),
 			{"map.addPatch", "map.editPatch", "map.stitchPatches", "map.capPatch", "map.thickenPatch", "map.patchInvert", "map.patchTranspose"}},
 		{"patchMatrix", QT_TRANSLATE_NOOP("VibeStudioLevelTools", "Patch Rows and Columns"),
@@ -112,6 +121,12 @@ void ApplicationShell::buildLevelToolsPage(SidebarPage* page)
 		SidebarSection* section = addLevelSidebarSection(page, QStringLiteral("tools.") + groupId, QCoreApplication::translate("VibeStudioLevelTools", group.title), body, 0,
 			groupId == QLatin1String("brush") || groupId == QLatin1String("transform"));
 		m_levelToolSections.insert(groupId, section);
+		// NetRadiant Custom's CSG Tool window, as the section after Brush
+		// (level_csg_tool_actions.cpp); CSG Tool opens it.
+		if (groupId == QLatin1String("brush")) {
+			m_levelToolSections.insert(QStringLiteral("csg"), addLevelSidebarSection(page, QStringLiteral("tools.csg"),
+				QCoreApplication::translate("VibeStudioLevelTools", "CSG Tool"), buildLevelCsgToolPanel(), 0, false));
+		}
 	}
 	refreshLevelToolsPage();
 }
@@ -128,12 +143,15 @@ void ApplicationShell::refreshLevelToolsPage()
 	const QHash<QString, bool> shown {
 		{QStringLiteral("clipboard"), quake || unknown},
 		{QStringLiteral("brush"), quake || unknown},
+		{QStringLiteral("csg"), quake || unknown},
 		{QStringLiteral("vertices"), quake || unknown},
 		{QStringLiteral("component-selection"), quake || unknown},
 		{QStringLiteral("patchMatrix"), m_levelMapDocument.format == LevelMapFormat::Quake3Map},
 		{QStringLiteral("entities"), quake || unknown},
 		{QStringLiteral("groups"), true},
 		{QStringLiteral("patches"), m_levelMapDocument.format == LevelMapFormat::Quake3Map},
+		{QStringLiteral("camera-textures"), quake || unknown},
+		{QStringLiteral("rotate-textures"), quake || unknown},
 		{QStringLiteral("doom"), doom},
 		{QStringLiteral("region"), quake || unknown},
 	};

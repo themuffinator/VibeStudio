@@ -35,6 +35,9 @@ struct LevelMapPreviewMeshOptions {
 	// material targets are always rebuilt from the current document and assets.
 	MapBrushGeometryCache* brushGeometryCache = nullptr;
 	std::function<bool()> isCancelled;
+	// Brush faces to leave out, as (brush id, zero-based face) pairs: the
+	// faces the view filters hide one at a time (levelViewFilteredFaces).
+	QSet<QPair<int, int>> hiddenFaces;
 };
 
 struct LevelMapPreviewMesh {

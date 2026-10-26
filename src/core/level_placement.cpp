@@ -162,6 +162,9 @@ LevelPlacementResult prepareLevelPlacement(const LevelMapDocument& source, const
 		case LevelPlacementOperation::Resize:
 			applied = resizeLevelMapSelection(&candidate, request.mins, request.maxs, request.textures, &result.error);
 			break;
+		case LevelPlacementOperation::Scale:
+			applied = scaleLevelMapSelection(&candidate, request.scale, &result.error);
+			break;
 		case LevelPlacementOperation::Snap:
 			applied = snapLevelMapSelectionToGrid(&candidate, request.grid, request.textures, &result.error);
 			break;

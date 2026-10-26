@@ -105,7 +105,10 @@ int main(int argc,char** argv)
 		stale = dialog->isVisible() && dialog->findChild<QLabel*>("componentTransformError")->text().contains("changed"); dialog->reject();
 	});
 	QTimer watchdog; watchdog.setSingleShot(true); QObject::connect(&watchdog,&QTimer::timeout,&shell,[] { if (auto* modal = qobject_cast<QDialog*>(QApplication::activeModalWidget())) { modal->reject(); } });
-	drive.start(); watchdog.start(15000); trigger("map.rotatePrecisely"); drive.stop(); watchdog.stop();
+	// Transform Components… (Rotate Selection… now opens the modeless Euler
+	// window) is enabled once the shell has seen the picks.
+	view->componentPicksChanged(static_cast<int>(picks.size()));
+	drive.start(); watchdog.start(15000); trigger("map.transformComponents"); drive.stop(); watchdog.stop();
 	expect(stale && serializeLevelMap(shell.levelDocument()).bytes == original,"numeric component dialog rejects changed picks");
 	expect(shell.saveLevelDocument(temp.filePath("saved.map"),false,&error),"save tested shell",error); expect(shell.close(),"clean shell close");
 	return ok ? 0 : 1;

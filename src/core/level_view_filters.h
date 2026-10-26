@@ -16,24 +16,100 @@
 // entity is a brush entity when it owns brushes or patches or the built-in
 // catalogues define its class as made of brushes, so a door with no brushes
 // yet is never a point entity.
-// Workflow reference: NRC filters.cpp and plugins/entity/entity.cpp at 449778b3
-// (GPL-2.0-or-later) / TB ActionManager "View Filter > Toggle show brushes" at
-// 4c756be1 (GPL-3.0-or-later). Original Qt implementation; see docs/CREDITS.md.
+//
+// The texture kinds read texture names and the content bits a face carries:
+// Area Portals (any areaportal face or the area portal bit, and Quake II's
+// func_areaportal), Cluster Portals, Light Grid and Bot Clip (every face),
+// Decals (any face under decals/) and Structural, the inverse of Detail:
+// brushes with no detail face outside func_detail on Quake II and III maps,
+// and worldspawn with every brush entity but func_detail* on Quake maps.
+// Caulk also hides caulk faces one by one on brushes it does not hide whole,
+// and on Quake maps Quake's skip counts as caulk rather than as hint.
+//
+// The material kinds also read Quake III shader scripts through the material
+// library (LevelViewFilterMaterials): Translucent (qer_trans, qer_alphafunc, a
+// stage's alphaFunc, fog), Liquids (surfaceparm water, slime or lava), Clip
+// with its Player Clip, Monster Clip and Weapon Clip parts (surfaceparm
+// playerclip and monsterclip), Bot Clip (botclip, donotenter), Sky (skyparms
+// or surfaceparm sky) and Nodraw (surfaceparm nodraw). On a Quake III map a
+// face whose shader the package defines, or whose image it holds without a
+// script, goes by that shader; other faces keep the name rules. Quake II maps
+// read the face's own surface and content flags (SURF_TRANS33/66, SURF_NODRAW,
+// the clip contents) and Quake maps the texture names ({fence textures, *water).
+// Clip, its parts and Translucent take patches by their shader too.
+// Workflow reference: NRC filters.cpp, brushmanip.cpp BrushFilters_construct,
+// patchmanip.cpp PatchFilters_construct, plugins/shaders/shaders.cpp and
+// plugins/entity/entity.cpp at 449778b3 (GPL-2.0-or-later) / TB ActionManager
+// "View Filter > Toggle show brushes" at 4c756be1 (GPL-3.0-or-later).
+// Original Qt implementation; see docs/CREDITS.md.
 
 #include "core/level_map.h"
+#include "core/level_surface.h"
 
 #include <QHash>
 #include <QString>
 #include <QStringList>
 #include <QVector>
 
+#include <functional>
+
 namespace vibestudio {
+
+class MaterialLibrary;
+class PackageArchiveReader;
+struct MaterialDefinition;
 
 struct LevelViewFilter {
 	QString id;
 	QString title;
 	QString description;
 };
+
+// What one Quake III shader says about the faces that name it, read the way
+// Radiant's shader parser sets its editor flags.
+struct LevelViewFilterShader {
+	// qer_trans, surfaceparm fog or fogParms, or Doom 3's translucent.
+	bool translucent = false;
+	// qer_alphafunc, or alphaFunc in a stage.
+	bool alphaTested = false;
+	// surfaceparm water, slime or lava.
+	bool liquid = false;
+	bool playerClip = false;
+	bool monsterClip = false;
+	// surfaceparm botclip or donotenter.
+	bool botClip = false;
+	// skyParms or surfaceparm sky.
+	bool sky = false;
+	bool nodraw = false;
+};
+
+// The shaders of the open package, keyed by materialLookupKey of the shader
+// name ("textures/base_wall/glass"). Images under textures/ that no script
+// defines are there too, with no flags, as Quake III's default shader has none.
+struct LevelViewFilterMaterials {
+	QString sourcePath;
+	QHash<QString, LevelViewFilterShader> shaders;
+	int scriptCount = 0;
+	// Shaders a script defines, not counting images without one.
+	int scriptedShaderCount = 0;
+	bool complete = true;
+	bool cancelled = false;
+	QStringList warnings;
+	[[nodiscard]] bool isEmpty() const { return shaders.isEmpty(); }
+	// The shader a map face names: "base_wall/glass" is textures/base_wall/glass.
+	[[nodiscard]] const LevelViewFilterShader* find(const QString& textureName) const;
+};
+
+[[nodiscard]] LevelViewFilterShader levelViewFilterShader(const MaterialDefinition& definition);
+// The winning Quake III definition of every name in a scanned library.
+[[nodiscard]] LevelViewFilterMaterials levelViewFilterMaterials(const MaterialLibrary& library);
+// Reads a package's Quake III shader scripts (scripts/*.shader) and the
+// images under textures/ through the material library. `cancelled` is polled
+// between scripts; a cancelled scan says so and holds nothing.
+[[nodiscard]] LevelViewFilterMaterials scanLevelViewFilterMaterials(const PackageArchiveReader& reader,
+	const std::function<bool()>& cancelled = {});
+// Whether a kind reads shader scripts on Quake III maps.
+[[nodiscard]] bool levelViewFilterReadsMaterials(const QString& filterId);
 
 // Every Quake-family kind in menu order, whatever the open map's format; the
 // shell gives each one a checkable command. Doom thing categories come from
@@ -52,12 +128,27 @@ struct LevelViewFilter {
 [[nodiscard]] bool levelViewFilterForId(const LevelMapDocument& document, const QString& id, LevelViewFilter* out = nullptr);
 
 // What one filter names: whole entities (their brushes and patches go with
-// them), brushes, patches, and Doom things.
-[[nodiscard]] QVector<LevelMapSelectionRef> levelViewFilterMatches(const LevelMapDocument& document, const QString& filterId);
+// them), brushes, patches, and Doom things. `materials` holds the open
+// package's shaders for the material kinds on Quake III maps; without them
+// those kinds go by texture names.
+[[nodiscard]] QVector<LevelMapSelectionRef> levelViewFilterMatches(const LevelMapDocument& document, const QString& filterId,
+	const LevelViewFilterMaterials& materials = LevelViewFilterMaterials());
 // How many objects each filter names, keyed by filter id.
-[[nodiscard]] QHash<QString, int> levelViewFilterCounts(const LevelMapDocument& document);
+[[nodiscard]] QHash<QString, int> levelViewFilterCounts(const LevelMapDocument& document,
+	const LevelViewFilterMaterials& materials = LevelViewFilterMaterials());
 // Everything the switched-off filters name, without repeats.
-[[nodiscard]] QVector<LevelMapSelectionRef> levelViewFilteredObjects(const LevelMapDocument& document, const QStringList& hiddenFilterIds);
+[[nodiscard]] QVector<LevelMapSelectionRef> levelViewFilteredObjects(const LevelMapDocument& document, const QStringList& hiddenFilterIds,
+	const LevelViewFilterMaterials& materials = LevelViewFilterMaterials());
+// The faces one kind hides one at a time, on brushes it does not name whole:
+// Caulk's caulk faces (and skip faces on a Quake map) on otherwise textured
+// brushes, which the camera leaves out as Radiant's caulk face filter does.
+// Empty for every other kind; faces are zero-based, in document order.
+[[nodiscard]] QVector<LevelSurfaceFace> levelViewFilterFaceMatches(const LevelMapDocument& document, const QString& filterId,
+	const LevelViewFilterMaterials& materials = LevelViewFilterMaterials());
+// Every face the switched-off kinds hide one at a time, leaving out brushes
+// they hide whole, without repeats.
+[[nodiscard]] QVector<LevelSurfaceFace> levelViewFilteredFaces(const LevelMapDocument& document, const QStringList& hiddenFilterIds,
+	const LevelViewFilterMaterials& materials = LevelViewFilterMaterials());
 
 // The switched-off list after Invert Filters: every kind the document's format
 // offers flips, as Radiant's Invert filters toggles each filter in turn. Ids

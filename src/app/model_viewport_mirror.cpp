@@ -44,6 +44,7 @@ void ModelViewport::mirrorDisplayFrom(const ModelViewport& source)
 	m_showGrid = source.m_showGrid;
 	m_showAxes = source.m_showAxes;
 	m_showEdges = source.m_showEdges;
+	m_polygonEdges = source.m_polygonEdges;
 	m_highContrast = source.m_highContrast;
 	m_reducedMotion = source.m_reducedMotion;
 	m_frame = source.m_frame;

@@ -242,10 +242,10 @@ LevelMapVec3 levelCameraNudgeAxis(const LevelMapVec3& forward, const LevelMapVec
 	return {};
 }
 
-LevelMapVec3 levelCameraNudgeAxis(double yawDegrees, double pitchDegrees, LevelNudgeDirection direction)
+bool levelCameraBasis(double yawDegrees, double pitchDegrees, LevelMapVec3* forwardOut, LevelMapVec3* rightOut, LevelMapVec3* upOut)
 {
 	if (!std::isfinite(yawDegrees) || !std::isfinite(pitchDegrees)) {
-		return {};
+		return false;
 	}
 	constexpr double kRadians = 3.14159265358979323846 / 180.0;
 	const double yaw = yawDegrees * kRadians;
@@ -255,6 +255,26 @@ LevelMapVec3 levelCameraNudgeAxis(double yawDegrees, double pitchDegrees, LevelN
 	const LevelMapVec3 right {std::sin(yaw), -std::cos(yaw), 0, true};
 	const LevelMapVec3 up {right.y * forward.z - right.z * forward.y, right.z * forward.x - right.x * forward.z,
 		right.x * forward.y - right.y * forward.x, true};
+	if (forwardOut) {
+		*forwardOut = forward;
+	}
+	if (rightOut) {
+		*rightOut = right;
+	}
+	if (upOut) {
+		*upOut = up;
+	}
+	return true;
+}
+
+LevelMapVec3 levelCameraNudgeAxis(double yawDegrees, double pitchDegrees, LevelNudgeDirection direction)
+{
+	LevelMapVec3 forward;
+	LevelMapVec3 right;
+	LevelMapVec3 up;
+	if (!levelCameraBasis(yawDegrees, pitchDegrees, &forward, &right, &up)) {
+		return {};
+	}
 	return levelCameraNudgeAxis(forward, right, up, direction);
 }
 

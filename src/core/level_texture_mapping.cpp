@@ -197,6 +197,28 @@ LevelTextureProjection levelFaceAlignedTextureProjection(const LevelMapBrushFace
 	return result;
 }
 
+LevelTextureProjection levelPlaneBasisTextureProjection(const LevelMapBrushFace& face, double scaleU, double scaleV, QSize imageSize)
+{
+	// NetRadiant Custom's TextureReset/Cap gives Valve 220 faces this basis
+	// (FaceTexdef::setBasis) and brush primitives a unit matrix over it
+	// (TexDef_Construct_Default). Workflow reference: NRC radiant/brush.h and
+	// brush_primit.cpp at 449778b3 (GPL-2.0-or-later); see docs/CREDITS.md.
+	LevelTextureProjection result;
+	const auto p = plane(face);
+	if (!p.valid || !std::isfinite(scaleU) || !std::isfinite(scaleV) || scaleU == 0 || scaleV == 0
+		|| (face.explicitTextureMatrix && (imageSize.width() <= 0 || imageSize.height() <= 0))) {
+		return result;
+	}
+	const double width = face.explicitTextureMatrix ? imageSize.width() : 1.0;
+	const double height = face.explicitTextureMatrix ? imageSize.height() : 1.0;
+	const auto [s, t] = primitiveBasis(normal(p));
+	result.u = scale(s, 1.0 / (scaleU * width));
+	result.v = scale(t, 1.0 / (scaleV * height));
+	result.normalizedCoordinates = face.explicitTextureMatrix;
+	result.valid = finite(result.u) && finite(result.v);
+	return result;
+}
+
 LevelTextureProjection levelTextureProjection(const LevelMapBrushFace &face)
 {
 	LevelTextureProjection result;

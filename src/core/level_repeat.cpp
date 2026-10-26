@@ -112,6 +112,8 @@ LevelRepeatTransforms detail::levelRepeatTransformsAfter(const LevelRepeatTransf
 		if (action.rotationAxis <= 2 && std::isfinite(action.rotationDegrees) && std::remainder(action.rotationDegrees, 360.0) != 0) {
 			result.rotationAxis = action.rotationAxis;
 			result.rotationDegrees = action.rotationDegrees;
+			result.rotationEulerXyz = false;
+			result.rotationEuler = {0, 0, 0};
 		}
 		return result;
 	}
@@ -383,7 +385,10 @@ bool usableTransforms(const LevelRepeatTransforms& transforms, QString* error)
 	};
 	if (!finiteArray(transforms.translation) || !finiteArray(transforms.scale) ||
 	    std::any_of(transforms.scale.cbegin(), transforms.scale.cend(), [](double n) { return n == 0; }) ||
-	    (transforms.hasRotation() && (transforms.rotationAxis > 2 || !std::isfinite(transforms.rotationDegrees))) ||
+	    (transforms.hasRotation() && !transforms.rotationEulerXyz && (transforms.rotationAxis > 2 || !std::isfinite(transforms.rotationDegrees))) ||
+	    (transforms.hasRotation() && transforms.rotationEulerXyz &&
+	     std::any_of(transforms.rotationEuler.cbegin(), transforms.rotationEuler.cend(),
+	                 [](double n) { return !std::isfinite(n) || std::abs(n) > 360000; })) ||
 	    (transforms.hasSkew() && (transforms.skewAxis > 2 || transforms.skewAlong > 2 || transforms.skewAxis == transforms.skewAlong ||
 	                              !std::isfinite(transforms.skewAmount) || std::abs(transforms.skewAmount) > 1024))) {
 		return fail(error, QT_TRANSLATE_NOOP("LevelRepeat", "The recorded transforms cannot be repeated. Reset them and record a new transform."));
@@ -406,7 +411,11 @@ std::array<LevelMapVec3, 3> repeatLinearColumns(const LevelRepeatTransforms& tra
 			const double along = transforms.skewAlong == 0 ? column.x : transforms.skewAlong == 1 ? column.y : column.z;
 			(transforms.skewAxis == 0 ? column.x : transforms.skewAxis == 1 ? column.y : column.z) += transforms.skewAmount * along;
 		}
-		if (transforms.hasRotation()) {
+		if (transforms.hasRotation() && transforms.rotationEulerXyz) {
+			for (int axis = 0; axis < 3; ++axis) {
+				column = rotateLevelVector(column, axis, transforms.rotationEuler[axis]);
+			}
+		} else if (transforms.hasRotation()) {
 			column = rotateLevelVector(column, transforms.rotationAxis, transforms.rotationDegrees);
 		}
 	}
@@ -440,7 +449,12 @@ QStringList levelRepeatTransformsDescription(const LevelRepeatTransforms& transf
 		             .arg(transforms.skewAmount, 0, 'g', 8)
 		             .arg(axisName(transforms.skewAlong));
 	}
-	if (transforms.hasRotation()) {
+	if (transforms.hasRotation() && transforms.rotationEulerXyz) {
+		lines << QCoreApplication::translate("LevelRepeat", "Rotate %1° about X, %2° about Y, then %3° about Z")
+		             .arg(transforms.rotationEuler[0], 0, 'g', 8)
+		             .arg(transforms.rotationEuler[1], 0, 'g', 8)
+		             .arg(transforms.rotationEuler[2], 0, 'g', 8);
+	} else if (transforms.hasRotation()) {
 		lines << QCoreApplication::translate("LevelRepeat", "Rotate %1° about %2")
 		             .arg(transforms.rotationDegrees, 0, 'g', 8)
 		             .arg(axisName(transforms.rotationAxis));
@@ -458,8 +472,11 @@ QJsonObject levelRepeatTransformsJson(const LevelRepeatTransforms& transforms)
 	const auto axis = [](int value) { return QString(QLatin1Char("xyz"[std::clamp(value, 0, 2)])); };
 	return {{"identity", transforms.isIdentity()},
 	        {"translation", array(transforms.translation)},
-	        {"rotation", transforms.hasRotation() ? QJsonValue(QJsonObject{{"axis", axis(transforms.rotationAxis)}, {"degrees", transforms.rotationDegrees}})
-	                                              : QJsonValue()},
+	        {"rotation", transforms.hasRotation() && transforms.rotationEulerXyz
+	                         ? QJsonValue(QJsonObject{{"eulerXyz", array(transforms.rotationEuler)}})
+	                     : transforms.hasRotation()
+	                         ? QJsonValue(QJsonObject{{"axis", axis(transforms.rotationAxis)}, {"degrees", transforms.rotationDegrees}})
+	                         : QJsonValue()},
 	        {"scale", array(transforms.scale)},
 	        {"shear", transforms.hasSkew() ? QJsonValue(QJsonObject{{"axis", axis(transforms.skewAxis)},
 	                                                                {"along", axis(transforms.skewAlong)},
@@ -561,6 +578,8 @@ bool repeatLevelMapTransforms(LevelMapDocument* document, const LevelMapTextureL
 			LevelMapRotationRequest rotation;
 			rotation.axis = transforms.rotationAxis;
 			rotation.degrees = transforms.rotationDegrees;
+			rotation.euler = transforms.rotationEulerXyz;
+			rotation.eulerDegrees = transforms.rotationEuler;
 			rotation.pivot = centre;
 			rotation.textureLock = textures.enabled;
 			rotation.allowValve220 = textures.allowValve220;

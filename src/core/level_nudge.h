@@ -58,6 +58,9 @@ bool levelNudgeCommandForName(const QString& name, LevelNudgeCommand* command = 
 // The same for a camera that looks along `yawDegrees` (0 along +X, counter-
 // clockwise) and `pitchDegrees` (up positive), as the CLI names a view.
 [[nodiscard]] LevelMapVec3 levelCameraNudgeAxis(double yawDegrees, double pitchDegrees, LevelNudgeDirection direction);
+// That camera's unit forward, screen-right and screen-up directions, with no
+// roll; pitch is clamped to -90..90. False for a non-finite angle.
+bool levelCameraBasis(double yawDegrees, double pitchDegrees, LevelMapVec3* forward, LevelMapVec3* right, LevelMapVec3* up);
 // Doom-format geometry lies in the plane, so those maps nudge along X and Y
 // only; every Quake-family map takes all three axes. False for no map.
 [[nodiscard]] bool levelNudgeAxisSupported(const LevelMapDocument& document, const LevelMapVec3& axis);

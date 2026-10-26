@@ -849,6 +849,83 @@ JSON reports `operation` (`scale-step` or `degrees`) and, for turns, `anchor`
 `texture-origin`). See
 [Step textures by Radiant increments](levels.md#step-textures-by-radiant-increments).
 
+## Move and flip textures as a camera sees them
+
+`map align-textures` also takes the Levels camera's texture moves and flips,
+for a camera looking along **--camera-yaw** degrees (0 along +X, turning
+anticlockwise) and **--camera-pitch** degrees (up positive, -90 to 90), both 0
+when left out. **--camera-shift RIGHT,UP** moves each selected face's texture
+RIGHT texels across the view and UP texels up it, along whichever of the
+face's texture axes runs most nearly that way. **--camera-flip horizontal** or
+**vertical** mirrors the axis running across or up the view, about the middle
+of each face:
+
+```sh
+vibestudio --cli map align-textures room.map --face 12:3 --camera-shift 0,16 --camera-yaw 90 --camera-pitch -20 --output moved.map --json
+vibestudio --cli map align-textures room.map --object brush:12 --camera-flip horizontal --camera-yaw 45 --output flipped.map
+```
+
+Brush-primitive faces and patches need **--package** or **--texture-size** for
+a move; flips need no image. **--camera-yaw** and **--camera-pitch** go only
+with these two operations. JSON reports `operation` (`camera-shift` or
+`camera-flip`), `cameraYaw` and `cameraPitch`. See
+[Move and flip textures from the camera](levels.md#move-and-flip-textures-from-the-camera).
+
+## Turn textures clockwise by fixed steps
+
+`map align-textures --clockwise N` turns each selected face's texture N
+degrees clockwise as seen from the face's front, about the texture origin, as
+the Levels **Rotate Textures** commands do. A negative N turns
+counter-clockwise. The direction holds on classic, Valve 220 and
+brush-primitive faces and on patches, whether the texture reads the right way
+round or mirrored:
+
+```sh
+vibestudio --cli map align-textures room.map --object brush:12 --clockwise 15 --output turned.map --json
+vibestudio --cli map align-textures room.map --face 12:3 --clockwise -90 --output turned.map
+```
+
+Patches need **--package** or **--texture-size**; faces need no image.
+**--anchor** and the camera options do not go with **--clockwise**. JSON
+reports `operation` `clockwise`, `anchor` `origin` and `clockwiseDegrees`. See
+[Rotate textures by fixed steps](levels.md#rotate-textures-by-fixed-steps).
+
+## Reset textures
+
+`map align-textures` resets every selected face in one pass, whatever its
+format, at U,V map units per texel with no shift or rotation.
+**--reset-alignment U,V** keeps each face's kind, as the Levels **Reset Texture
+Alignment** command does: classic faces natural, Valve 220 and brush-primitive
+faces in their own plane, patches their natural spread. **--radiant-reset U,V**
+resets as **Radiant Texture Reset** does: Valve 220 and brush-primitive faces
+take their plane's own basis and patches are capped:
+
+```sh
+vibestudio --cli map align-textures room.map --object brush:12 --reset-alignment 1,1 --output reset.map --json
+vibestudio --cli map align-textures room.map --object entity:4 --radiant-reset 0.5,0.5 --package ./assets --output reset.map
+```
+
+Instead of an operation, Reset Textures values set absolute numbers, as the
+Levels **Reset Textures…** window does: **--set-scale-u N**, **--set-scale-v N**,
+**--set-shift-u N**, **--set-shift-v N** and **--set-rotation N** for each value
+to set, and **--rename NAME** for a new texture. They act on the **--object**
+and **--face** selection, or on the **--whole-map** (its visible, unlocked
+surfaces in the open group), and **--only-texture NAME** keeps them to the
+surfaces using one texture, ignoring case and a leading `textures/`. Patches
+take only the new name:
+
+```sh
+vibestudio --cli map align-textures room.map --whole-map --only-texture base_wall/concrete --rename base_wall/metal --set-scale-u 0.5 --set-scale-v 0.5 --output retextured.map --json
+```
+
+Brush-primitive faces need **--package** or **--texture-size** for a reset or
+for values, as patches do for a reset. A scale of 0, a texture name with spaces
+or quotes, and a request that sets nothing are refused. JSON reports
+`operation` (`reset-alignment`, `radiant-reset` or `reset-textures`), and for
+Reset Textures `scope` (`selection` or `map`), `targetFaces`, `targetPatches`,
+`renamed` and the `set` values. See
+[Reset textures](levels.md#reset-textures).
+
 ## Round level geometry to the grid
 
 `map round-to-grid` rounds each brush vertex, patch control point and
@@ -1008,6 +1085,120 @@ or `--set editing.flipSnapsPivot=on` changes them.
 **Status: Partial.** The CLI and the Levels commands share one rotation and
 mirror service. See [Edit Quake-family maps](levels.md#edit-quake-family-maps).
 
+## Rotate and scale level objects by exact values
+
+`map rotate --euler x,y,z` turns the objects about world X, then Y, then Z by
+those degrees, as one step: the command line form of **Rotate Selection…** and
+NetRadiant Custom's **Arbitrary Rotation**. It replaces **--axis**,
+**--degrees** and **--turns**, and takes the same **--pivot**, **--pivot-grid**,
+**--texture-lock** and **--allow-valve220**. `map resize --factors x,y,z`
+multiplies the objects' size along each axis about their centre, or about
+**--pivot x,y,z**, as **Scale Selection…** and **Arbitrary Scale** do. A
+negative factor mirrors along its axis, and faces keep facing outward. Two
+numbers leave z at 1, which Doom maps need. **--factors** replaces **--size**
+and **--mins**/**--maxs**, and **--pivot** goes only with it:
+
+```sh
+vibestudio --cli map rotate room.map --object brush:12 --euler 15,0,45 --pivot 0,0,0 --output turned.map --json
+vibestudio --cli map resize room.map --object brush:12 --factors -1,2,1 --texture-lock on --output mirrored.map --json
+```
+
+JSON adds `eulerXyz` for a rotation and `factors`, `mirrored`, `pivot` (when
+given) and the old and new bounds for a scale. A zero factor, a factor beyond
+±32768, a Doom Z factor other than 1 or a Doom turn about X or Y fails with
+the reason and writes nothing.
+
+**Status: Partial.** The CLI and the Levels windows share the same services.
+See [Rotate and scale by exact values](levels.md#rotate-and-scale-by-exact-values).
+
+## Make rooms with caulk and openings
+
+`map hollow --mode room` is **Make Room**: walls `--thickness` units thick
+outside each `--object` brush, which is removed so it becomes the room. Two
+options match **Make Room Options…**, and also work with `--mode overlap` and
+`--mode touch`:
+
+- **--caulk** puts the game's caulk material on every wall face except the one
+  facing the room: `common/caulk` in Quake III (`textures/common/caulk` for
+  brushDef3 brushes) and `skip` in Quake. Quake II has none, so there
+  **--caulk** fails and you name a material with **--caulk-texture NAME**,
+  which also works on its own.
+- **--open-face face:brushId:faceNumber**, repeatable, leaves that face open,
+  with no wall. Faces are numbered from 1, as `map select-textured` prints
+  them, and must belong to a brush `--object` selects. The walls beside an
+  opening stop flush with it, and the faces lining it keep its material.
+
+```sh
+vibestudio --cli map hollow room.map --object brush:12 --mode room --thickness 16 --caulk --open-face face:12:6 --output room-made.map --json
+```
+
+JSON adds `caulkTexture`, `caulkedFaces` (wall faces that now carry it),
+`wallCount`, `openFaces` (the selectors given) and `openFaceCount` (faces left
+open on the hollowed brushes). A bad material name, a face the brush does not
+have or a face on another brush is a usage error (exit 2) and writes nothing; a
+brush with every face open is left as it was and listed under `skipped`.
+
+`map hollow` takes its options as flags. To see or change the options the
+Levels editor's **Make Room** uses, the ones **Make Room Options…** saves, use
+`editor make-room`:
+
+```sh
+vibestudio --cli editor make-room --json
+vibestudio --cli editor make-room --set caulkTexture=common/nodraw --set openPickedFaces=off --dry-run --json
+vibestudio --cli editor make-room --reset
+```
+
+Repeat `--set` with `caulk=on|off`, `caulkTexture=NAME` (leave the name out,
+as in `caulkTexture=`, for the game's own caulk) and `openPickedFaces=on|off`.
+`--reset` brings back NetRadiant Custom's behaviour, and `--dry-run` shows the
+result without saving. JSON reports `values`, `applied` and `dryRun`. A field,
+value or material name the editor would refuse is a usage error (exit 2).
+
+**Status: Partial.** The CLI and the Levels editor share the same service.
+See [Make a room with caulk and openings](levels.md#make-a-room-with-caulk-and-openings).
+
+## Hollow, shrink and expand as the CSG Tool does
+
+`map hollow` also builds the walls of the **CSG Tool**'s other hollows.
+`--mode diagonal` puts them outside each brush, meeting on mitred joints with
+no overlap or gap; `--mode extrude` builds a wall straight out from each face,
+its sides square to the face. `--mode wrap` is another name for `touch`, and
+`--mode pull` for `room`, as NetRadiant Custom names them.
+
+- **--keep-inner** keeps the brush instead of removing it: as it was for the
+  outward modes, or what the walls leave of it for `overlap` and `touch`. With
+  **--caulk**, the faces between the walls and the brush take caulk and the
+  outside keeps its materials.
+- **--exclude-face face:brushId:faceNumber**, repeatable, leaves a face alone,
+  as **--open-face** does.
+- **--only-face face:brushId:faceNumber**, repeatable, works on the named
+  faces only; every other face of the brushes `--object` reaches is left open.
+- **--exclude-facing x|y|z** or **dx,dy,dz** leaves alone each brush's faces
+  at either end along that direction, as the **Faces** choices for the 2D view
+  and the camera do.
+
+`map shrink-brushes` and `map expand-brushes` move every face of the
+`--object` brushes `--thickness` units in or out, with the same three face
+options. Textures stay where they are in the world. A brush a shrink would
+flatten, or rob of a face, is left as it was and listed under `skipped`; when
+no brush can change, the command fails (exit 1) and writes nothing. `--context`
+opens a group first.
+
+```sh
+vibestudio --cli map hollow room.map --object brush:12 --mode diagonal --thickness 16 --exclude-facing z --keep-inner --caulk --output shaft.map --json
+vibestudio --cli map shrink-brushes room.map --object brush:12 --thickness 8 --exclude-face face:12:6 --output thinner.map --json
+vibestudio --cli map expand-brushes room.map --object entity:3 --thickness 4 --output wider.map --json
+```
+
+`map hollow` JSON adds `keepInner` and `innerKept`. The shrink and expand JSON
+reports `operation`, `thickness`, `offset` (negative for a shrink), `changed`,
+`movedFaces`, `excludedFaces` and `skipped`. An unknown mode, a bad direction
+or a face selector that does not fit the selection is a usage error (exit 2).
+
+**Status: Partial.** The CLI and the Levels editor's **CSG Tool** share the
+same services. See
+[Hollow, shrink and expand with the CSG Tool](levels.md#hollow-shrink-and-expand-with-the-csg-tool).
+
 ## Query connected level entities
 
 `map select-connected <map> --object patch:2` adds one hop of incoming and
@@ -1074,12 +1265,28 @@ list the View tab saved in the settings store (choose another store with
 **--settings-file**), leaving out kinds saved for other formats. **--invert**
 then applies **Invert Filters**. **--objects** adds each kind's object
 selectors. `filteredObjects` and `filteredCount` report what the views would
-hide; `off` is the final list. Use **--map MAP02** for a map in a Doom or Hexen
-WAD and **--engine** for the usual engine hint.
+hide; `off` is the final list. Each kind's `faceCount` counts the faces it hides
+one at a time on brushes it does not hide whole: **Caulk**'s caulk faces (and
+Quake's skip) on otherwise textured brushes, which the camera leaves out.
+`filteredFaces` and `filteredFaceCount` list those faces for the final list as
+`face:brushId:faceNumber` selectors, numbered from one as `map select-textured`
+prints them, and **--objects** adds each kind's `faces`. Use **--map MAP02** for
+a map in a Doom or Hexen WAD and **--engine** for the usual engine hint.
+
+**--package baseq3** reads a Quake III map's shader scripts from a package or
+folder, as the View tab reads the open package's: **Translucent**, **Liquids**,
+**Sky**, **Clip** with **Player Clip** and **Monster Clip**, **Bot Clip** and
+**Nodraw** then go by each face's shader (qer_trans, alphaFunc, fog, surfaceparm
+water, playerclip, nodraw and the rest, skyParms), and textures the package does
+not hold keep the name rules. `shaders` reports the package, how many `scripts`
+and `shaders` were read and any `warnings`, and each kind says whether it
+`readsShaders`. Without **--package**, and on Quake and Quake II maps, which
+carry their own face flags, the kinds go by flags and texture names.
 
 ```text
 vibestudio --cli map filters start.map --json
 vibestudio --cli map filters start.map --off world --invert --objects
+vibestudio --cli map filters q3dm1.map --package baseq3 --off translucent --objects
 ```
 
 The query writes nothing: the map, `mapWritten: false`, and the saved filters

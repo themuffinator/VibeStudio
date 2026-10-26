@@ -1075,11 +1075,22 @@ struct LevelMapRotationRequest {
 	// If conversion is needed, all classic faces in the document convert so
 	// compilers see one dialect. Unselected geometry and appearance stay fixed.
 	bool allowValve220 = false;
+	// NetRadiant Custom's Arbitrary Rotation: with `euler` set, `axis` and
+	// `degrees` are ignored and the selection turns about the fixed world X
+	// axis, then Y, then Z by these degrees, all about the same pivot.
+	bool euler = false;
+	std::array<double, 3> eulerDegrees{0, 0, 0};
 };
 // Arbitrary right-handed rotation, validated and committed as one undo step.
 // An unrepresentable classic texture lock fails atomically unless conversion
 // is explicitly enabled. Turning texture lock off retains source parameters.
+// An Euler request with one nonzero angle is that single-axis rotation; with
+// more, each turn uses the single-axis rules (entity angles, texture lock,
+// Repeat) and the turns fold into one undo step. Doom maps turn about Z only.
 bool rotateLevelMapSelection(LevelMapDocument* document, const LevelMapRotationRequest& request, QString* error = nullptr);
+// The world-axis turns an Euler request makes, in order: (axis, degrees)
+// pairs with whole turns dropped, or the single turn of a plain request.
+QVector<QPair<int, double>> levelMapRotationSteps(const LevelMapRotationRequest& request);
 // Mirrors the selection across the plane through the centre of its bounds
 // that is perpendicular to `axis`. Faces keep facing outward: each point-
 // defined face swaps two of its points and each patch reverses its columns;
@@ -1116,6 +1127,22 @@ bool resizeLevelMapSelection(LevelMapDocument* document, const LevelMapVec3& min
 // keeps its existing default of retaining source texture parameters.
 bool resizeLevelMapSelection(LevelMapDocument* document, const LevelMapVec3& mins, const LevelMapVec3& maxs,
 	const LevelMapTextureLockOptions& textures, QString* error = nullptr);
+// NetRadiant Custom's Arbitrary Scale and `map resize --factors`.
+struct LevelMapScaleRequest {
+	std::array<double, 3> factors{1, 1, 1};
+	// Invalid means the centre of the selection's bounds.
+	LevelMapVec3 pivot;
+	// Texture Scale Lock: enabled stretches brush textures with the brushes.
+	LevelMapTextureLockOptions textures{false, false};
+};
+// Multiplies the selection's offsets from `pivot` along x, y and z by the
+// factors, each nonzero and within ±32768. A negative factor mirrors along
+// its axis; when an odd number of them do, faces would turn inside out, so
+// point-defined faces swap two points and patches reverse their columns, as
+// Flip does. Mirrors reflect entity headings and Doom thing angles as Flip
+// does; positive factors keep them. Doom maps scale in the top view only, so
+// their z factor must be 1. Scene locks and open groups apply. One undo step.
+bool scaleLevelMapSelection(LevelMapDocument* document, const LevelMapScaleRequest& request, QString* error = nullptr);
 // Which part of a brush a clip keeps: the part behind the plane (the side
 // its normal points away from), the part in front, or both, as two brushes.
 enum class LevelMapClipKeep {
@@ -1172,8 +1199,13 @@ bool hollowLevelMapSelection(LevelMapDocument* document, double thickness, int* 
 // inside of the walls before it, so no two overlap (NetRadiant Custom's
 // wrapped hollow); Room builds them outside the brush instead, the room
 // being the brush itself, as NetRadiant Custom's Make Room does, with the
-// walls pushed out on every side so the corners are filled.
-enum class LevelMapHollowMode { Overlap, Touch, Room };
+// walls pushed out on every side so the corners are filled. Diagonal and
+// Extrude also build outside the brush, as NetRadiant Custom's CSG Tool
+// does: Diagonal walls meet their neighbours on mitred joints halfway
+// between their faces, with neither overlaps nor gaps; Extrude walls go
+// straight out from their faces, their sides square to them. The ids also
+// take NetRadiant Custom's names: wrap for touch and pull for room.
+enum class LevelMapHollowMode { Overlap, Touch, Room, Diagonal, Extrude };
 QString levelMapHollowModeId(LevelMapHollowMode mode);
 bool parseLevelMapHollowMode(const QString& id, LevelMapHollowMode* mode);
 bool hollowLevelMapSelection(LevelMapDocument* document, double thickness, LevelMapHollowMode mode, int* hollowed = nullptr,

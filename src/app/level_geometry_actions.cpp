@@ -14,6 +14,7 @@
 #include "app/model_viewport.h"
 #include "app/studio_actions.h"
 #include "core/level_brush.h"
+#include "core/level_hollow.h"
 #include "core/level_patch_tools.h"
 #include "core/level_prefab.h"
 #include "core/level_selection_tools.h"
@@ -41,6 +42,7 @@
 #include <QFileInfo>
 #include <QSpinBox>
 #include <QStatusBar>
+#include <QVBoxLayout>
 
 #include <algorithm>
 #include <cmath>
@@ -272,8 +274,11 @@ void ApplicationShell::registerLevelGeometryCommands()
 		QStringLiteral("cube"), geometry, [this]() { hollowLevelMapTouchingFromUi(); });
 	add(QStringLiteral("map.makeRoom"), tr("Make Room"),
 		tr("Build walls one grid step thick around the outside of each selected brush and remove the brush, so it becomes the room, as "
-		   "NetRadiant Custom's Make Room does."),
+		   "NetRadiant Custom's Make Room does. Make Room Options decides whether hidden wall faces are caulked and picked faces left open."),
 		QStringLiteral("shape-room"), geometry, [this]() { makeLevelRoomFromUi(); });
+	add(QStringLiteral("map.makeRoomOptions"), tr("Make Room Options…"),
+		tr("Choose whether Make Room caulks the wall faces the room does not see, with which material, and whether it leaves picked faces open."),
+		QStringLiteral("settings"), geometry, [this]() { editLevelRoomOptionsFromUi(); });
 	add(QStringLiteral("map.selectWholeEntities"), tr("Expand Selection to Whole Entities"),
 		tr("Select the whole brush entity of every selected brush or patch, as Radiant's Expand Selection to Entities does."), QStringLiteral("entity"),
 		tr("Select by Region"), [this]() { selectLevelWholeEntitiesFromUi(); });
@@ -317,6 +322,8 @@ void ApplicationShell::registerLevelGeometryCommands()
 	add(QStringLiteral("map.replaceWithPrefab"), tr("Replace Selection with Prefab…"),
 		tr("Put a prefab where the selection stands, its anchor at the selection's bottom centre, and remove the selection, as one undo step."),
 		QStringLiteral("prefab"), tr("Prefabs"), [this]() { replaceLevelSelectionWithPrefabFromUi(); });
+	// NetRadiant Custom's CSG Tool (level_csg_tool_actions.cpp).
+	registerLevelCsgToolCommands();
 }
 
 void ApplicationShell::refreshLevelGeometryCommands()
@@ -362,6 +369,8 @@ void ApplicationShell::refreshLevelGeometryCommands()
 	m_commands->setEnabled(QStringLiteral("map.componentGizmoOptions"),textMap);
 	m_commands->setEnabled(QStringLiteral("map.snapPickedVertex"),textMap && m_levelMapViewport && m_levelMapViewport->canSnapPickedVertex());
 	m_commands->setEnabled(QStringLiteral("map.transformComponents"), textMap && levelComponentsActive() && (!picked.isEmpty() || !levelComponentFacePicks().faces.isEmpty()));
+	// Open Rotate and Scale windows follow component picks and mode changes.
+	refreshLevelArbitraryTransformDialogs();
 	m_commands->setEnabled(QStringLiteral("map.componentUvLock"), textMap);
 	if (auto* action = m_commands->action(QStringLiteral("map.componentUvLock"))) {
 		const QSignalBlocker blocker(action); action->setChecked(m_settings.levelComponentUvLock());
@@ -376,6 +385,7 @@ void ApplicationShell::refreshLevelGeometryCommands()
 	refreshLevelDeletionCommands();
 	m_commands->setEnabled(QStringLiteral("map.hollowTouching"), textMap && levelMapSelectionClippable());
 	m_commands->setEnabled(QStringLiteral("map.makeRoom"), textMap && levelMapSelectionClippable());
+	refreshLevelCsgToolCommands();
 	m_commands->setEnabled(QStringLiteral("map.selectWholeEntities"), textMap && owned);
 	for (const QString& id : levelPatchMatrixCommandIds()) {
 		m_commands->setEnabled(id, patches);
@@ -665,18 +675,124 @@ void ApplicationShell::makeLevelRoomFromUi()
 		return;
 	}
 	const double grid = m_levelMapViewport ? m_levelMapViewport->gridSize() : 8.0;
-	int hollowed = 0;
+	// NRC's Make Room caulks every wall face but the room's and leaves the
+	// picked faces open; Make Room Options can turn either off.
+	const LevelRoomPreferences preferences = m_settings.levelRoomPreferences();
+	LevelMapHollowOptions options;
+	options.caulkTexture = levelRoomCaulkTexture(m_levelMapDocument, preferences);
+	if (preferences.openPickedFaces) {
+		options.openFaces = levelPickedSurfaceFaces();
+	}
+	LevelMapHollowReport report;
 	QString error;
-	QStringList skipped;
-	if (!hollowLevelMapSelection(&m_levelMapDocument, grid, LevelMapHollowMode::Room, &hollowed, &error, &skipped)) {
+	if (!hollowLevelMapSelection(&m_levelMapDocument, grid, LevelMapHollowMode::Room, options, &report, &error)) {
 		statusBar()->showMessage(tr("Could not make the room: %1").arg(error));
 		return;
 	}
-	recordActivity(tr("Level map rooms made"), tr("%n brush(es)", nullptr, hollowed), QStringLiteral("level-map"), OperationState::Warning,
+	recordActivity(tr("Level map rooms made"), tr("%n brush(es)", nullptr, report.hollowed), QStringLiteral("level-map"), OperationState::Warning,
 		tr("Unsaved map edit"));
 	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("Made %n room(s) with walls %1 units thick outside them.", nullptr, hollowed).arg(grid) + levelMapSkippedNote(skipped),
-		5000);
+	QString message = tr("Made %n room(s) with walls %1 units thick outside them.", nullptr, report.hollowed).arg(grid);
+	if (report.openFaces > 0) {
+		message += QLatin1Char(' ') + tr("Left %n face(s) open.", nullptr, report.openFaces);
+	}
+	if (!options.caulkTexture.isEmpty()) {
+		message += QLatin1Char(' ') + tr("Caulked %n hidden wall face(s) with %1.", nullptr, report.caulkedFaces).arg(options.caulkTexture);
+	} else if (preferences.caulk) {
+		message += QLatin1Char(' ') + tr("This game has no caulk material, so the walls keep their textures; name one in Make Room Options.");
+	}
+	statusBar()->showMessage(message + levelMapSkippedNote(report.skipped), 8000);
+}
+
+void ApplicationShell::editLevelRoomOptionsFromUi()
+{
+	QDialog dialog(this);
+	dialog.setObjectName(QStringLiteral("levelRoomOptionsDialog"));
+	dialog.setWindowTitle(tr("Make Room Options"));
+	dialog.setAccessibleName(dialog.windowTitle());
+	auto* layout = new QVBoxLayout(&dialog);
+	auto* form = new QFormLayout;
+	form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+	form->setRowWrapPolicy(QFormLayout::WrapAllRows);
+	layout->addLayout(form);
+	auto* caulk = new QCheckBox(tr("&Caulk the wall faces the room does not see"), &dialog);
+	caulk->setObjectName(QStringLiteral("levelRoomCaulk"));
+	caulk->setToolTip(tr("Every wall face except the one facing the room takes the caulk material, so the compiler leaves it out. Faces lining an "
+						 "open face keep its material."));
+	auto* texture = new QLineEdit(&dialog);
+	texture->setObjectName(QStringLiteral("levelRoomCaulkTexture"));
+	texture->setAccessibleName(tr("Caulk material"));
+	texture->setMaxLength(1024);
+	texture->setToolTip(tr("Leave empty to use the game's own caulk: common/caulk in Quake III and skip in Quake. Quake II has none, so name a "
+						   "material its assets provide."));
+	auto* open = new QCheckBox(tr("Leave picked faces &open"), &dialog);
+	open->setObjectName(QStringLiteral("levelRoomOpenFaces"));
+	open->setToolTip(tr("Faces picked in face mode, with Select Textured or in the camera get no wall, so they become openings; the walls beside "
+						"them stop flush with them."));
+	for (auto* control : {caulk, open}) {
+		control->setAccessibleName(control->text().remove(QLatin1Char('&')));
+		control->setAccessibleDescription(control->toolTip());
+	}
+	texture->setAccessibleDescription(texture->toolTip());
+	form->addRow(caulk);
+	form->addRow(tr("Caulk &material"), texture);
+	form->addRow(open);
+	// What Make Room would use on the open map, so the game's default is
+	// never a guess.
+	auto* effective = new QLabel(&dialog);
+	effective->setObjectName(QStringLiteral("levelRoomCaulkSummary"));
+	effective->setWordWrap(true);
+	effective->setAccessibleName(tr("Caulk material in use"));
+	layout->addWidget(effective);
+	auto* error = new QLabel(&dialog);
+	error->setObjectName(QStringLiteral("levelRoomOptionsError"));
+	error->setAccessibleName(tr("Make Room options validation"));
+	error->setWordWrap(true);
+	error->hide();
+	layout->addWidget(error);
+	auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::RestoreDefaults, &dialog);
+	layout->addWidget(buttons);
+	const QString gameCaulk = levelMapCaulkTexture(m_levelMapDocument);
+	texture->setPlaceholderText(gameCaulk.isEmpty() ? tr("No game caulk: name a material") : gameCaulk);
+	const auto current = [&] {
+		return LevelRoomPreferences {caulk->isChecked(), texture->text().trimmed(), open->isChecked()};
+	};
+	const auto refresh = [&] {
+		texture->setEnabled(caulk->isChecked());
+		const QString used = levelRoomCaulkTexture(m_levelMapDocument, current());
+		effective->setText(!caulk->isChecked() ? tr("Walls keep the brush's textures.")
+			: used.isEmpty() ? tr("This map's game has no caulk material, so walls keep the brush's textures until you name one.")
+							 : tr("Hidden wall faces on this map take %1.").arg(used));
+		effective->setAccessibleDescription(effective->text());
+		error->hide();
+	};
+	const auto populate = [&](const LevelRoomPreferences& preferences) {
+		caulk->setChecked(preferences.caulk);
+		texture->setText(preferences.caulkTexture);
+		open->setChecked(preferences.openPickedFaces);
+		refresh();
+	};
+	populate(m_settings.levelRoomPreferences());
+	connect(caulk, &QCheckBox::toggled, &dialog, [&] { refresh(); });
+	connect(texture, &QLineEdit::textChanged, &dialog, [&] { refresh(); });
+	connect(buttons->button(QDialogButtonBox::RestoreDefaults), &QPushButton::clicked, &dialog, [&] { populate({}); });
+	connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+	connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+		const LevelRoomPreferences next = current();
+		if (const QString problem = levelRoomPreferencesProblem(next); !problem.isEmpty()) {
+			error->setText(problem);
+			error->show();
+			texture->setFocus();
+			return;
+		}
+		if (!m_settings.setLevelRoomPreferences(next)) {
+			error->setText(tr("Unable to save the Make Room options."));
+			error->show();
+			return;
+		}
+		dialog.accept();
+	});
+	dialog.exec();
 }
 
 void ApplicationShell::selectLevelWholeEntitiesFromUi()

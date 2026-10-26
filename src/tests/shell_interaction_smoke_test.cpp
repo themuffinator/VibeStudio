@@ -2760,7 +2760,11 @@ void checkMapClip(ApplicationShell& shell)
 		check(preview->renderMode() == ModelViewportRenderMode::Wireframe && action(shell, "map.previewWireframe")->isChecked(),
 			"W should draw the 3D preview as edges.");
 		press(shell, Qt::Key_W);
-		check(preview->renderMode() == ModelViewportRenderMode::FlatShaded, "W again should shade it.");
+		// Wireframe off brings back the faces as Textures in Camera says.
+		check(preview->renderMode()
+					== (action(shell, "map.previewTextures")->isChecked() ? ModelViewportRenderMode::Textured : ModelViewportRenderMode::FlatShaded)
+				&& !action(shell, "map.previewWireframe")->isChecked(),
+			"W again should bring the faces back as they were.");
 	}
 	check(trigger(shell, "map.toggle3D") && map->isVisible() && preview && !preview->isVisible() && !action(shell, "map.toggle3D")->isChecked(),
 		"3D Preview again should bring the 2D view back.");

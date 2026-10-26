@@ -11,6 +11,7 @@
 #include "app/level_texture_audit_panel.h"
 #include "core/level_placement.h"
 #include "core/level_nudge.h"
+#include "core/level_camera_texture.h"
 #include "core/level_quick_transform.h"
 #include "core/level_build_workspace.h"
 #include "core/level_build_deployment.h"
@@ -2945,7 +2946,8 @@ QWidget* ApplicationShell::buildLevelsPage()
 	m_levelMap3D->setAccessibleName(tr("Map 3D preview"));
 	m_levelMap3D->setAccessibleDescription(tr("The level camera shows brushes, patches and placed models using package material images. Select geometry to edit it; Details lists unresolved images and preview limitations."));
 	m_levelMap3D->setMinimumSize(320, 260);
-	m_levelMap3D->setRenderMode(ModelViewportRenderMode::FlatShaded);
+	// The saved camera display: faces textured, flat or hidden, and edges.
+	applyLevelCameraRender();
 	connect(m_levelMap3D, &ModelViewport::hoverChanged, this, [this](const QString& summary) {
 		if (m_levelMapHover && levelMap3DShowing()) {
 			m_levelMapHover->setText(levelSweepReadout(summary.isEmpty() ? m_levelMap3D->hoverSummary() : summary));
@@ -14913,6 +14915,7 @@ void ApplicationShell::buildCommands()
 		tr("Shift, scale, rotate, fit and align selected brush faces using package material dimensions."), QStringLiteral("image"), false, false, false,
 		[this]() { editLevelMapSurfacesFromUi(); });
 	registerLevelSurfaceCommands();
+	registerLevelCameraTextureCommands();
 	registerLevelSidebarCommands();
 	registerLevelEditingCommands();
 	registerLevelGeometryCommands();
@@ -14941,7 +14944,7 @@ void ApplicationShell::buildCommands()
 		tr("Edit text-map properties while preserving comments and extension fields."), QStringLiteral("edit"), false, false, false,
 		[this]() { editLevelUdmfPropertiesFromUi(); });
 	add(QStringLiteral("map.rotatePrecisely"), StudioCommandGroup::Edit, tr("Rotate Selection…"),
-		tr("Preview an arbitrary rotation with a chosen pivot and texture lock."), QStringLiteral("rotate"), false, false, false,
+		tr("Turn the selection about X, Y and Z by any angles around a pivot, with texture lock. The window stays open for repeated Apply."), QStringLiteral("rotate"), false, false, false,
 		[this]() { rotateLevelMapSelectionPreciselyFromUi(); });
 	add(QStringLiteral("map.rotateRight"), StudioCommandGroup::Edit, tr("Rotate 90° R&ight"),
 		tr("Turn the selection a quarter turn clockwise as the view shows it."), QStringLiteral("redo"), false, false, false,
@@ -14957,6 +14960,7 @@ void ApplicationShell::buildCommands()
 	add(QStringLiteral("map.resizeSelection"), StudioCommandGroup::Edit, tr("Resi&ze Selection…"),
 		tr("Fit the selection to a new size. Texture Scale Lock stretches brush textures with it; otherwise their source parameters stay fixed. Viewport handles use the same setting."),
 		QStringLiteral("resize"), false, false, false, [this]() { resizeLevelMapSelectionFromUi(); });
+	registerLevelArbitraryTransformCommands();
 	add(QStringLiteral("map.textureLock"), StudioCommandGroup::Edit, tr("Texture &Lock"),
 		tr("Keep brush texture coordinates attached during moves, quick turns and flips. Numeric rotation starts with this setting."),
 		QStringLiteral("image"), false, false, false, [this]() {
@@ -15196,19 +15200,19 @@ void ApplicationShell::buildCommands()
 	add(QStringLiteral("map.previousSavedView"), StudioCommandGroup::View, tr("Previous Saved Level View"),
 		tr("Restore the previous named view for this map."), QStringLiteral("map"), false, false, false, [this] { stepLevelBookmark(-1); });
 	add(QStringLiteral("map.previewWireframe"), StudioCommandGroup::View, tr("3D &Wireframe"),
-		tr("Draw the Levels 3D preview as edges instead of shaded faces, to see through to what lies behind."), QStringLiteral("cube"), false, false, false,
+		tr("Draw the Levels 3D preview as edges instead of faces, to see through to what lies behind; turned off, the faces come back textured or flat as before. The choice is kept."),
+		QStringLiteral("cube"), false, false, false,
 		[this]() {
-			if (!m_levelMap3D) {
-				return;
-			}
-			const bool wire = m_levelMap3D->renderMode() != ModelViewportRenderMode::Wireframe;
-			m_levelMap3D->setRenderMode(wire ? ModelViewportRenderMode::Wireframe : ModelViewportRenderMode::FlatShaded);
-			refreshCommandEnablement();
-			statusBar()->showMessage(wire ? tr("3D preview: wireframe.") : tr("3D preview: flat shaded."));
+			// Hiding the faces keeps the Textures and Edges choices for when
+			// they come back (level_camera_render_actions.cpp).
+			LevelCameraRenderState state = m_levelCameraRender;
+			state.facesHidden = !state.facesHidden;
+			setLevelCameraRender(state, levelCameraRenderSummary(state));
 		});
 	if (QAction* wireframe = m_commands->action(QStringLiteral("map.previewWireframe"))) {
 		wireframe->setCheckable(true);
 	}
+	registerLevelCameraRenderCommands();
 	add(QStringLiteral("map.gridSmaller"), StudioCommandGroup::View, tr("S&maller Grid"),
 		tr("Halve the Levels grid, so drags, nudges, and new objects land on finer steps."), QStringLiteral("grid"), false, false, false,
 		[this]() { stepLevelMapGrid(-1); });
@@ -17266,6 +17270,15 @@ void ApplicationShell::installShortcutScopes()
 			// Alt+Left and Find's Ctrl+F (app/level_nudge_actions.cpp).
 			const bool nudge = levelNudgeCommandForId(registration.commandId) || levelViewTransformForCommand(registration.commandId)
 				|| levelDuplicateMoveCommandForId(registration.commandId);
+			if (levelCameraTextureCommandForId(registration.commandId)) {
+				// TrenchBroom's texture moves and flips act in the camera, on the
+				// nudge and flip keys, in a claim layer of their own: the camera
+				// chooses between them by whether faces are picked
+				// (app/level_camera_texture_actions.cpp).
+				m_commands->setShortcutScopes(registration.commandId, m_levelMap3D ? QList<QWidget*>{m_levelMap3D} : QList<QWidget*>{page(StudioMode::Levels)});
+				m_commands->setShortcutScopeClaims(registration.commandId, m_levelMap3D != nullptr, QStringLiteral("camera-faces"));
+				continue;
+			}
 			m_commands->setShortcutScopes(registration.commandId, (viewNavigation || nudge) && !levelViews.isEmpty()
 				? levelViews : QList<QWidget*>{page(StudioMode::Levels)});
 			if (nudge) { m_commands->setShortcutScopeClaims(registration.commandId, !levelViews.isEmpty()); }
@@ -19129,6 +19142,7 @@ void ApplicationShell::refreshCommandEnablement()
 	m_commands->setEnabled(QStringLiteral("map.flipHorizontal"), hasMap && hasSelection);
 	m_commands->setEnabled(QStringLiteral("map.flipVertical"), hasMap && hasSelection);
 	refreshLevelAxisTransformCommands();
+	refreshLevelArbitraryTransformDialogs();
 	refreshLevelNudgeCommands();
 	refreshLevelCameraFocusCommands();
 	m_commands->setEnabled(QStringLiteral("map.selectConnectedGeometry"), hasMap && m_levelMapDocument.format == LevelMapFormat::DoomWad &&
@@ -19159,11 +19173,9 @@ void ApplicationShell::refreshCommandEnablement()
 	}
 	m_commands->setEnabled(QStringLiteral("map.toggle3D"), hasMap);
 	refreshLevelViewWorkspaceActions();
-	const bool previewShowing = hasMap && levelMap3DShowing();
-	m_commands->setEnabled(QStringLiteral("map.previewWireframe"), previewShowing);
-	if (QAction* wireframe = m_commands->action(QStringLiteral("map.previewWireframe"))) {
-		wireframe->setChecked(m_levelMap3D && m_levelMap3D->renderMode() == ModelViewportRenderMode::Wireframe);
-	}
+	// 3D Wireframe and the other camera display commands, enabled while the
+	// camera is showing, and their check marks from the saved choices.
+	refreshLevelCameraRenderCommands();
 	if (m_levelMap3DButton) {
 		m_levelMap3DButton->setEnabled(hasMap);
 	}
@@ -24673,6 +24685,7 @@ void ApplicationShell::showLevelMapContextMenu(const QPoint& globalPosition, boo
 	QAction* rotateLeft = transform->addAction(studioIcon(QStringLiteral("undo")), tr("Rotate 90° Left"));
 	QAction* rotatePrecisely = transform->addAction(studioIcon(QStringLiteral("rotate")), tr("Rotate Selection…"));
 	rotatePrecisely->setEnabled(hasSelection);
+	if (QAction* scale = m_commands->action(QStringLiteral("map.scaleSelection"))) { transform->addAction(scale); }
 	QAction* rotateRight = transform->addAction(studioIcon(QStringLiteral("redo")), tr("Rotate 90° Right"));
 	QAction* flipHorizontal = transform->addAction(studioIcon(QStringLiteral("compare")), tr("Flip Horizontal"));
 	QAction* flipVertical = transform->addAction(studioIcon(QStringLiteral("compare")), tr("Flip Vertical"));

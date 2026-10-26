@@ -441,6 +441,9 @@ QWidget* ApplicationShell::buildLevelFilterOptions()
 
 void ApplicationShell::refreshLevelViewFilters()
 {
+	// The material kinds read the package's shader scripts for a Quake III
+	// map; a new map, package or staged edit starts a fresh read.
+	refreshLevelViewFilterMaterials();
 	// The View > Filters commands follow the open map's format either way.
 	refreshLevelViewFilterCommands();
 	if (!m_levelFilterPanel) {
@@ -475,6 +478,31 @@ void ApplicationShell::refreshLevelViewFilters()
 			m_levelFilterBoxes.insert(filter.id, box);
 		}
 		if (!filters.isEmpty()) {
+			// What the material kinds read on a Quake III map, and a way to read
+			// the shader scripts again after editing them outside the studio.
+			auto* status = new QLabel;
+			status->setObjectName(QStringLiteral("levelFilterMaterialStatus"));
+			status->setProperty("sidebarHint", true);
+			status->setWordWrap(true);
+			status->setTextFormat(Qt::PlainText);
+			status->setAccessibleName(tr("Shader scripts for the material filters"));
+			layout->addWidget(status);
+			m_levelFilterMaterialStatus = status;
+			auto* reload = new QToolButton;
+			reload->setObjectName(QStringLiteral("levelFiltersReloadShaders"));
+			reload->setText(tr("Reload Shaders"));
+			reload->setIcon(studioIcon(QStringLiteral("refresh")));
+			reload->setToolTip(tr("Read the package's shader scripts again for Translucent, Liquids, Clip, Sky and Nodraw. The map is unchanged."));
+			reload->setAccessibleName(tr("Reload shader scripts for the material filters"));
+			reload->setAccessibleDescription(reload->toolTip());
+			reload->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+			reload->setAutoRaise(true);
+			reload->setFocusPolicy(Qt::TabFocus);
+			setBaseIconSize(reload, QSize(16, 16));
+			connect(reload, &QToolButton::clicked, this, &ApplicationShell::reloadLevelViewFilterMaterials);
+			layout->addWidget(reload);
+			m_levelFilterMaterialReload = reload;
+			refreshLevelViewFilterMaterialStatus();
 			// Each button is its View > Filters command, so its key, tooltip and
 			// enabled state match the menu and command search.
 			const auto commandButton = [this, layout](const QString& name, const QString& commandId, const QString& text, const QString& icon,
@@ -507,7 +535,7 @@ void ApplicationShell::refreshLevelViewFilters()
 	if (!page || !page->isVisible() || m_levelFilterBoxes.isEmpty()) {
 		return;
 	}
-	const QHash<QString, int> counts = levelViewFilterCounts(m_levelMapDocument);
+	const QHash<QString, int> counts = levelViewFilterCounts(m_levelMapDocument, currentLevelFilterMaterials());
 	for (const LevelViewFilter& filter : levelViewFilters(m_levelMapDocument)) {
 		if (QCheckBox* box = m_levelFilterBoxes.value(filter.id)) {
 			const int count = counts.value(filter.id);
@@ -528,7 +556,7 @@ void ApplicationShell::applyLevelViewFilters()
 			off << id;
 		}
 	}
-	QVector<LevelMapSelectionRef> filtered = off.isEmpty() ? QVector<LevelMapSelectionRef>() : levelViewFilteredObjects(m_levelMapDocument, off);
+	QVector<LevelMapSelectionRef> filtered = off.isEmpty() ? QVector<LevelMapSelectionRef>() : levelViewFilteredObjects(m_levelMapDocument, off, currentLevelFilterMaterials());
 	// A region hides what lies outside it, unless asked only to shade it.
 	if (levelRegionActive() && m_levelRegionHideOutside) {
 		filtered += levelMapOutsideRegionObjects(m_levelMapDocument, m_levelRegionMins, m_levelRegionMaxs);
@@ -809,7 +837,13 @@ void ApplicationShell::setLevelViewFilter(const QString& filterId, bool shown)
 	applyLevelViewFilterState(off);
 	LevelViewFilter filter;
 	if (levelViewFilterForId(m_levelMapDocument, filterId, &filter)) {
-		statusBar()->showMessage(shown ? tr("%1 shown again.").arg(filter.title) : tr("%1 hidden from the views; the map is unchanged.").arg(filter.title), 4000);
+		// Caulk also leaves caulk faces on other brushes out of the camera.
+		const int faces = shown || filterId != QLatin1String("caulk") ? 0
+			: static_cast<int>(levelViewFilteredFaces(m_levelMapDocument, m_levelFiltersOff, currentLevelFilterMaterials()).size());
+		statusBar()->showMessage(shown ? tr("%1 shown again.").arg(filter.title)
+				: faces > 0 ? tr("%1 hidden from the views, with %n face(s) on other brushes in the camera; the map is unchanged.", nullptr, faces).arg(filter.title)
+							: tr("%1 hidden from the views; the map is unchanged.").arg(filter.title),
+			4000);
 	}
 }
 

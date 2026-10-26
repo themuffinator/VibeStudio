@@ -659,6 +659,21 @@ bool ModelViewport::showEdges() const
 	return m_showEdges;
 }
 
+void ModelViewport::setPolygonEdges(bool enabled)
+{
+	if (m_polygonEdges == enabled) {
+		return;
+	}
+	m_polygonEdges = enabled;
+	invalidateRaster();
+	update();
+}
+
+bool ModelViewport::polygonEdges() const
+{
+	return m_polygonEdges;
+}
+
 void ModelViewport::setHighContrast(bool enabled)
 {
 	if (m_highContrast == enabled) {
@@ -1624,6 +1639,7 @@ void ModelViewport::paintTriangles(QPainter &painter, const Palette &palette)
 		work->wireframe = m_renderMode == ModelViewportRenderMode::Wireframe;
 		work->highContrast = m_highContrast;
 		work->showEdges = m_showEdges;
+		work->polygonEdges = m_polygonEdges;
 		work->moving = m_dragStarted && m_dragAction == DragAction::Move;
 		work->resizingSelection = isResizingSelection();
 		work->resizeFrom = m_selectionResizeBox; work->resizeTo = m_selectionResizePreview;
@@ -1785,6 +1801,7 @@ ModelViewport::GeometryKey ModelViewport::currentGeometryKey(bool textured, bool
 	key.frameBlend = m_frameBlend;
 	key.textured = textured;
 	key.highContrast = m_highContrast;
+	key.polygonEdges = m_polygonEdges;
 	key.editMoveActive = m_editMoveActive || m_mirroredJointPreview;
 	if (key.editMoveActive)
 	{

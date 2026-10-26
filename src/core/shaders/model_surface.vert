@@ -14,6 +14,8 @@ VIBE_ATTRIBUTE(2) vec4 aPlane;
 VIBE_ATTRIBUTE(3) vec4 aColor;
 // Bit 0: the corner has finite texture coordinates on a textured surface.
 // Bit 1: the triangle is degenerate or not finite and draws nothing.
+// Bits 2..4: the edge opposite corner 0, 1 or 2 is a polygon diagonal, which
+// the edge overlay leaves out.
 VIBE_ATTRIBUTE(4) uint aInfo;
 // Bit 0: highlighted (selected or stroked). Bits 2..4: the edge opposite
 // corner 0, 1 or 2 is selected.
@@ -42,7 +44,8 @@ VIBE_VARYING_OUT(1) vec3 vBarycentricW;
 // Untextured: the shaded flat colour. Textured: r holds the light factor.
 VIBE_FLAT_OUT(2) vec4 vShade;
 VIBE_FLAT_OUT(3) int vTriangle;
-// Bit 0 highlighted, 1 hovered, 2..4 selected edges, 5 textured.
+// Bit 0 highlighted, 1 hovered, 2..4 selected edges, 5 textured, 6..8
+// polygon diagonals.
 VIBE_FLAT_OUT(4) uint vFlags;
 
 void main()
@@ -80,7 +83,7 @@ void main()
 	} else {
 		vShade = vec4(floor(aColor.rgb * 255.0 * (0.22 + 0.78 * t) + 0.5) / 255.0, 1.0);
 	}
-	uint flags = (aFlags & 29u) | (textured ? 32u : 0u) | (triangle == iparams.x ? 2u : 0u);
+	uint flags = (aFlags & 29u) | (textured ? 32u : 0u) | (triangle == iparams.x ? 2u : 0u) | (((aInfo >> 2u) & 7u) << 6u);
 	vFlags = flags;
 	vec4 clip = viewProjection * vec4(aPosition, 1.0);
 	// Screen-linear barycentrics: the fragment multiplies by gl_FragCoord.w,

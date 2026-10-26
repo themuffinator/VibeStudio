@@ -10,6 +10,7 @@
 #include "core/document_watch.h"
 #include "core/entity_definitions.h"
 #include "core/idtech_image.h"
+#include "core/level_camera_render.h"
 #include "core/level_editor_controls.h"
 #include "core/level_navigation.h"
 #include "core/level_sidebar.h"
@@ -93,6 +94,7 @@ namespace vibestudio {
 struct LevelMapComponentSet;
 struct LevelSurfaceFacePicks;
 struct LevelSurfaceFaceTransformReport;
+struct LevelViewFilterMaterials;
 enum class LevelPatchMatrixOperation;
 
 enum class LevelObjectSelectionMode;
@@ -254,12 +256,24 @@ public:
 	bool applyLevelPatchCaps(int patchId, const LevelPatchCapRequest& request, QString* error = nullptr);
 	bool applyLevelBrushGeometry(const LevelMapBrush& brush, int brushId, QString* error = nullptr);
 	bool applyLevelRotation(const LevelMapRotationRequest& request, QString* error = nullptr);
+	// Scale Selection…'s commit: factors about a pivot, or the picked components' scale.
+	bool applyLevelScale(const LevelMapScaleRequest& request, QString* error = nullptr);
 	bool applyLevelSurfaceEdit(const LevelSurfaceEditPlan& plan, QString* error = nullptr);
-	bool queueLevelSurfaceEdit(const LevelSurfaceRequest& request, QString* error = nullptr);
+	// `cameraTargets`: the picked faces when there are any (TrenchBroom's
+	// face selection), otherwise the Surfaces tab's target.
+	bool queueLevelSurfaceEdit(const LevelSurfaceRequest& request, QString* error = nullptr, bool cameraTargets = false);
+	// Move Textures Up/Down/Left/Right (and Coarse and Fine) and Flip Textures
+	// Horizontally/Vertically, as the 3D camera sees the faces
+	// (app/level_camera_texture_actions.cpp, core/level_camera_texture.h).
+	bool runLevelCameraTextureCommand(const QString& commandId, QString* error = nullptr);
 	bool copyLevelSurfaceSettings(LevelSurfaceFace face, QString* error = nullptr);
 	bool pasteLevelSurfaceSettings(const QVector<LevelSurfaceFace>& faces, const LevelSurfacePasteOptions& options = {}, QString* error = nullptr);
 	bool pasteLevelSurfaceTargets(const QVector<LevelMaterialTarget>& targets, const LevelSurfacePasteOptions& options = {}, QString* error = nullptr);
 	const LevelSurfaceClipboard& levelSurfaceClipboard() const { return m_levelSurfaceClipboard; }
+	// Reset Textures (bobToolz) on the surface worker as one undo step: the
+	// Surfaces target unless `request.wholeMap`, which leaves out what the
+	// views hide (app/level_surface_quick_actions.cpp).
+	bool startLevelTextureReset(LevelTextureResetRequest request, QString* error = nullptr);
 	void cancelLevelSurfaceEdits();
 	bool levelSurfaceEditsPending() const;
 	bool applyLevelMaterialPaint(const QVector<LevelMaterialTarget>& targets, const QString& material, QString* error = nullptr);
@@ -733,6 +747,13 @@ private:
 	void invertLevelViewFilters();
 	void resetLevelViewFilters();
 	void applyLevelViewFilterState(const QStringList& hiddenFilterIds);
+	// The material kinds read the open package's Quake III shader scripts on a
+	// worker whenever the map, package, staged edits or Reload change what they
+	// would read; the Filters section says what they read.
+	void refreshLevelViewFilterMaterials();
+	void reloadLevelViewFilterMaterials();
+	void refreshLevelViewFilterMaterialStatus();
+	[[nodiscard]] const LevelViewFilterMaterials& currentLevelFilterMaterials() const;
 	// View > Camera: Level Camera, Focus Camera on Selection, Reset Camera
 	// Zoom and the held free-focus key. They move only the level camera
 	// (level_camera_focus_actions.cpp, core/level_camera_focus.h).
@@ -747,6 +768,14 @@ private:
 	void beginLevelCameraFreeFocus(int key);
 	void applyLevelCameraFreeFocus();
 	void endLevelCameraFreeFocus();
+	// View > Camera Display: the camera's saved face mode (textured, flat or
+	// hidden), Edges in Camera and the four-mode cycle. They change only the
+	// picture (level_camera_render_actions.cpp, core/level_camera_render.h).
+	void registerLevelCameraRenderCommands();
+	void refreshLevelCameraRenderCommands();
+	void applyLevelCameraRender();
+	void setLevelCameraRender(const LevelCameraRenderState& state, const QString& message);
+	void stepLevelCameraDrawMode(int steps);
 	// Models, Sounds and Prefabs tabs (level_asset_browsers.cpp).
 	void buildLevelModelBrowser(SidebarPage* page);
 	void buildLevelSoundBrowser(SidebarPage* page);
@@ -849,7 +878,20 @@ private:
 	void applyLevelComponentUvSettings(LevelComponentTransformRequest* request) const;
 	QString levelComponentUvFitNote(int fittedFaces) const;
 	void hollowLevelMapTouchingFromUi();
+	// NRC's Make Room, with the caulk and open-face options that Make Room
+	// Options… saves (level_geometry_actions.cpp, core/level_hollow.h).
 	void makeLevelRoomFromUi();
+	void editLevelRoomOptionsFromUi();
+	// NetRadiant Custom's CSG Tool as the Tools tab's CSG Tool section: the
+	// saved thickness, face policy, caulk and keep-inner options, and Shrink,
+	// Expand and the four hollows as commands that read them
+	// (app/level_csg_tool_actions.cpp, core/level_hollow.h).
+	void registerLevelCsgToolCommands();
+	void refreshLevelCsgToolCommands();
+	[[nodiscard]] QWidget* buildLevelCsgToolPanel();
+	void syncLevelCsgToolPanel();
+	void showLevelCsgToolFromUi();
+	void runLevelCsgToolCommandFromUi(const QString& commandId);
 	void selectLevelWholeEntitiesFromUi();
 	void applyLevelPatchMatrixFromUi(LevelPatchMatrixOperation operation);
 	void thickenLevelPatchesFromUi();
@@ -1066,6 +1108,15 @@ private:
 	// The Levels views claim their nudge keys ahead of window-wide commands.
 	bool handleLevelNudgeKey(QObject* watched, QEvent* event);
 	[[nodiscard]] QString levelNudgeCommandForKey(QKeyCombination combination, int* steps) const;
+	// Camera texture moves and flips: registered with the surface commands;
+	// enabled with a surface target; in the camera their keys come ahead of
+	// the nudge and flip keys while faces are picked outside component mode.
+	void registerLevelCameraTextureCommands();
+	void refreshLevelCameraTextureCommands(bool surfaceTargetEditable);
+	[[nodiscard]] bool levelCameraTextureFacesPicked() const;
+	[[nodiscard]] QString levelCameraTextureCommandForKey(QKeyCombination combination, bool facesPickedOnly) const;
+	// The faces and patches a surface burst adjusts (see queueLevelSurfaceEdit).
+	void levelSurfaceQueueTargets(bool cameraTargets, QVector<LevelSurfaceFace>* faces, QVector<int>* patches) const;
 	// The world axis a nudge or Duplicate and Move along `direction` takes from
 	// `source` or the last focused view: the plan view's, or the camera's where
 	// the profile nudges camera-relative. Activates the plan view it uses;
@@ -1084,6 +1135,11 @@ private:
 	// Point-entity sizes from the loaded definitions, for placement bounds.
 	void fillLevelPlacementEntityBounds(LevelPastePlacement* placement) const;
 	void rotateLevelMapSelectionPreciselyFromUi();
+	// NRC's Arbitrary Rotation and Arbitrary Scale windows stay open after
+	// Apply; refreshing hands them the edited map (app/level_rotation_actions.cpp).
+	void scaleLevelMapSelectionFromUi();
+	void registerLevelArbitraryTransformCommands();
+	void refreshLevelArbitraryTransformDialogs();
 	void editLevelUdmfPropertiesFromUi();
 	void editLevelMapSurfacesFromUi();
 	LevelSurfaceFace inspectedLevelMapSurface() const;
@@ -1111,6 +1167,7 @@ private:
 	std::function<bool()> levelSurfaceContextGuard() const;
 	bool startLevelSurfacePaste(const QVector<LevelMaterialTarget>& targets, const LevelSurfacePasteOptions& options,
 		const QString& faceText, QString* error);
+	void showLevelTextureResetDialog();
 	// Mirrors the selection along the view's horizontal or vertical axis.
 	void flipLevelMapSelectionFromUi(bool horizontal);
 	// Asks for the selection's new size along each axis, kept against its
@@ -1897,6 +1954,8 @@ private:
 	QHash<QString, QAction*> m_levelTools;
 	// Shapes tab: the shape brush drawing makes, and its settings.
 	QHash<QString, SidebarSection*> m_levelToolSections;
+	// The Tools tab's CSG Tool section body (buildLevelCsgToolPanel()).
+	QPointer<QWidget> m_levelCsgToolPanel;
 	QString m_levelShape = QStringLiteral("box");
 	QString m_levelSectorShape = QStringLiteral("sector-rectangle");
 	QButtonGroup* m_levelShapeButtons = nullptr;
@@ -1959,6 +2018,16 @@ private:
 	QStringList m_levelFiltersOff;
 	QString m_levelFilterFormatKey;
 	QHash<QString, QCheckBox*> m_levelFilterBoxes;
+	// The shaders the material kinds read, null until a Quake III map's
+	// package has been read; the package key they came from and the one being
+	// read, whose worker the serial and flag cancel when it is superseded.
+	std::shared_ptr<const LevelViewFilterMaterials> m_levelFilterMaterials;
+	QString m_levelFilterMaterialsKey;
+	QString m_levelFilterMaterialsPendingKey;
+	quint64 m_levelFilterMaterialsSerial = 0;
+	std::shared_ptr<std::atomic_bool> m_levelFilterMaterialsCancel;
+	QPointer<QLabel> m_levelFilterMaterialStatus;
+	QPointer<QToolButton> m_levelFilterMaterialReload;
 	// View > Camera: the last selection the camera focus falls back to (for
 	// the map load it came from), and the held free focus while it lasts.
 	struct LevelCameraFocusState {
@@ -2428,11 +2497,14 @@ private:
 	QVector<LevelSurfaceRequest> m_levelSurfacePending;
 	QVector<LevelSurfaceFace> m_levelSurfaceFaces;
 	QVector<int> m_levelSurfacePatches;
+	// The pending burst's targets came from levelSurfaceQueueTargets(true).
+	bool m_levelSurfaceCameraTargets = false;
 	QHash<QString, QSize> m_levelSurfaceSizes;
 	std::function<bool()> m_levelSurfaceCurrent;
 	quint64 m_levelSurfaceToken = 0;
 	bool m_levelSurfacePublishing = false;
 	bool m_levelSurfacePasting = false;
+	bool m_levelSurfaceResetting = false;
 	LevelSurfaceClipboard m_levelSurfaceClipboard;
 	std::shared_ptr<const PackageArchiveReader> m_levelSurfaceClipboardArchive;
 	std::shared_ptr<const PackageStagingModel> m_levelSurfaceClipboardStaging;
@@ -2513,7 +2585,9 @@ private:
 	QLabel* m_levelPreviewLabel = nullptr;
 	QProgressBar* m_levelPreviewProgress = nullptr;
 	QToolButton* m_levelPreviewCancel = nullptr;
+	// The map.previewTextures command, also behind the status strip's box.
 	QAction* m_levelPreviewTextured = nullptr;
+	LevelCameraRenderState m_levelCameraRender;
 	LevelPreviewAssets m_levelPreviewAssets;
 	QString m_levelPreviewRequestKey;
 	quint64 m_levelPreviewReload = 0;

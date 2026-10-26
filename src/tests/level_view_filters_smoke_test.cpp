@@ -54,10 +54,12 @@ QStringList selectors(const QVector<LevelMapSelectionRef>& refs)
 QStringList kindIds()
 {
 	return {QStringLiteral("world"), QStringLiteral("entities"), QStringLiteral("brushes"), QStringLiteral("brush-entities"),
-		QStringLiteral("func-groups"), QStringLiteral("patches"), QStringLiteral("detail"), QStringLiteral("clip"), QStringLiteral("hint"),
-		QStringLiteral("caulk"), QStringLiteral("sky"), QStringLiteral("liquids"), QStringLiteral("point-entities"), QStringLiteral("lights"),
-		QStringLiteral("triggers"), QStringLiteral("monsters"), QStringLiteral("items"), QStringLiteral("starts"), QStringLiteral("paths"),
-		QStringLiteral("models")};
+		QStringLiteral("func-groups"), QStringLiteral("patches"), QStringLiteral("detail"), QStringLiteral("structural"), QStringLiteral("clip"),
+		QStringLiteral("player-clip"), QStringLiteral("monster-clip"), QStringLiteral("weapon-clip"), QStringLiteral("botclip"), QStringLiteral("hint"),
+		QStringLiteral("caulk"), QStringLiteral("nodraw"), QStringLiteral("areaportals"), QStringLiteral("clusterportals"), QStringLiteral("lightgrid"),
+		QStringLiteral("sky"), QStringLiteral("liquids"), QStringLiteral("translucent"), QStringLiteral("decals"), QStringLiteral("point-entities"),
+		QStringLiteral("lights"), QStringLiteral("triggers"), QStringLiteral("monsters"), QStringLiteral("items"), QStringLiteral("starts"),
+		QStringLiteral("paths"), QStringLiteral("models")};
 }
 
 // What each kind names in tests::viewFilterFixture().
@@ -71,11 +73,22 @@ QHash<QString, QStringList> expectedMatches()
 		{QStringLiteral("func-groups"), {"entity:1", "entity:13"}},
 		{QStringLiteral("patches"), {"patch:0", "patch:1"}},
 		{QStringLiteral("detail"), {"brush:5", "brush:7"}},
+		{QStringLiteral("structural"), {"brush:0", "brush:1", "brush:2", "brush:3", "brush:4", "brush:6", "brush:8", "brush:9"}},
 		{QStringLiteral("clip"), {"brush:2"}},
+		{QStringLiteral("player-clip"), {"brush:2"}},
+		{QStringLiteral("monster-clip"), {}},
+		{QStringLiteral("weapon-clip"), {}},
+		{QStringLiteral("botclip"), {}},
+		{QStringLiteral("areaportals"), {}},
+		{QStringLiteral("clusterportals"), {}},
+		{QStringLiteral("lightgrid"), {}},
+		{QStringLiteral("decals"), {}},
 		{QStringLiteral("hint"), {"brush:3"}},
 		{QStringLiteral("caulk"), {"brush:0"}},
+		{QStringLiteral("nodraw"), {}},
 		{QStringLiteral("sky"), {"brush:1"}},
 		{QStringLiteral("liquids"), {"brush:4"}},
+		{QStringLiteral("translucent"), {}},
 		{QStringLiteral("point-entities"), {"entity:7", "entity:8", "entity:9", "entity:10", "entity:11", "entity:12"}},
 		{QStringLiteral("lights"), {"entity:5"}},
 		{QStringLiteral("triggers"), {"entity:4"}},
@@ -158,16 +171,19 @@ void quake3()
 	expect(serializeLevelMap(document).bytes == before && document.revision == revision && document.undoStack.isEmpty(),
 		"classifying never changes the map");
 
-	// A Quake or Quake II map has no patches to filter; every other kind stays.
+	// A Quake or Quake II map has no patches, bot clip, cluster portals, light
+	// grid or decals to filter; every other kind stays.
 	LevelMapDocument quake = document;
 	quake.format = LevelMapFormat::QuakeMap;
 	QStringList quakeIds;
 	for (const LevelViewFilter& filter : levelViewFilters(quake)) {
 		quakeIds << filter.id;
 	}
-	QStringList withoutPatches = kindIds();
-	withoutPatches.removeAll(QStringLiteral("patches"));
-	expect(quakeIds == withoutPatches, "Quake maps offer every kind but Patches", quakeIds.join(QLatin1Char(',')));
+	QStringList withoutQuake3 = kindIds();
+	for (const char* id : {"patches", "botclip", "clusterportals", "lightgrid", "decals"}) {
+		withoutQuake3.removeAll(QString::fromLatin1(id));
+	}
+	expect(quakeIds == withoutQuake3, "Quake maps offer every kind but the Quake III ones", quakeIds.join(QLatin1Char(',')));
 	LevelMapDocument unknown;
 	expect(levelViewFilters(unknown).isEmpty() && levelViewFilterMatches(unknown, QStringLiteral("world")).isEmpty(), "no map, no filters");
 }
@@ -252,7 +268,10 @@ void profileKeys()
 		{QStringLiteral("map.filterCaulk"), {QStringLiteral("Alt+6")}}, {QStringLiteral("map.filterClip"), {QStringLiteral("Alt+7")}},
 		{QStringLiteral("map.filterPaths"), {QStringLiteral("Alt+8")}}, {QStringLiteral("map.filterLights"), {QStringLiteral("Alt+0")}},
 		{QStringLiteral("map.filterDetail"), {QStringLiteral("Ctrl+D")}}, {QStringLiteral("map.filterHint"), {QStringLiteral("Ctrl+H")}},
-		{QStringLiteral("map.filterModels"), {QStringLiteral("Shift+M")}}, {QStringLiteral("map.filterTriggers"), {QStringLiteral("Ctrl+Shift+T")}}};
+		{QStringLiteral("map.filterModels"), {QStringLiteral("Shift+M")}}, {QStringLiteral("map.filterTriggers"), {QStringLiteral("Ctrl+Shift+T")}},
+		{QStringLiteral("map.filterAreaportals"), {QStringLiteral("Alt+3")}}, {QStringLiteral("map.filterClusterportals"), {QStringLiteral("Alt+9")}},
+		{QStringLiteral("map.filterStructural"), {QStringLiteral("Ctrl+Shift+D")}}, {QStringLiteral("map.filterBotclip"), {QStringLiteral("Alt+M")}},
+		{QStringLiteral("map.filterDecals"), {QStringLiteral("Shift+D")}}, {QStringLiteral("map.filterTranslucent"), {QStringLiteral("Alt+4")}}};
 	const auto filterKeys = [](const QString& profile) {
 		QHash<QString, QStringList> keys;
 		for (const LevelEditorKeyBinding& binding : levelEditorControlsForProfile(profile).keys) {

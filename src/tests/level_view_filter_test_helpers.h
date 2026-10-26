@@ -18,12 +18,13 @@
 namespace vibestudio::tests {
 
 // A box brush in Quake III's classic face syntax; textures are bottom, top,
-// -Y, +Y, -X and +X, the first repeated for any not given.
-inline QString viewFilterBox(int x0, int y0, int z0, int x1, int y1, int z1, const QStringList& textures, qint64 contents = 0)
+// -Y, +Y, -X and +X, the first repeated for any not given. Its planes face
+// inwards, so it classifies but does not solve; viewFilterSolidBox solves.
+inline QString viewFilterBox(int x0, int y0, int z0, int x1, int y1, int z1, const QStringList& textures, qint64 contents = 0, bool solid = false)
 {
 	const auto point = [](int x, int y, int z) { return QStringLiteral("( %1 %2 %3 )").arg(x).arg(y).arg(z); };
 	const auto face = [&](const QString& a, const QString& b, const QString& c, int index) {
-		return QStringLiteral("%1 %2 %3 %4 0 0 0 0.5 0.5 %5 0 0\n").arg(a, b, c, textures.value(index, textures.value(0))).arg(contents);
+		return QStringLiteral("%1 %2 %3 %4 0 0 0 0.5 0.5 %5 0 0\n").arg(a, solid ? c : b, solid ? b : c, textures.value(index, textures.value(0))).arg(contents);
 	};
 	return QStringLiteral("{\n") + face(point(x0, y0, z0), point(x0, y0 + 1, z0), point(x0 + 1, y0, z0), 0)
 		+ face(point(x0, y0, z1), point(x0 + 1, y0, z1), point(x0, y0 + 1, z1), 1)
@@ -33,7 +34,14 @@ inline QString viewFilterBox(int x0, int y0, int z0, int x1, int y1, int z1, con
 		+ face(point(x1, y0, z0), point(x1, y0 + 1, z0), point(x1, y0, z0 + 1), 5) + QStringLiteral("}\n");
 }
 
-inline QString viewFilterPatch(int x, int y, int z)
+// The same box with outward planes, as editors write them, so it solves and
+// the camera draws it; face indices are the same.
+inline QString viewFilterSolidBox(int x0, int y0, int z0, int x1, int y1, int z1, const QStringList& textures, qint64 contents = 0)
+{
+	return viewFilterBox(x0, y0, z0, x1, y1, z1, textures, contents, true);
+}
+
+inline QString viewFilterPatch(int x, int y, int z, const QString& texture = QStringLiteral("base/curve"))
 {
 	QString rows;
 	for (int column = 0; column < 3; ++column) {
@@ -44,7 +52,7 @@ inline QString viewFilterPatch(int x, int y, int z)
 		}
 		rows += QStringLiteral(")\n");
 	}
-	return QStringLiteral("{\npatchDef2\n{\nbase/curve\n( 3 3 0 0 0 )\n(\n") + rows + QStringLiteral(")\n}\n}\n");
+	return QStringLiteral("{\npatchDef2\n{\n") + texture + QStringLiteral("\n( 3 3 0 0 0 )\n(\n") + rows + QStringLiteral(")\n}\n}\n");
 }
 
 inline QByteArray viewFilterFixture()
@@ -78,6 +86,108 @@ inline QByteArray viewFilterFixture()
 						   "{\n\"classname\" \"target_speaker\"\n\"origin\" \"96 96 96\"\n\"noise\" \"sound/test.wav\"\n}\n"
 						   "{\n\"classname\" \"func_group\"\n}\n"
 						   "{\n\"classname\" \"func_door\"\n\"targetname\" \"empty\"\n}\n");
+	return text.toUtf8();
+}
+
+// A Quake III map with one brush of each texture kind, shared by
+// level_filter_texture_kinds_smoke_test and its UI test:
+// worldspawn: 0 areaportal, 1 area portal bit, 2 clusterportal, 3 cluster
+//   portal bit, 4 lightgrid, 5 lightgrid with one base/wall face, 6 botclip,
+//   7 donotenter, 8 clip, 9 bot clip bit, 10 one decals/ face,
+//   11 textures/decals/ face, 12 base/decals/ (no decal), 13 detail flag,
+//   14 caulk but its top, 15 caulk all over, 16 hint with skip;
+// entity 1 func_detail: brush 17; entity 2 func_door: brush 18, caulk but
+//   its +Y face.
+inline QByteArray viewFilterTextureKindsFixture()
+{
+	const QString caulk = QStringLiteral("common/caulk");
+	const QString wall = QStringLiteral("base/wall");
+	const QString lightgrid = QStringLiteral("common/lightgrid");
+	QString text = QStringLiteral("// Game: Quake 3\n{\n\"classname\" \"worldspawn\"\n");
+	const auto at = [](int index) { return index * 64; };
+	text += viewFilterSolidBox(at(0), 0, 0, at(1), 64, 64, {QStringLiteral("common/areaportal")});
+	text += viewFilterSolidBox(at(1), 0, 0, at(2), 64, 64, {wall}, 0x8000);
+	text += viewFilterSolidBox(at(2), 0, 0, at(3), 64, 64, {QStringLiteral("common/clusterportal")});
+	text += viewFilterSolidBox(at(3), 0, 0, at(4), 64, 64, {wall}, 0x100000);
+	text += viewFilterSolidBox(at(4), 0, 0, at(5), 64, 64, {lightgrid});
+	text += viewFilterSolidBox(at(5), 0, 0, at(6), 64, 64, {lightgrid, wall, lightgrid});
+	text += viewFilterSolidBox(at(6), 0, 0, at(7), 64, 64, {QStringLiteral("common/botclip")});
+	text += viewFilterSolidBox(at(7), 0, 0, at(8), 64, 64, {QStringLiteral("common/donotenter")});
+	text += viewFilterSolidBox(at(8), 0, 0, at(9), 64, 64, {QStringLiteral("common/clip")});
+	text += viewFilterSolidBox(at(9), 0, 0, at(10), 64, 64, {wall}, 0x400000);
+	text += viewFilterSolidBox(at(10), 0, 0, at(11), 64, 64, {wall, QStringLiteral("decals/blood1"), wall});
+	text += viewFilterSolidBox(at(11), 0, 0, at(12), 64, 64, {wall, QStringLiteral("textures/decals/scorch"), wall});
+	text += viewFilterSolidBox(at(12), 0, 0, at(13), 64, 64, {wall, QStringLiteral("base/decals/plate"), wall});
+	text += viewFilterSolidBox(at(13), 0, 0, at(14), 64, 64, {wall}, 0x8000000);
+	text += viewFilterSolidBox(at(14), 0, 0, at(15), 64, 64, {caulk, wall, caulk});
+	text += viewFilterSolidBox(at(15), 0, 0, at(16), 64, 64, {caulk});
+	text += viewFilterSolidBox(at(16), 0, 0, at(17), 64, 64, {QStringLiteral("common/skip"), QStringLiteral("common/hint"), QStringLiteral("common/skip")});
+	text += QStringLiteral("}\n{\n\"classname\" \"func_detail\"\n");
+	text += viewFilterSolidBox(0, 128, 0, 64, 192, 64, {wall});
+	text += QStringLiteral("}\n{\n\"classname\" \"func_door\"\n");
+	text += viewFilterSolidBox(64, 128, 0, 128, 192, 64, {caulk, caulk, caulk, QStringLiteral("base/door"), caulk, caulk});
+	text += QStringLiteral("}\n");
+	return text.toUtf8();
+}
+
+// The shader script of the material-kinds fixture, for a package's
+// scripts/ folder; shared by level_filter_material_kinds_smoke_test and its UI
+// test. textures/skies/stars and textures/base_wall/wall are images without a
+// script in that package, and liquids/murk is neither.
+inline QByteArray viewFilterMaterialKindsShaders()
+{
+	return QByteArrayLiteral(
+		"textures/base_wall/glass\n{\n\tqer_trans 0.5\n\tsurfaceparm trans\n\t{\n\t\tmap textures/base_wall/glass.tga\n\t\tblendFunc blend\n\t}\n}\n"
+		"textures/base_wall/grate\n{\n\tcull none\n\t{\n\t\tmap textures/base_wall/grate.tga\n\t\talphaFunc GE128\n\t\tdepthWrite\n\t}\n}\n"
+		"textures/base_wall/fence\n{\n\tqer_alphafunc greater 0.5\n\t{\n\t\tmap textures/base_wall/fence.tga\n\t}\n}\n"
+		"textures/fogs/mist\n{\n\tqer_nocarve\n\tsurfaceparm trans\n\tsurfaceparm nonsolid\n\tsurfaceparm fog\n\tsurfaceparm nolightmap\n"
+		"\tfogparms ( 0.5 0.5 0.5 ) 512\n}\n"
+		"textures/base_wall/lavarock\n{\n\t{\n\t\tmap textures/base_wall/lavarock.tga\n\t}\n}\n"
+		"textures/base_floor/goo\n{\n\tsurfaceparm slime\n\tsurfaceparm nonsolid\n\tsurfaceparm trans\n\t{\n\t\tmap textures/base_floor/goo.tga\n\t}\n}\n"
+		"textures/base_sky/nebula\n{\n\tsurfaceparm noimpact\n\tsurfaceparm nolightmap\n\tskyParms - 512 -\n\t{\n\t\tmap textures/base_sky/nebula.tga\n\t}\n}\n"
+		"textures/base_wall/invisible\n{\n\tsurfaceparm nodraw\n\tsurfaceparm playerclip\n\tsurfaceparm nonsolid\n}\n"
+		"textures/common/weapclip\n{\n\tqer_trans 0.40\n\tsurfaceparm nodraw\n\tsurfaceparm trans\n\tsurfaceparm nomarks\n}\n"
+		"textures/common/monsterclip\n{\n\tsurfaceparm nodraw\n\tsurfaceparm nonsolid\n\tsurfaceparm monsterclip\n}\n"
+		"textures/common/nodraw\n{\n\tsurfaceparm nodraw\n\tsurfaceparm nonsolid\n}\n"
+		"textures/base_wall/botwall\n{\n\tsurfaceparm nodraw\n\tsurfaceparm botclip\n}\n"
+		"textures/common/clip\n{\n\tsurfaceparm nodraw\n\tsurfaceparm playerclip\n\tsurfaceparm nonsolid\n}\n");
+}
+
+// A Quake III map for the material kinds, with the shaders above:
+// worldspawn brushes 0 glass (qer_trans), 1 one grate face (alphaFunc),
+//   2 fence (qer_alphafunc), 3 fogs/mist (fog), 4 lavarock (named lava, not a
+//   liquid), 5 one goo face (slime), 6 skies/stars (an image only),
+//   7 one base_sky/nebula face (skyParms), 8 invisible (playerclip, nodraw),
+//   9 weapclip (qer_trans, nodraw), 10 monsterclip (nodraw), 11 nodraw,
+//   12 wall with one nodraw face, 13 liquids/murk (unknown to the package),
+//   14 botwall (botclip, nodraw), 15 wall;
+// patches 0 glass and 1 common/clip.
+inline QByteArray viewFilterMaterialKindsFixture()
+{
+	const QString wall = QStringLiteral("base_wall/wall");
+	QString text = QStringLiteral("// Game: Quake 3\n{\n\"classname\" \"worldspawn\"\n");
+	const auto box = [&text](int index, const QStringList& textures) {
+		text += viewFilterSolidBox(index * 64, 0, 0, index * 64 + 64, 64, 64, textures);
+	};
+	box(0, {QStringLiteral("base_wall/glass")});
+	box(1, {wall, QStringLiteral("base_wall/grate"), wall});
+	box(2, {QStringLiteral("base_wall/fence")});
+	box(3, {QStringLiteral("fogs/mist")});
+	box(4, {QStringLiteral("base_wall/lavarock")});
+	box(5, {wall, QStringLiteral("base_floor/goo"), wall});
+	box(6, {QStringLiteral("skies/stars")});
+	box(7, {wall, QStringLiteral("base_sky/nebula"), wall});
+	box(8, {QStringLiteral("base_wall/invisible")});
+	box(9, {QStringLiteral("common/weapclip")});
+	box(10, {QStringLiteral("common/monsterclip")});
+	box(11, {QStringLiteral("common/nodraw")});
+	box(12, {wall, QStringLiteral("common/nodraw"), wall});
+	box(13, {QStringLiteral("liquids/murk")});
+	box(14, {QStringLiteral("base_wall/botwall")});
+	box(15, {wall});
+	text += viewFilterPatch(0, 0, 128, QStringLiteral("base_wall/glass"));
+	text += viewFilterPatch(128, 0, 128, QStringLiteral("common/clip"));
+	text += QStringLiteral("}\n");
 	return text.toUtf8();
 }
 

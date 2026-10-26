@@ -833,6 +833,13 @@ It accepts repeatable `--object`, `--axis x|y|z`, optional `--pivot x,y,z`,
 dialect conversion is authorized through that option. `--turns` uses the same
 texture-lock policy; it cannot accompany `--degrees`. Save As, dry-run, overwrite,
 JSON and quiet contracts remain available. See [rotation limits](LEVEL_EDITOR.md#numeric-rotation-and-texture-lock).
+`map rotate --euler x,y,z` turns about world X, then Y, then Z in one atomic
+step (NetRadiant Custom's Arbitrary Rotation, the GUI's modeless **Rotate
+Selection…**) and cannot accompany `--axis`, `--degrees` or `--turns`; JSON
+reports `eulerXyz`. `map resize --factors x,y,z` scales about the centre or
+`--pivot x,y,z` through `scaleLevelMapSelection` (NetRadiant Custom's
+Arbitrary Scale, the GUI's modeless **Scale Selection…**); negative factors
+mirror with winding repair, and JSON reports `factors` and `mirrored`.
 `map rotate --pivot-grid <units>` turns about the selection's centre rounded to
 that grid, the quick-turn pivot of the NetRadiant Custom and TrenchBroom
 profiles (`core/level_quick_transform.h`); it cannot accompany `--pivot`, and
@@ -1476,10 +1483,26 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
   `--scale U,V`, `--scale-step U,V` (NetRadiant Custom's additive scale step
   about the texture origin, flipping sign at zero), `--degrees N` (with
   `--anchor centre|origin`; `origin` is Radiant's turn about the texture
-  origin), `--fit U,V` (a zero keeps that axis),
+  origin), `--clockwise N` (degrees clockwise as seen from each face's front,
+  about the texture origin, whatever the face format or a mirrored texture:
+  TrenchBroom's Rotate Textures turns, `ClockwiseRotate` in
+  `core/level_surface.h`; negative turns counter-clockwise), `--fit U,V` (a
+  zero keeps that axis),
   `--align U,V` with `keep|minimum|center|maximum` modes, `--natural U,V` or
   `--face-aligned U,V` (map units per texel, Radiant's Natural and a projection
-  along each face's own plane), or `--flip u|v`.
+  along each face's own plane), `--flip u|v`, or, as a camera at
+  `--camera-yaw` and `--camera-pitch` degrees (default 0) sees each face,
+  `--camera-shift RIGHT,UP` (texels across and up the view, TrenchBroom's
+  camera texture moves) or `--camera-flip horizontal|vertical`, or a reset in
+  one pass for every face format: `--reset-alignment U,V` (TrenchBroom's Reset
+  Texture Alignment, keeping each face's projection kind; `Reset`) or
+  `--radiant-reset U,V` (NetRadiant Custom's TextureReset/Cap: the plane's own
+  basis for Valve 220 and brush-primitive faces, capped patches;
+  `RadiantReset`). Reset Textures mode (bobToolz) replaces the operation with
+  absolute `--set-scale-u`, `--set-scale-v`, `--set-shift-u`, `--set-shift-v`
+  and `--set-rotation` values and `--rename NAME`, on the selection or the
+  `--whole-map` (visible, unlocked surfaces in the open group), optionally
+  `--only-texture NAME`, through `prepareLevelTextureReset`.
   Resolve original image sizes through `--package <archive-or-folder>` and
   optional `--palette`, or override with `--texture-size W,H`. Required unknown
   dimensions fail; no size is guessed. Requires `--output`, supports
@@ -1837,11 +1860,15 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
   writes the prepared result, including consumed source volumes; `--dry-run`
   validates without writing. `--axis` is the projection axis for Tall modes.
   See [Select by brush volume](manual/levels.md#select-by-brush-volume).
-- [x] `map filters <map> [--off kinds] [--saved] [--invert] [--objects]` lists the
+- [x] `map filters <map> [--off kinds] [--saved] [--invert] [--objects] [--package path]` lists the
   Levels view filters the map's format offers, with counts, shown state and the
   toggling command, through `core/level_view_filters`, and reports the objects a
   switched-off list (the View tab's saved one with `--saved`) would hide, after
-  Invert Filters with `--invert`. Nothing is written. See the
+  Invert Filters with `--invert`, plus the caulk faces the camera leaves out one
+  at a time (`faceCount`, `filteredFaces`). `--package` reads a Quake III map's
+  shader scripts through the material library for the material kinds
+  (Translucent, Liquids, Sky, Clip and its parts, Bot Clip, Nodraw) and reports
+  them as `shaders`. Nothing is written. See the
   [view filters CLI manual](manual/cli.md#query-view-filters).
 - [x] `map camera-focus <map> [--object selector...] [--level]` reports where
   **Level Camera** and **Focus Camera on Selection** would put the 3D camera,
@@ -1923,7 +1950,35 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
   it grew from; the new selectors are reported as `walls`. `--mode overlap`
   (the default) lets the walls meet at the edges, `touch` cuts them back so
   they meet without overlapping, and `room` builds them outside the brush, as
-  NetRadiant Custom's Make Room does.
+  NetRadiant Custom's Make Room does. `--caulk` (the game's caulk) or
+  `--caulk-texture NAME` puts caulk on every wall face but the room's, and
+  repeated `--open-face face:brushId:faceNumber` leaves faces open, the walls
+  beside them stopping flush; JSON adds `caulkTexture`, `caulkedFaces`,
+  `wallCount`, `openFaces` and `openFaceCount`
+  (`cli/level_hollow_options.cpp`, `core/level_hollow.h`).
+- [x] `editor make-room` to read or change the `levels/makeRoom/*` options
+  that **Make Room Options…** edits and the Levels editor's **Make Room**
+  uses: repeat `--set` with `caulk=on|off`, `caulkTexture=NAME` (nothing after
+  `=` for the game's own caulk) and `openPickedFaces=on|off`; `--reset`
+  restores NetRadiant Custom's defaults (caulk on, picked faces open) and
+  `--dry-run` previews. Both surfaces validate through
+  `updateLevelRoomPreferences` and `levelRoomPreferencesProblem`; JSON reports
+  `values`, `applied` and `dryRun`. A bad field, value or material name returns
+  2 and a settings write failure 1. `map hollow` does not read these options;
+  it takes them as flags.
+- [x] `map hollow --mode diagonal|extrude|wrap|pull`, `--keep-inner`,
+  `--exclude-face`, `--only-face` and `--exclude-facing x|y|z|dx,dy,dz`: the
+  Levels **CSG Tool**'s hollows and face policies, after NetRadiant Custom's
+  CSG Tool (`hollowLevelMapSelection`, `levelCsgExcludedFaces`,
+  `levelMapFacesFacingAxis`); JSON adds `keepInner` and `innerKept`.
+- [x] `map shrink-brushes` and `map expand-brushes` move every face of the
+  `--object` brushes `--thickness` units in or out, except those
+  `--exclude-face`, `--only-face` and `--exclude-facing` leave alone, as one
+  undo step (`offsetLevelMapSelectionFaces`); `--context`, `--dry-run` and
+  `--overwrite` as for other map commands. JSON reports `operation`,
+  `thickness`, `offset`, `changed`, `movedFaces`, `excludedFaces` and
+  `skipped`; usage errors return 2, a shrink no brush can take 1 and save
+  errors 4 (`cli/level_hollow_options.cpp`).
 - [x] `map snap-vertices` to round every vertex of the `--object` brushes, or
   of entities' brushes, onto `--grid` and rebuild them, as TrenchBroom's Snap
   Vertices does; a brush the grid would collapse is left as it was and listed
@@ -1996,6 +2051,8 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
   planes map from the old box to the new one; source texture parameters remain
   unchanged by default. `--texture-lock on` stretches with the brush and
   `--allow-valve220` permits required conversion. Two numbers leave z as it is.
+  `--factors x,y,z` scales about the centre or `--pivot` instead; a negative
+  factor mirrors.
 - [x] `map replace-texture` to replace every use of `--from` with `--to` on
   brush faces, patches, or Doom wall textures and flats, across the map, only
   the `--object` selectors given, or only repeated `--face` picks (with

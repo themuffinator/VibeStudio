@@ -101,9 +101,9 @@ int main(int argc, char **argv)
 		LevelMapRotationRequest request{1, 31.75, {20, 30, 40, true}, true, true};
 		dialog.setRequest(request);
 		ok &= expect(settle(dialog) && dialog.previewValid(), "async rotation preview",
-					 dialog.findChild<QLabel *>(QStringLiteral("rotationStatus"))->text());
+					 dialog.findChild<QLabel *>(QStringLiteral("transformStatus"))->text());
 		auto *preview = dialog.findChild<ModelViewport *>();
-		auto *degrees = dialog.findChild<QDoubleSpinBox *>(QStringLiteral("rotationDegrees"));
+		auto *degrees = dialog.findChild<QDoubleSpinBox *>(QStringLiteral("rotationAngleY"));
 		ok &= expect(preview && preview->hasMesh() && preview->reducedMotion() && degrees && degrees->layoutDirection() == Qt::LeftToRight,
 					 "shared viewport and LTR numeric controls");
 		ok &= expect(QAccessible::queryAccessibleInterface(degrees)->role() == QAccessible::SpinBox &&
@@ -140,7 +140,7 @@ int main(int argc, char **argv)
 		});
 		dialog.accept();
 		ok &= expect(dialog.isVisible() &&
-						 dialog.findChild<QLabel *>(QStringLiteral("rotationStatus"))->text().contains(QStringLiteral("Map changed")),
+						 dialog.findChild<QLabel *>(QStringLiteral("transformStatus"))->text().contains(QStringLiteral("Map changed")),
 					 "failed commit retains draft");
 		dialog.setApplyHandler({});
 		dialog.accept();
@@ -169,48 +169,23 @@ int main(int argc, char **argv)
 	const auto output = QDir(temp.path()).filePath(QStringLiteral("rotated.map"));
 	ok &= expect(shell.saveLevelDocument(output, false, &error), "shell save", error);
 	select->trigger();
-	// Open the actual command and change the document after preview. This
-	// exercises the shell's load/revision guard without input injection.
-	QTimer drive;
-	drive.setInterval(30);
-	int phase = 0;
+	// Open the actual, modeless command and replace the document after the
+	// preview: the window follows the new map, whose empty selection cannot
+	// apply, instead of committing the old draft.
 	bool staleRejected = false;
-	QObject::connect(&drive, &QTimer::timeout, &shell, [&] {
-		auto *modal = QApplication::activeModalWidget();
-		if (!modal || modal->objectName() != QStringLiteral("levelRotationDialog")) {
-			return;
-		}
-		auto *dialog = static_cast<LevelRotationDialog *>(modal);
-		if (phase == 0) {
-			dialog->setRequest(request);
-			phase = 1;
-			return;
-		}
-		if (!dialog->isReady()) {
-			return;
-		}
-		drive.stop();
+	rotate->trigger();
+	if (auto *open = shell.findChild<QDialog *>(QStringLiteral("levelRotationDialog"), Qt::FindDirectChildrenOnly)) {
+		auto *dialog = static_cast<LevelRotationDialog *>(open);
+		dialog->setRequest(request);
+		settle(*dialog);
 		create.starterRoom = false;
 		if (shell.createLevelDocument(create, &error)) {
-			dialog->accept();
-			staleRejected = dialog->isVisible() &&
-							dialog->findChild<QLabel *>(QStringLiteral("rotationStatus"))->text().contains(QStringLiteral("changed"));
+			settle(*dialog);
+			staleRejected = !dialog->apply() && dialog->isVisible() && !dialog->previewValid() && shell.levelDocument().undoStack.isEmpty();
 		}
 		dialog->reject();
-	});
-	QTimer watchdog;
-	watchdog.setSingleShot(true);
-	QObject::connect(&watchdog, &QTimer::timeout, &shell, [] {
-		if (auto *modal = qobject_cast<QDialog *>(QApplication::activeModalWidget())) {
-			modal->reject();
-		}
-	});
-	drive.start();
-	watchdog.start(60000);
-	rotate->trigger();
-	drive.stop();
-	watchdog.stop();
-	ok &= expect(staleRejected, "actual shell rejects stale rotation draft", error);
+	}
+	ok &= expect(staleRejected, "actual shell retargets the open rotation window", error);
 	ok &= expect(shell.saveLevelDocument(QDir(temp.path()).filePath(QStringLiteral("replacement.map")), false, &error), "save replacement",
 				 error);
 	ok &= expect(shell.close(), "clean shell closure");

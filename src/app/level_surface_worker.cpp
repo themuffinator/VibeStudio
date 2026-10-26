@@ -28,9 +28,44 @@ bool LevelSurfaceWorker::start(LevelSurfaceWork request)
 	work->result.pasted = request.clipboard.ready() || !request.faceClipboardText.isEmpty();
 	work->result.strokeResult = request.stroke || request.startStroke;
 	work->result.finishedStroke = request.finishStroke;
+	work->result.reset = request.resetTextures;
 	m_thread = QThread::create([work, request = std::move(request)]() mutable {
 		const auto cancelled = [work] { return work->cancelled.load(); };
 		try {
+			if (request.resetTextures) {
+				// Brush-primitive faces read Reset Textures values in texels, so
+				// their images' sizes come from the package first.
+				QVector<LevelSurfaceFace> faces;
+				QVector<int> patches;
+				QStringList sized;
+				if (!levelTextureResetTargets(request.document, request.reset, &faces, &patches, &sized, &work->result.error)) { return; }
+				LevelMapDocument visible;
+				visible.format = request.document.format;
+				visible.engineFamily = request.document.engineFamily;
+				for (const auto& name : sized) {
+					if (request.textureSizes.value(name).isValid()) { continue; }
+					LevelMapBrush brush; LevelMapBrushFace face; face.textureName = name;
+					brush.faces << face; visible.brushes << brush;
+				}
+				PackageReadControl packageControl; packageControl.isCancelled = cancelled;
+				if (request.staging && !visible.brushes.isEmpty()) {
+					request.archive = std::make_shared<PackageStagingArchive>(*request.staging, PackageStagingReadMode::CompletePlan, packageControl);
+				}
+				if (request.archive && !visible.brushes.isEmpty()) {
+					LevelPreviewAssetOptions options; options.paletteId = request.palette;
+					const auto assets = resolveLevelPreviewAssets(visible, *request.archive, options, [cancelled](int, int) { return !cancelled(); });
+					request.textureSizes.insert(levelPreviewTextureSizes(assets));
+				}
+				LevelSurfaceEditPlan plan;
+				if (cancelled() || !prepareLevelTextureReset(request.document, request.reset, request.textureSizes, &plan, &work->result.error, cancelled)
+					|| cancelled() || !commitLevelSurfaceEdit(&request.document, plan, &work->result.error)) { return; }
+				work->result.changedFaces = plan.faceCount();
+				work->result.changedPatches = plan.patchCount();
+				work->result.renamed = plan.renamedCount();
+				work->result.document = std::move(request.document);
+				work->result.textureSizes = std::move(request.textureSizes);
+				return;
+			}
 			if (!request.faceClipboardText.isEmpty() && !parseLevelFaceClipboard(request.faceClipboardText, &request.clipboard, &work->result.error, cancelled)) { return; }
 			const auto describePlan = [&](const LevelSurfaceEditPlan& plan) {
 				work->result.changedFaces = plan.faceCount(); work->result.changedPatches = plan.patchCount();

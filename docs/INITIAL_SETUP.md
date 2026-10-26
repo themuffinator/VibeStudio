@@ -1579,6 +1579,20 @@ the NRC profile, with `plan.quickClipModifiers` for remapping or disabling it.
 Existing custom selection bindings retain priority. See
 [clipping](manual/levels.md#clip-brushes-across-views).
 
+**Make Room** needs no setup either. It starts as NetRadiant Custom's does,
+caulking the wall faces the room does not see with the game's caulk
+(`common/caulk` in Quake III, `skip` in Quake) and leaving picked faces open.
+**Make Room Options…** saves either choice and an optional caulk material
+under `levels/makeRoom`; games that ship no caulk material, such as Quake II,
+need a named one. `editor make-room` reads and updates the same settings. See
+[Make a room with caulk and openings](manual/levels.md#make-a-room-with-caulk-and-openings).
+
+The **CSG Tool** section of the Levels **Tools** tab needs no setup either. It
+starts as NetRadiant Custom's CSG Tool does (thickness 16, picked faces left
+alone, caulk on, inner brush removed) and saves every change under
+`levels/csgTool`; its caulk uses the material Make Room's options choose. See
+[Hollow, shrink and expand with the CSG Tool](manual/levels.md#hollow-shrink-and-expand-with-the-csg-tool).
+
 The NRC profile also enables `camera.clipViewAxis`: two camera points choose a
 view-dependent plane and correct parallel segments or outer-face-only planes.
 It requires no connector, package or additional setup. **Customize Gestures… >

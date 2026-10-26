@@ -28,6 +28,7 @@
 #include "app/model_viewport.h"
 #include "app/studio_actions.h"
 #include "core/level_camera_keys.h"
+#include "core/level_camera_texture.h"
 #include "core/level_nudge.h"
 #include "core/level_placement.h"
 #include "core/level_quick_transform.h"
@@ -194,12 +195,16 @@ QString ApplicationShell::levelNudgeCommandForKey(QKeyCombination combination, i
 		}
 	}
 	// Shift moves eight grid steps, where no command answers the Shift chord
-	// in the views (Radiant's Shift+arrows shift textures instead).
+	// in the views (Radiant's Shift+arrows shift textures instead). The
+	// camera's texture moves take their Shift chords only while faces are
+	// picked (handleLevelNudgeKey), so they leave the chord to the nudge.
 	if (combination.keyboardModifiers().testFlag(Qt::ShiftModifier)) {
 		const QKeyCombination plain(combination.keyboardModifiers() & ~Qt::ShiftModifier, combination.key());
 		const QString chord = QKeySequence(combination).toString(QKeySequence::PortableText);
 		for (const LevelNudgeCommand& command : levelNudgeCommands()) {
-			if (bound(command.commandId, plain) && m_commands->commandsUsingShortcut(chord, command.commandId).isEmpty()) {
+			QStringList users = m_commands->commandsUsingShortcut(chord, command.commandId);
+			users.removeIf([](const QString& id) { return levelCameraTextureCommandForId(id); });
+			if (bound(command.commandId, plain) && users.isEmpty()) {
 				if (steps) {
 					*steps = 8;
 				}
@@ -231,9 +236,32 @@ bool ApplicationShell::handleLevelNudgeKey(QObject* watched, QEvent* event)
 		// Availability is read fresh, so the claim never lags a selection change.
 		refreshLevelNudgeCommands();
 		refreshLevelAxisTransformCommands();
+		if (camera) {
+			// The camera texture moves follow the Surfaces target and the
+			// picked faces; refresh them only for a key one of them uses.
+			const QKeyCombination pressed = normalizedNudgeKey(key->keyCombination());
+			bool textureKey = false;
+			for (const LevelCameraTextureCommand& command : levelCameraTextureCommands()) {
+				for (const QKeySequence& sequence : m_commands->shortcutSequences(command.commandId)) {
+					textureKey |= sequence.count() == 1 && normalizedNudgeKey(sequence[0]) == pressed;
+				}
+			}
+			if (textureKey) {
+				refreshLevelSurfaceTools();
+			}
+		}
 	}
 	int steps = 1;
-	const QString commandId = levelNudgeCommandForKey(key->keyCombination(), &steps);
+	// In the camera, TrenchBroom's texture moves and flips come first while
+	// faces are picked (its face selection), then the nudges, turns and flips
+	// of objects; a texture command still takes a key nothing else wants.
+	QString commandId = camera ? levelCameraTextureCommandForKey(key->keyCombination(), true) : QString();
+	if (commandId.isEmpty()) {
+		commandId = levelNudgeCommandForKey(key->keyCombination(), &steps);
+	}
+	if (commandId.isEmpty() && camera) {
+		commandId = levelCameraTextureCommandForKey(key->keyCombination(), false);
+	}
 	if (commandId.isEmpty()) {
 		return false;
 	}
@@ -267,7 +295,12 @@ bool ApplicationShell::handleLevelNudgeKey(QObject* watched, QEvent* event)
 		return false;
 	}
 	QWidget* view = plan ? static_cast<QWidget*>(plan) : static_cast<QWidget*>(m_levelMap3D);
-	if (levelNudgeCommandForId(commandId)) {
+	if (levelCameraTextureCommandForId(commandId)) {
+		QString error;
+		if (!runLevelCameraTextureCommand(commandId, &error) && !error.isEmpty()) {
+			statusBar()->showMessage(error, 6000);
+		}
+	} else if (levelNudgeCommandForId(commandId)) {
 		nudgeLevelSelectionFromUi(commandId, steps, view);
 	} else if (levelDuplicateMoveCommandForId(commandId)) {
 		duplicateMoveLevelSelectionFromUi(commandId, view);
