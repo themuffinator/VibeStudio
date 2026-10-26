@@ -378,6 +378,59 @@ bool planarLevelPatchTexture(LevelMapPatch* patch, double unitsPerRepeatU, doubl
 	return validateLevelPatch(*patch, error);
 }
 
+// NetRadiant Custom's TextureProjectAxial, Ortho and Cam on a patch
+// (Patch::ProjectTexture with Texdef_Construct_local2tex4projection: an axial
+// basis for the average normal, or ComputeAxisBase for a direction) at
+// 449778b3 (GPL-2.0-or-later). Original code; see docs/CREDITS.md. Its
+// direction projection runs V down the second axis for patches but up it for
+// Valve 220 faces; here patches take the faces' way, which reads the right
+// way round, as Cap Texture does.
+bool axialLevelPatchTexture(LevelMapPatch* patch, double unitsPerRepeatU, double unitsPerRepeatV, QString* error)
+{
+	if (!patch || !validateLevelPatch(*patch, error)) {
+		return patch ? false : fail(error, QT_TRANSLATE_NOOP("VibeStudioLevelPatch", "Missing patch destination."));
+	}
+	if (!std::isfinite(unitsPerRepeatU) || !std::isfinite(unitsPerRepeatV) || unitsPerRepeatU <= 0 || unitsPerRepeatV <= 0) {
+		return fail(error, QT_TRANSLATE_NOOP("VibeStudioLevelPatch", "A projected patch texture needs a positive size for each repeat."));
+	}
+	// A face facing the patch's way takes the same world axes as Natural.
+	LevelMapBrushFace facing;
+	facing.explicitPlane = true;
+	facing.planeNormal = levelPatchAverageNormal(*patch);
+	const auto projection = levelNaturalTextureProjection(facing, unitsPerRepeatU, unitsPerRepeatV);
+	if (!projection.valid) {
+		return fail(error, QT_TRANSLATE_NOOP("VibeStudioLevelPatch", "The patch has no direction to project its texture along."));
+	}
+	for (int i = 0; i < patch->controlPoints.size(); ++i) {
+		const QPointF uv = projection.at(patch->controlPoints.at(i));
+		patch->controlU[i] = uv.x();
+		patch->controlV[i] = uv.y();
+	}
+	patch->definitionDirty = patch->geometryDirty = true;
+	return validateLevelPatch(*patch, error);
+}
+
+bool projectedLevelPatchTexture(LevelMapPatch* patch, const LevelMapVec3& direction, double unitsPerRepeatU, double unitsPerRepeatV, QString* error)
+{
+	if (!patch || !validateLevelPatch(*patch, error)) {
+		return patch ? false : fail(error, QT_TRANSLATE_NOOP("VibeStudioLevelPatch", "Missing patch destination."));
+	}
+	if (!std::isfinite(unitsPerRepeatU) || !std::isfinite(unitsPerRepeatV) || unitsPerRepeatU <= 0 || unitsPerRepeatV <= 0) {
+		return fail(error, QT_TRANSLATE_NOOP("VibeStudioLevelPatch", "A projected patch texture needs a positive size for each repeat."));
+	}
+	const double size = length(direction);
+	if (!std::isfinite(size) || size < 1e-9) {
+		return fail(error, QT_TRANSLATE_NOOP("VibeStudioLevelPatch", "The patch has no direction to project its texture along."));
+	}
+	const auto [s, t] = levelTexturePrimitiveBasis(times(direction, 1.0 / size));
+	for (int i = 0; i < patch->controlPoints.size(); ++i) {
+		patch->controlU[i] = dot(patch->controlPoints.at(i), s) / unitsPerRepeatU;
+		patch->controlV[i] = dot(patch->controlPoints.at(i), t) / unitsPerRepeatV;
+	}
+	patch->definitionDirty = patch->geometryDirty = true;
+	return validateLevelPatch(*patch, error);
+}
+
 bool thickenLevelPatch(const LevelMapPatch& source, const LevelPatchThickenRequest& request, QVector<LevelMapPatch>* created, QString* error)
 {
 	if (error) {

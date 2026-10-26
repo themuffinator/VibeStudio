@@ -2,6 +2,7 @@
 #include "core/level_placement.h"
 #include "core/level_scene.h"
 #include "core/editor_profiles.h"
+#include "core/level_filter_tags.h"
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -14,12 +15,12 @@ LevelVisibilityCliResult runLevelVisibility(const QStringList& arguments)
 	LevelVisibilityCliResult result; result.payload.insert("mapWritten",false); result.payload.insert("queryOnly",true);
 	const auto fail = [&](int code, const QString& message) { result.exitCode = code; result.error = message; return result; };
 	const QSet<QString> flags{"--cli","--json","--quiet","--verbose"};
-	const QSet<QString> options{"--object","--hidden","--shown","--policy","--profile","--mode","--node","--parent","--offset","--context","--engine","--map","--settings-file","--locale","--catalog-root"};
+	const QSet<QString> options{"--object","--hidden","--shown","--class","--policy","--profile","--mode","--node","--parent","--offset","--context","--engine","--map","--settings-file","--locale","--catalog-root"};
 	QSet<QString> seen; QHash<QString,QStringList> values; QStringList positional;
 	for (qsizetype i = 1; i < arguments.size(); ++i) {
 		const auto arg = arguments[i]; if (!arg.startsWith('-')) { positional.append(arg); continue; }
 		const auto equal = arg.indexOf('='); const auto name = equal < 0 ? arg : arg.left(equal);
-		if (seen.contains(name) && name != "--object" && name != "--hidden" && name != "--shown") { return fail(2,Text::tr("Repeated option: %1.").arg(name)); }
+		if (seen.contains(name) && name != "--object" && name != "--hidden" && name != "--shown" && name != "--class") { return fail(2,Text::tr("Repeated option: %1.").arg(name)); }
 		seen.insert(name);
 		if (flags.contains(name) && equal < 0) { continue; }
 		if (!options.contains(name)) { return fail(2,Text::tr("Unexpected option: %1.").arg(arg)); }
@@ -121,8 +122,42 @@ LevelVisibilityCliResult runLevelVisibility(const QStringList& arguments)
 	result.payload.insert("changed",changed); result.payload.insert("mode",mode);
 	result.payload.insert("source",source.sourcePath); result.payload.insert("sourceSha256",QString::fromLatin1(source.sourceContentHash.toHex()));
 	result.payload.insert("context",source.openSceneGroups.isEmpty() ? QString{} : source.openSceneGroups.last());
+	// --class switches off view filters for whole entity classes, as the View
+	// tab's Entity Classes and the Toggle <class> Visible commands do: every
+	// entity of the class, those added later included, apart from session
+	// hiding, which they leave unchanged.
+	QJsonArray classFilters; QStringList classFiltered; QStringList classNames;
+	for (const auto& list : values.value("--class")) {
+		for (const auto& part : list.split(',',Qt::SkipEmptyParts)) {
+			const auto name = part.trimmed();
+			if (!levelFilterTagsApply(prepared.document)) { return fail(2,Text::tr("Class filters are for Quake-family maps.")); }
+			if (!levelFilterClassForId(levelFilterClassId(name))) { return fail(2,Text::tr("%1 is not a class name a map can hold.").arg(name)); }
+			if (classNames.contains(name,Qt::CaseInsensitive)) { continue; }
+			classNames.append(name);
+			QJsonArray members;
+			for (const auto& ref : levelFilterClassMatches(prepared.document,name)) {
+				const auto id = levelMapSelectionRefId(ref);
+				members.append(id);
+				if (!classFiltered.contains(id)) { classFiltered.append(id); }
+			}
+			classFilters.append(QJsonObject{{"class",name},{"id",levelFilterClassId(name)},{"count",members.size()},
+				{"objects",members},{"command",levelFilterClassCommandId(name)}});
+		}
+	}
+	classFiltered.sort();
+	QStringList viewHidden = effective;
+	for (const auto& id : std::as_const(classFiltered)) { if (!viewHidden.contains(id)) { viewHidden.append(id); } }
+	viewHidden.sort();
+	result.payload.insert("classFilters",classFilters);
+	result.payload.insert("classFiltered",QJsonArray::fromStringList(classFiltered));
+	result.payload.insert("viewHidden",QJsonArray::fromStringList(viewHidden));
 	result.lines.append(Text::tr("Session visibility query: no map was written. Scene visibility and filters are independent."));
 	result.lines.append(Text::tr("%n temporarily hidden object(s)",nullptr,static_cast<int>(hidden.size()))); result.lines.append(hidden);
+	if (!classNames.isEmpty()) {
+		const int filteredCount = static_cast<int>(classFiltered.size());
+		result.lines.append(Text::tr("Class filters for %1 hide %n entity(ies) from the views as well.",nullptr,filteredCount).arg(classNames.join(QStringLiteral(", "))));
+		result.lines.append(classFiltered);
+	}
 	return result;
 }
 }

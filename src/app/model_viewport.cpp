@@ -1002,6 +1002,7 @@ QString ModelViewport::accessibleSummary() const
 	if (m_edgePicking) { summary += QStringLiteral(" ") + tr("Edge selection mode: choose an edge on a visible face or use the component table. %Ln edge(s) selected.", nullptr, int(m_selectedEdges.size())); }
 	if (m_selectionResizeEnabled && !m_brushDrawTool) { summary += QStringLiteral(" ") + selectionResizeSummary(); }
 	if (m_brushDrawTool) { summary += QStringLiteral(" ") + brushDrawSummary(); }
+	if (m_assembleTool) { summary += QStringLiteral(" ") + brushAssembleSummary(); }
 	if (isRendering()) { summary += QStringLiteral(" ") + tr("Rendering model…"); }
 	if (m_pointerDriving) { summary += QStringLiteral(" ") + tr("Position steering; release or Escape stops movement."); }
 	if (m_componentMode) { summary += QStringLiteral(" ") + componentSummary(); }
@@ -1904,6 +1905,7 @@ void ModelViewport::paintEvent(QPaintEvent*)
 
 	if (!m_hasMesh) {
 		if (m_brushDrawTool) { paintBrushDraw(painter); paintHud(painter,palette); }
+		else if (m_assembleTool) { paintBrushAssemble(painter); paintHud(painter,palette); }
 		else { paintEmptyState(painter, palette); }
 		if (m_overlayPainter) { m_overlayPainter(painter); }
 		paintOverlay(painter, palette);
@@ -1922,7 +1924,7 @@ void ModelViewport::paintEvent(QPaintEvent*)
 		paintAxes(painter, palette);
 	}
 	if (m_meshTriangles.isEmpty()) {
-		if (!m_brushDrawTool) { paintNoGeometryState(painter, palette); }
+		if (!m_brushDrawTool && !m_assembleTool) { paintNoGeometryState(painter, palette); }
 	} else {
 		paintTriangles(painter, palette);
 		paintCollisionOverlays(painter);
@@ -1934,7 +1936,8 @@ void ModelViewport::paintEvent(QPaintEvent*)
 		paintClip(painter);
 	}
 	paintBrushDraw(painter);
-	if (!m_meshTriangles.isEmpty() || m_brushDrawTool) { paintHud(painter, palette); }
+	paintBrushAssemble(painter);
+	if (!m_meshTriangles.isEmpty() || m_brushDrawTool || m_assembleTool) { paintHud(painter, palette); }
 	if (m_overlayPainter) {
 		painter.save();
 		m_overlayPainter(painter);
@@ -1966,6 +1969,7 @@ ViewportHudLayout ModelViewport::hudLayoutFor(const QPaintDevice* device) const
 	left << effectiveRenderModeName();
 	if (isResizingSelection()) { left << selectionResizeSummary(false); }
 	if (m_brushDrawTool) { left << brushDrawSummary(false); }
+	if (m_assembleTool) { left << brushAssembleSummary(false); }
 	if (m_componentMode) { left << (isMovingComponents() ? componentSummary() : tr("%n component(s) picked",nullptr,m_componentPicks.size())); }
 	if (!m_groupContextLabel.isEmpty()) { left << tr("Editing group: %1").arg(m_groupContextLabel); }
 	if (m_texturedSurfaceCount > 0) { left << tr("%n textured face(s)",nullptr,m_texturedSurfaceCount); }
@@ -1989,7 +1993,7 @@ ViewportHudLayout ModelViewport::hudLayoutFor(const QPaintDevice* device) const
 void ModelViewport::mousePressEvent(QMouseEvent* event)
 {
 	rememberCommandPointer(event->position());
-	if (!m_clipMode && m_materialGesturesEnabled && cameraMaterialGesture(m_controls, event->button(), event->modifiers()) != CameraMaterialGesture::None) {
+	if (!m_clipMode && !m_assembleTool && m_materialGesturesEnabled && cameraMaterialGesture(m_controls, event->button(), event->modifiers()) != CameraMaterialGesture::None) {
 		// Consume a reserved chord even while busy; it must not fall through to
 		// navigation or cancel another pending edit. Multi-button chords do nothing.
 		m_materialGestureButtons.setFlag(event->button());
@@ -2004,6 +2008,7 @@ void ModelViewport::mousePressEvent(QMouseEvent* event)
 	if (m_componentBanding) { m_componentBanding = false; update(); event->accept(); return; }
 	if (m_pointerDriving) { endPointerDrive(); event->accept(); return; }
 	if (isDrawingBrush()) { finishBrushDraw(false); event->accept(); return; }
+	if (isAssemblingBrush()) { finishBrushAssemble(false); event->accept(); return; }
 	if (isResizingSelection()) { finishSelectionResize(false); event->accept(); return; }
 	setFocus(Qt::MouseFocusReason);
 	if (m_looking && m_controls.lookPanUsesButtons) { event->accept(); return; }
@@ -2011,6 +2016,9 @@ void ModelViewport::mousePressEvent(QMouseEvent* event)
 	if (m_clipGrabbed >= 0) { finishClipPoint(false); event->accept(); return; }
 	if (m_clipMode && button == Qt::LeftButton && !m_looking && event->modifiers() == Qt::NoModifier) {
 		beginClipPoint(event->position()); event->accept(); return;
+	}
+	if (m_assembleTool && button == Qt::LeftButton && !m_looking && (event->modifiers() == Qt::NoModifier || event->modifiers() == Qt::ShiftModifier)) {
+		beginBrushAssemble(event->position(),event->modifiers()); event->accept(); return;
 	}
 	if (m_componentMode && button == Qt::LeftButton && !m_looking) {
 		const auto modifiers = event->modifiers();
@@ -2102,6 +2110,11 @@ void ModelViewport::mouseMoveEvent(QMouseEvent* event)
 		else if (!m_componentGizmo->releasePending()) { m_componentGizmo->updateDrag(position); }
 		event->accept(); return;
 	}
+	if (isAssemblingBrush()) {
+		if (event->buttons() != Qt::LeftButton) { finishBrushAssemble(false); } else { updateBrushAssemble(position); }
+		event->accept(); return;
+	}
+	if (m_assembleTool && event->buttons() == Qt::NoButton) { updateBrushAssembleHover(position,event->modifiers()); }
 	if (m_clipGrabbed >= 0) {
 		if (event->buttons() != Qt::LeftButton) { finishClipPoint(false); } else { moveClipPoint(position,event->modifiers()); }
 		event->accept(); return;
@@ -2193,6 +2206,11 @@ void ModelViewport::mouseMoveEvent(QMouseEvent* event)
 
 void ModelViewport::mouseReleaseEvent(QMouseEvent* event)
 {
+	if (isAssemblingBrush()) {
+		if (event->button() == Qt::LeftButton) { updateBrushAssemble(event->position()); finishBrushAssemble(true); }
+		else { finishBrushAssemble(false); }
+		event->accept(); return;
+	}
 	if (m_clipGrabbed >= 0) {
 		if (event->button() == Qt::LeftButton) { moveClipPoint(event->position(),event->modifiers()); finishClipPoint(true); }
 		else { finishClipPoint(false); }
@@ -2314,6 +2332,19 @@ void ModelViewport::keyPressEvent(QKeyEvent* event)
 {
 	if (updateClipPointModifiers(event->key(),event->modifiers(),true)) { event->accept(); return; }
 	if (updateComponentModifiers(event->key(),event->modifiers(),true)) { event->accept(); return; }
+	if (m_assembleTool && !m_looking) {
+		const int key = event->key();
+		if (key == Qt::Key_Shift) { updateBrushAssembleHover(commandPosition(),Qt::ShiftModifier); }
+		if (key == Qt::Key_Escape) {
+			if (isAssemblingBrush()) { finishBrushAssemble(false); }
+			else if (!m_assembleState.points.isEmpty()) { clearBrushAssemblePoints(); }
+			else { setBrushAssembleTool(false); }
+			event->accept(); return;
+		}
+		if (key == Qt::Key_Backspace || key == Qt::Key_Delete) { removeLastBrushAssemblePoint(); event->accept(); return; }
+		if (key == Qt::Key_Return || key == Qt::Key_Enter) { requestBrushAssemble(); event->accept(); return; }
+		if (isAssemblingBrush()) { event->accept(); return; }
+	}
 	if (m_clipMode && !m_looking) {
 		const int key = event->key();
 		if (key == Qt::Key_Escape) { if (m_clipGrabbed >= 0) { finishClipPoint(false); } else { setClipMode(false); } event->accept(); return; }
@@ -3140,7 +3171,7 @@ void ModelViewport::recentreLookCursor(const QPointF& position)
 void ModelViewport::setMoveGrid(double units)
 {
 	const double next = std::isfinite(units) && units > 0.0 ? units : 0.0;
-	if (next != m_moveGrid) { finishClipPoint(false); finishBrushDraw(false); finishSelectionResize(false); finishComponentMove(false); }
+	if (next != m_moveGrid) { finishClipPoint(false); finishBrushAssemble(false); finishBrushDraw(false); finishSelectionResize(false); finishComponentMove(false); }
 	m_moveGrid = next;
 }
 
@@ -3220,6 +3251,7 @@ void ModelViewport::keyReleaseEvent(QKeyEvent* event)
 {
 	if (updateClipPointModifiers(event->key(),event->modifiers(),false)) { event->accept(); return; }
 	if (updateComponentModifiers(event->key(),event->modifiers(),false)) { event->accept(); return; }
+	if (m_assembleTool && event->key() == Qt::Key_Shift) { updateBrushAssembleHover(commandPosition(),Qt::NoModifier); }
 	m_vertexInsertion->clearHover();
 	if (m_pointerDriving && cameraNavigationDrag(m_controls, m_controls.driveButton, event->modifiers()) != CameraNavigationDrag::Drive) { endPointerDrive(); }
 	if (isDrawingBrush()) { updateBrushDraw(m_brushDrawPoint,event->modifiers()); event->accept(); return; }
@@ -3268,6 +3300,12 @@ bool ModelViewport::event(QEvent* event)
 			event->accept(); return true;
 		}
 	}
+	if (event->type() == QEvent::ShortcutOverride && m_assembleTool && !m_looking) {
+		const int key = static_cast<QKeyEvent*>(event)->key();
+		if (isAssemblingBrush() || key == Qt::Key_Escape || key == Qt::Key_Return || key == Qt::Key_Enter || key == Qt::Key_Backspace || key == Qt::Key_Delete) {
+			event->accept(); return true;
+		}
+	}
 	if (event->type() == QEvent::ShortcutOverride && m_clipMode && !m_looking) {
 		const int key = static_cast<QKeyEvent*>(event)->key();
 		if (m_clipGrabbed >= 0 || key == Qt::Key_Escape || key == Qt::Key_Tab || key == Qt::Key_Backtab || key == Qt::Key_Return || key == Qt::Key_Enter
@@ -3288,6 +3326,7 @@ bool ModelViewport::event(QEvent* event)
 	if (event->type() == QEvent::WindowDeactivate || event->type() == QEvent::UngrabMouse
 		|| event->type() == QEvent::Hide || (event->type() == QEvent::EnabledChange && !isEnabled())) {
 		finishClipPoint(false);
+		finishBrushAssemble(false);
 		finishComponentMove(false); m_componentBanding = false;
 		m_materialGestureButtons = {};
 		if (event->type() != QEvent::UngrabMouse || materialStrokeActive()) { finishMaterialStroke(false); }

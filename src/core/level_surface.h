@@ -11,6 +11,10 @@ namespace vibestudio
 class LevelSurfaceClipboard;
 struct LevelSurfacePasteOptions;
 struct LevelMaterialTarget;
+struct LevelFaceFlagsEdit;
+struct LevelUvLayout;
+struct LevelUvEdit;
+enum class LevelUvFit;
 struct LevelSurfaceFace {
 	int brushId = -1;
 	int faceIndex = -1; // Zero-based source face, as used by camera picking.
@@ -64,15 +68,33 @@ struct LevelSurfaceFace {
 // Valve 220 or brush-primitive face its plane's own basis
 // (levelPlaneBasisTextureProjection() in core/level_texture_mapping.h), and a
 // patch Radiant's Cap Texture projection, as FaceAligned gives patches.
+//
+// ProjectAxial and ProjectDirection are NetRadiant Custom's Project Axial,
+// Project Ortho and Project Camera: the default texture, with no shift or
+// rotation at x and y map units per texel, projected flat. ProjectAxial
+// projects each face along the world axis it looks down most (Natural's
+// projection, in every face format) and each patch along the world axis
+// nearest its average normal (axialLevelPatchTexture() in
+// core/level_patch_tools.h). ProjectDirection projects every face and patch
+// along `projectionDirection`, with the texture axes q3map2's ComputeAxisBase
+// gives a plane facing that way, so they all share one planar projection that
+// reads the right way round from the side the direction points to. Both write
+// a brush-primitive matrix's offsets within one repeat, as that editor does.
+// A face the direction runs along (edge-on to it) and a patch it flattens to
+// a line keep their mapping, as does a classic face, whose format holds the
+// projection only where it happens to suit the face's own axis (the Top
+// view's on a floor); the plan counts them (skippedEdgeOnCount(),
+// skippedClassicCount()), and refuses a request that would change nothing but
+// skip surfaces.
 enum class LevelSurfaceOperation { Shift, Scale, Rotate, Fit, Align, Natural, FaceAligned, RadiantScale, RadiantRotate, CameraShift, CameraFlip,
-	ClockwiseRotate, Reset, RadiantReset };
+	ClockwiseRotate, Reset, RadiantReset, ProjectAxial, ProjectDirection };
 enum class LevelSurfaceAlignment { Keep, Minimum, Center, Maximum };
 struct LevelSurfaceRequest {
 	LevelSurfaceOperation operation = LevelSurfaceOperation::Fit;
 	// Texels for shift, size multipliers for scale (negative mirrors), repeats
 	// for fit (0 keeps that axis), map units per texel for Natural,
-	// FaceAligned, Reset and RadiantReset, scale increments for RadiantScale
-	// (0 keeps that axis),
+	// FaceAligned, Reset, RadiantReset, ProjectAxial and ProjectDirection,
+	// scale increments for RadiantScale (0 keeps that axis),
 	// screen-right and screen-up texels for CameraShift, axes to mirror for
 	// CameraFlip.
 	double x = 1, y = 1;
@@ -85,6 +107,16 @@ struct LevelSurfaceRequest {
 	// directions in map space. Any length, but they must not be parallel.
 	LevelMapVec3 cameraRight;
 	LevelMapVec3 cameraUp;
+	// Fit with exactly one repeat count 0: scale that axis by the factor that
+	// fits the other and start it at the face's (or patch's) minimum, so the
+	// texture keeps its proportions, as NetRadiant Custom's Fit Width and Fit
+	// Height do; without it that axis is kept, as their Width Only and Height
+	// Only do. No effect when both counts are set.
+	bool keepProportions = false;
+	// ProjectDirection: the direction to project along, pointing out of the
+	// surfaces that show the texture the right way round, such as towards the
+	// viewer of a 2D view or back towards the camera. Any length but zero.
+	LevelMapVec3 projectionDirection;
 };
 
 // The map units per texel a reset mapping uses: 0.5 for Quake III, as its
@@ -139,6 +171,10 @@ class LevelSurfaceEditPlan
 	int brushCount() const { return static_cast<int>(m_after.size()); }
 	// Faces and patches a Reset Textures plan renames.
 	int renamedCount() const { return m_renamed; }
+	// Faces and patches a projection left as they were because it runs along
+	// them, and classic faces whose format cannot hold it.
+	int skippedEdgeOnCount() const { return m_skippedEdgeOn; }
+	int skippedClassicCount() const { return m_skippedClassic; }
 	bool ready() const { return m_ready; }
 
   private:
@@ -155,6 +191,12 @@ class LevelSurfaceEditPlan
 		const LevelSurfacePasteOptions&, LevelSurfaceEditPlan*, QString*, const std::function<bool()>&);
 	friend bool prepareLevelTextureReset(const LevelMapDocument&, const LevelTextureResetRequest&, const QHash<QString, QSize>&,
 		LevelSurfaceEditPlan*, QString*, const std::function<bool()>&);
+	// core/level_face_flags.h: content and surface flags and value.
+	friend bool prepareLevelFaceFlagsEdit(const LevelMapDocument&, const QVector<LevelSurfaceFace>&, const LevelFaceFlagsEdit&,
+		LevelSurfaceEditPlan*, QString*);
+	// core/level_uv_edit.h: the UV Editor's face or patch.
+	friend bool prepareLevelUvEdit(const LevelMapDocument&, const LevelUvLayout&, const LevelUvEdit&, LevelSurfaceEditPlan*, QString*,
+		LevelUvFit*);
 	quint64 m_revision = 0;
 	QString m_sourcePath;
 	QByteArray m_sourceHash;
@@ -167,9 +209,15 @@ class LevelSurfaceEditPlan
 	int m_convertedFaces = 0;
 	int m_edgeOnFaces = 0;
 	int m_renamed = 0;
+	int m_skippedEdgeOn = 0;
+	int m_skippedClassic = 0;
 	bool m_ready = false;
 	bool m_paste = false;
 	bool m_reset = false;
+	// A face flags plan, which names its undo step for the flags.
+	bool m_flags = false;
+	// A UV Editor plan, which names its undo step for texture coordinates.
+	bool m_uv = false;
 };
 
 // Work on an immutable document, normally on a worker. Each face keeps its
@@ -185,8 +233,8 @@ bool prepareLevelSurfaceEdits(const LevelMapDocument &document, const QVector<Le
 							  const QVector<LevelSurfaceRequest> &requests, const QHash<QString, QSize> &textureSizes,
 							  LevelSurfaceEditPlan *plan, QString *error = nullptr, const std::function<bool()> &cancelled = {});
 // The same for brush faces and whole patches together. Patch coordinates
-// count repeats, so a shift, a turn, Natural and FaceAligned need the
-// patch's image size; scale, fit and alignment do not.
+// count repeats, so a shift, a turn, Natural, FaceAligned and the projections
+// need the patch's image size; scale, fit and alignment do not.
 bool prepareLevelSurfaceEdits(const LevelMapDocument &document, const QVector<LevelSurfaceFace> &faces, const QVector<int> &patches,
 							  const QVector<LevelSurfaceRequest> &requests, const QHash<QString, QSize> &textureSizes,
 							  LevelSurfaceEditPlan *plan, QString *error = nullptr, const std::function<bool()> &cancelled = {});

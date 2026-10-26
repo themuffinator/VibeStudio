@@ -24,7 +24,10 @@
 // brushes with no detail face outside func_detail on Quake II and III maps,
 // and worldspawn with every brush entity but func_detail* on Quake maps.
 // Caulk also hides caulk faces one by one on brushes it does not hide whole,
-// and on Quake maps Quake's skip counts as caulk rather than as hint.
+// and on Quake maps Quake's skip counts as caulk. Hint takes brushes with a
+// hint face; Skip takes brushes skipped all over and, like Caulk, hides the
+// skip faces of other brushes one by one, so hiding it leaves a hint brush's
+// hint face. Fog takes Quake III fog volumes by shader, content bit or name.
 //
 // The material kinds also read Quake III shader scripts through the material
 // library (LevelViewFilterMaterials): Translucent (qer_trans, qer_alphafunc, a
@@ -81,6 +84,11 @@ struct LevelViewFilterShader {
 	// skyParms or surfaceparm sky.
 	bool sky = false;
 	bool nodraw = false;
+	// surfaceparm fog or fogParms.
+	bool fog = false;
+	// Every surfaceparm the shader declares, lower case, for the tags game or
+	// project data define by surfaceparm (core/level_filter_tags.h).
+	QStringList surfaceParms;
 };
 
 // The shaders of the open package, keyed by materialLookupKey of the shader
@@ -140,9 +148,10 @@ struct LevelViewFilterMaterials {
 [[nodiscard]] QVector<LevelMapSelectionRef> levelViewFilteredObjects(const LevelMapDocument& document, const QStringList& hiddenFilterIds,
 	const LevelViewFilterMaterials& materials = LevelViewFilterMaterials());
 // The faces one kind hides one at a time, on brushes it does not name whole:
-// Caulk's caulk faces (and skip faces on a Quake map) on otherwise textured
-// brushes, which the camera leaves out as Radiant's caulk face filter does.
-// Empty for every other kind; faces are zero-based, in document order.
+// Caulk's caulk faces (and skip faces on a Quake map) and Skip's skip faces on
+// otherwise textured brushes, which the camera leaves out as Radiant's caulk
+// face filter does. Empty for every other kind; faces are zero-based, in
+// document order.
 [[nodiscard]] QVector<LevelSurfaceFace> levelViewFilterFaceMatches(const LevelMapDocument& document, const QString& filterId,
 	const LevelViewFilterMaterials& materials = LevelViewFilterMaterials());
 // Every face the switched-off kinds hide one at a time, leaving out brushes

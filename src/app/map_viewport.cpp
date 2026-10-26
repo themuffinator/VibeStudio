@@ -532,12 +532,10 @@ MapViewportOverlayRequest MapViewport::overlayRequest(const MapViewportOverlayKe
 void MapViewport::prepareOverlays(QPainter& painter, const Palette& palette)
 {
 	const bool wasRendering = isRendering();
-	const auto device = viewportImageDevice(painter.deviceTransform());
 	MapViewportOverlayKey key; key.sceneRevision = m_sceneRevision; key.selectionRevision = m_selectionRevision; key.projection = m_projection;
-	key.view.viewport = size(); key.view.center = m_worldCenter; key.view.zoom = m_zoom; key.view.units = m_gridSize;
-	key.view.pixelRatio = device.pixelRatio; key.view.pixelPhase = device.pixelPhase;
-	key.view.minor = palette.gridMinor.rgba(); key.view.major = palette.gridMajor.rgba(); key.view.axis = palette.axis.rgba();
-	key.showGrid = m_showGrid; key.showMembers = m_selection.size() > 1;
+	// The grid image carries the block grid too (map_viewport_grid_overlays.cpp).
+	key.view = gridView(painter.deviceTransform(),palette);
+	key.showGrid = m_showGrid || drawsBlockGrid(); key.showMembers = m_selection.size() > 1;
 	key.selectionColor = palette.selection.rgba(); key.markerWidth = m_highContrast ? 2.0 : 1.4;
 	const bool sameRequest = sameMapViewportOverlayKey(key,m_overlayRequested);
 	const bool supported = !mapGridImageSize(key.view).isEmpty();
@@ -601,6 +599,13 @@ void MapViewport::setDocument(const LevelMapDocument& document, const MapBrushGe
 	if (m_clipMode) {
 		m_clipMode = false;
 		Q_EMIT clipModeChanged(false);
+	}
+	m_assembleGesture = 0; m_assembleDragged = false; m_assembleGrabbed.clear();
+	m_assembleState.points.clear(); m_assembleOutline = {}; m_assemblePreview = {}; m_assembleMessage.clear();
+	if (m_assembleTool) {
+		m_assembleTool = false;
+		unsetCursor();
+		Q_EMIT brushAssembleToolChanged(false);
 	}
 	m_drawCorners.clear();
 	m_hasDrawHover = false;
@@ -763,6 +768,13 @@ void MapViewport::clearDocument()
 	if (m_clipMode) {
 		m_clipMode = false;
 		Q_EMIT clipModeChanged(false);
+	}
+	m_assembleGesture = 0; m_assembleDragged = false; m_assembleGrabbed.clear();
+	m_assembleState.points.clear(); m_assembleOutline = {}; m_assemblePreview = {}; m_assembleMessage.clear();
+	if (m_assembleTool) {
+		m_assembleTool = false;
+		unsetCursor();
+		Q_EMIT brushAssembleToolChanged(false);
 	}
 	m_drawCorners.clear();
 	m_hasDrawHover = false;
@@ -977,6 +989,7 @@ bool MapViewport::openGroupAt(const QPointF& point)
 
 void MapViewport::mouseDoubleClickEvent(QMouseEvent* event)
 {
+	if (m_assembleTool && event->button() == Qt::LeftButton) { event->accept(); return; }
 	if (m_clipMode && event->button() == Qt::LeftButton
 		&& (event->modifiers() == Qt::NoModifier || event->modifiers() == m_controls.quickClipModifiers)) {
 		activateClipDoubleClick(); event->accept(); return;
@@ -995,6 +1008,8 @@ void MapViewport::setGridSize(double units)
 	finishComponentMove(false);
 	m_gridSize = clamped;
 	retireOverlayRender(); m_gridFrame = {};
+	// Grid coordinates step with the grid, and the description names them.
+	if (m_showGridCoordinates) { setAccessibleDescription(accessibleSummary()); }
 	update();
 }
 
@@ -1031,6 +1046,7 @@ void MapViewport::cancelInteraction()
 	m_vertexInsertion->finish(false); m_vertexInsertion->clearHover();
 	m_componentGizmo->finish(false);
 	finishClipPoint(false);
+	finishBrushAssemble(false);
 	setTemporaryPan(false);
 	const bool wasBusy = m_dragging || m_banding || m_pressArmed || m_resizing || m_clipDrawing || m_brushDrawing || m_clickArmed;
 	m_brushArmed = false;
@@ -1634,6 +1650,9 @@ QString MapViewport::hoverSummary() const
 	if (m_clipMode && (m_clipDrawing || !hasClipLine())) {
 		return clipSummary();
 	}
+	if (m_assembleTool && (m_assembleGesture || m_assembleState.points.isEmpty() || !m_assembleMessage.isEmpty())) {
+		return brushAssembleSummary();
+	}
 	if (m_drawMode) {
 		return drawSummary();
 	}
@@ -1742,6 +1761,9 @@ QStringList MapViewport::statusLines() const
 	if (m_clipMode) {
 		lines << clipSummary();
 	}
+	if (m_assembleTool) {
+		lines << brushAssembleSummary();
+	}
 	if (m_drawMode) {
 		lines << drawSummary();
 	}
@@ -1791,6 +1813,9 @@ QString MapViewport::accessibleSummary() const
 	if (const QString linked = levelLinkedGroupsDescription(m_linkedGroupBoxes, linkedGroupsInUse(), m_showLinkedGroups); !linked.isEmpty()) {
 		overlays += QStringLiteral(" ") + linked;
 	}
+	for (const QString& grid : {blockGridDescription(), gridCoordinatesDescription()}) {
+		if (!grid.isEmpty()) { overlays += QStringLiteral(" ") + grid; }
+	}
 	if (!m_hidden.isEmpty()) {
 		overlays += QStringLiteral(" ") + tr("%n object(s) are hidden from the view.", nullptr, static_cast<int>(m_hidden.size()));
 	}
@@ -1804,6 +1829,9 @@ QString MapViewport::accessibleSummary() const
 	}
 	if (m_regionDrawMode) {
 		overlays += QStringLiteral(" ") + tr("Draw Region is on: drag a box to set the region; Escape leaves.");
+	}
+	if (m_assembleTool) {
+		overlays += QStringLiteral(" ") + brushAssembleSummary();
 	}
 	if (m_hasCameraBrushDraft) { overlays += QStringLiteral(" ") + tr("Camera brush draft: %1 × %2 × %3 units. No source edit yet.")
 		.arg(m_cameraBrushDraft[3]-m_cameraBrushDraft[0]).arg(m_cameraBrushDraft[4]-m_cameraBrushDraft[1]).arg(m_cameraBrushDraft[5]-m_cameraBrushDraft[2]); }
@@ -3232,25 +3260,30 @@ void MapViewport::paintRubberBand(QPainter& painter, const Palette& palette) con
 
 void MapViewport::paintGrid(QPainter& painter, const Palette& palette) const
 {
-	const auto device = viewportImageDevice(painter.deviceTransform());
-	MapGridView view; view.viewport = size(); view.center = m_worldCenter;
-	view.zoom = m_zoom; view.units = m_gridSize; view.pixelRatio = device.pixelRatio; view.pixelPhase = device.pixelPhase;
-	view.minor = palette.gridMinor.rgba(); view.major = palette.gridMajor.rgba(); view.axis = palette.axis.rgba();
+	const MapGridView view = gridView(painter.deviceTransform(),palette);
 	if (m_asyncOverlays) {
+		// The last image stands in while the worker catches up with a pan or
+		// zoom, but never one drawn with other lines, colours or blocks.
 		const auto& previous = m_gridFrame.view;
 		if (previous.units == view.units && previous.minor == view.minor && previous.major == view.major
-			&& previous.axis == view.axis && previous.pixelRatio == view.pixelRatio) { paintOverlayImage(painter,m_gridFrame.image,previous); }
+			&& previous.axis == view.axis && previous.pixelRatio == view.pixelRatio && previous.lines == view.lines
+			&& previous.blockX == view.blockX && previous.blockY == view.blockY && previous.block == view.block
+			&& previous.blockWidth == view.blockWidth && previous.blockBounds == view.blockBounds) { paintOverlayImage(painter,m_gridFrame.image,previous); }
 		return;
 	}
 	if (!m_overlayRenderFailed && renderMapGrid(view,&m_gridFrame)) {
 		paintOverlayImage(painter,m_gridFrame.image,view); return;
 	}
-	const auto lines = mapGridLines(view);
+	const auto lines = view.lines ? mapGridLines(view) : MapGridLines();
 	const QColor colors[] = {palette.gridMinor,palette.gridMajor,palette.axis};
 	painter.setBrush(Qt::NoBrush);
 	for (int pass = 0; pass < 3; ++pass) {
 		painter.setPen(QPen(colors[pass],pass == 2 ? 2.0 : 1.0));
 		painter.drawLines(lines[pass]);
+	}
+	if (const auto blocks = mapBlockGridLines(view); !blocks.isEmpty()) {
+		painter.setPen(mapBlockGridPen(view));
+		painter.drawLines(blocks);
 	}
 }
 
@@ -3510,6 +3543,8 @@ void MapViewport::paintOverlay(QPainter& painter, const Palette& palette) const
 		const auto tags = hudTags();
 		hud = layoutViewportHud(rect(),QFontMetricsF(viewportHudFont(font()),painter.device()),
 			tags.at(0).split(QStringLiteral("  %1  ").arg(QChar(0x00b7))),{tags.at(1)},layoutDirection());
+		// Under the markers, handles and tools, clear of the status tags.
+		paintGridCoordinates(painter,palette,hud);
 	}
 	if (m_hasDocument && !m_dragging && !m_resizing && !m_banding && m_hover.kind == LevelMapSelectionKind::DoomSector) {
 		// The sector under the pointer is traced, dotted, as the room a click
@@ -3575,6 +3610,7 @@ void MapViewport::paintOverlay(QPainter& painter, const Palette& palette) const
 		paintShearPreview(painter, palette);
 		paintResizeHandles(painter, palette);
 		paintClip(painter, palette);
+		paintBrushAssemble(painter, palette);
 		paintDraw(painter, palette);
 		paintBrushDraw(painter, palette);
 		paintRegion(painter, palette);
@@ -3604,6 +3640,7 @@ QStringList MapViewport::hudTags() const
 		tr("Grid %1").arg(m_gridSize),
 		m_snapToGrid ? tr("Snap on") : tr("Snap off"),
 	};
+	if (const QString blocks = blockGridTag(); !blocks.isEmpty()) { leftParts << blocks; }
 	if (m_activePane) { leftParts.insert(1, tr("Active")); }
 	if (!m_texturedFaces.isEmpty()) { leftParts << tr("%n textured face(s)",nullptr,static_cast<int>(m_texturedFaces.size())); }
 	if (const auto* group = levelSceneNode(m_sourceDocument.scene,m_sceneContext.openGroup)) { leftParts << tr("Editing group: %1").arg(group->name); }
@@ -3611,6 +3648,9 @@ QStringList MapViewport::hudTags() const
 	if (isRendering()) { leftParts.insert(1, tr("Updating view…")); }
 	if (m_clipMode) {
 		leftParts << clipSummary();
+	}
+	if (m_assembleTool) {
+		leftParts << brushAssembleSummary(false);
 	}
 	if (m_drawMode) {
 		leftParts << tr("Draw Sector");
@@ -3675,6 +3715,14 @@ bool MapViewport::event(QEvent* event)
 			event->accept(); return true;
 		}
 	}
+	if (event->type() == QEvent::ShortcutOverride && m_assembleTool) {
+		const int key = static_cast<QKeyEvent*>(event)->key();
+		if (m_assembleGesture || key == Qt::Key_Escape || key == Qt::Key_Backspace || key == Qt::Key_Delete || key == Qt::Key_Return
+			|| key == Qt::Key_Enter) {
+			event->accept();
+			return true;
+		}
+	}
 	if (event->type() == QEvent::ShortcutOverride && m_clipMode) {
 		const int key = static_cast<QKeyEvent*>(event)->key();
 		if (key == Qt::Key_Escape || key == Qt::Key_Backspace || key == Qt::Key_Delete || key == Qt::Key_Return || key == Qt::Key_Enter) { event->accept(); return true; }
@@ -3682,6 +3730,7 @@ bool MapViewport::event(QEvent* event)
 	if (event->type() == QEvent::FocusOut || event->type() == QEvent::Hide || (event->type() == QEvent::EnabledChange && !isEnabled())) {
 		finishComponentMove(false);
 		finishClipPoint(false);
+		finishBrushAssemble(false);
 		setTemporaryPan(false);
 	}
 	if (event->type() == QEvent::ShortcutOverride && (m_componentMode != ComponentMode::Off || m_regionDrawMode)) {
@@ -3747,6 +3796,7 @@ void MapViewport::paintEvent(QPaintEvent*)
 		palette.thing = palette.entity = palette.link = c.info;
 		palette.patch = c.success; palette.warning = c.warning; palette.leak = c.danger;
 		palette.focus = c.focus; palette.sectorDark = c.panelRaised; palette.sectorBright = c.textFaint;
+		palette.block = c.accent;
 	} else {
 		palette.background = QColor(22, 24, 28);
 		palette.gridMinor = QColor(40, 44, 52);
@@ -3770,6 +3820,7 @@ void MapViewport::paintEvent(QPaintEvent*)
 		palette.sectorBright = QColor(150, 170, 200);
 		palette.leak = QColor(255, 86, 86);
 		palette.link = QColor(214, 140, 224);
+		palette.block = QColor(74, 120, 194);
 	}
 
 	QPainter painter(this);
@@ -3784,7 +3835,7 @@ void MapViewport::paintEvent(QPaintEvent*)
 
 	prepareOverlays(painter,palette);
 
-	if (m_showGrid) {
+	if (m_showGrid || drawsBlockGrid()) {
 		PaintMeasurement grid(m_measurePainting,&m_paintStatistics.gridNs);
 		paintGrid(painter, palette);
 	}
@@ -4086,6 +4137,7 @@ void MapViewport::paintLeakTrail(QPainter& painter, const Palette& palette) cons
 void MapViewport::mousePressEvent(QMouseEvent* event)
 {
 	if (m_clipDrawing) { finishClipPoint(false); event->accept(); return; }
+	if (m_assembleGesture) { finishBrushAssemble(false); event->accept(); return; }
 	setFocus(Qt::MouseFocusReason);
 	rememberCommandPointer(event->position());
 	if (m_panHoldActive) { event->accept(); return; }
@@ -4183,6 +4235,9 @@ void MapViewport::mousePressEvent(QMouseEvent* event)
 
 	if (m_clipMode) {
 		beginClipPoint(event->position()); event->accept(); return;
+	}
+	if (m_assembleTool) {
+		beginBrushAssemble(event->position(), keys); event->accept(); return;
 	}
 
 	// Vertex editing picks and drags handles rather than objects.
@@ -4474,6 +4529,11 @@ void MapViewport::mouseMoveEvent(QMouseEvent* event)
 		else { moveClipPoint(position); }
 		event->accept(); return;
 	}
+	if (m_assembleGesture) {
+		if (event->buttons() != Qt::LeftButton) { finishBrushAssemble(false); }
+		else { updateBrushAssemble(position); }
+		event->accept(); return;
+	}
 
 	if (m_pressArmed) {
 		const QPointF travel = position - m_pressViewPoint;
@@ -4593,6 +4653,11 @@ void MapViewport::mouseReleaseEvent(QMouseEvent* event)
 	if (m_clipDrawing) {
 		if (event->button() == Qt::LeftButton) { moveClipPoint(event->position()); finishClipPoint(true); }
 		else { finishClipPoint(false); }
+		event->accept(); return;
+	}
+	if (m_assembleGesture) {
+		if (event->button() == Qt::LeftButton) { updateBrushAssemble(event->position()); finishBrushAssemble(true); }
+		else { finishBrushAssemble(false); }
 		event->accept(); return;
 	}
 
@@ -4762,6 +4827,7 @@ void MapViewport::keyPressEvent(QKeyEvent* event)
 	case Qt::Key_Backspace:
 	case Qt::Key_Delete:
 		if (m_clipMode) { removeLastClipPoint(); event->accept(); return; }
+		if (m_assembleTool) { removeLastBrushAssemblePoint(); event->accept(); return; }
 		if (m_drawMode && !m_drawCorners.isEmpty()) {
 			m_drawCorners.removeLast();
 			setAccessibleDescription(accessibleSummary());
@@ -4780,6 +4846,18 @@ void MapViewport::keyPressEvent(QKeyEvent* event)
 				clearDrawCorners();
 			} else {
 				setDrawMode(false);
+			}
+			event->accept();
+			return;
+		}
+		if (m_assembleTool) {
+			// Escape drops a drag, then the points, then leaves the tool.
+			if (m_assembleGesture) {
+				finishBrushAssemble(false);
+			} else if (!m_assembleState.points.isEmpty()) {
+				clearBrushAssemblePoints();
+			} else {
+				setBrushAssembleTool(false);
 			}
 			event->accept();
 			return;
@@ -4858,6 +4936,11 @@ void MapViewport::keyPressEvent(QKeyEvent* event)
 	case Qt::Key_Enter:
 		if (m_drawMode) {
 			finishDraw();
+			event->accept();
+			return;
+		}
+		if (m_assembleTool) {
+			requestBrushAssemble();
 			event->accept();
 			return;
 		}

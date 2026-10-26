@@ -190,6 +190,64 @@ bool cameraOperation(LevelSurfaceOperation operation)
 {
 	return operation == LevelSurfaceOperation::CameraShift || operation == LevelSurfaceOperation::CameraFlip;
 }
+bool projectOperation(LevelSurfaceOperation operation)
+{
+	return operation == LevelSurfaceOperation::ProjectAxial || operation == LevelSurfaceOperation::ProjectDirection;
+}
+// Why a projection left a surface as it was: it runs along the surface, or
+// a classic face cannot hold it.
+enum class Skip { None, EdgeOn, Classic };
+// Fit's scale factors for an axis that spans `extent` (texels on classic and
+// Valve 220 faces, repeats on brush-primitive faces and patches) and `size`
+// texels a repeat: a count of 0 keeps that axis (factor 1), unless keeping
+// proportions, when it takes the other axis's factor.
+// Workflow reference: NRC radiant/brush_primit.cpp Texdef_FitTexture (fit
+// width or height, with and without only_dimension) at 449778b3
+// (GPL-2.0-or-later). Original code; see docs/CREDITS.md.
+std::pair<double, double> fitFactors(const LevelSurfaceRequest &request, double extentU, double extentV, double sizeU, double sizeV)
+{
+	double u = request.x > 0 ? request.x * sizeU / extentU : 1.0, v = request.y > 0 ? request.y * sizeV / extentV : 1.0;
+	if (request.keepProportions && (request.x > 0) != (request.y > 0)) {
+		if (request.x > 0) {
+			v = u;
+		} else {
+			u = v;
+		}
+	}
+	return {u, v};
+}
+bool fitsAxis(const LevelSurfaceRequest &request, bool uAxis)
+{
+	return (uAxis ? request.x : request.y) > 0 || (request.keepProportions && (request.x > 0) != (request.y > 0));
+}
+// Whether a patch's texture coordinates all lie along one line, as a flat
+// projection running along the patch leaves them: the texture would smear.
+bool collapsedCoordinates(const LevelMapPatch &patch)
+{
+	const qsizetype count = patch.controlU.size();
+	const auto distance = [&patch](qsizetype a, qsizetype b) {
+		return std::hypot(patch.controlU[a] - patch.controlU[b], patch.controlV[a] - patch.controlV[b]);
+	};
+	// Two coordinates about as far apart as any, then how far the others lie
+	// off the line through them.
+	qsizetype first = 0, second = 0;
+	for (qsizetype i = 1; i < count; ++i) {
+		first = distance(0, i) > distance(0, first) ? i : first;
+	}
+	for (qsizetype i = 0; i < count; ++i) {
+		second = distance(first, i) > distance(first, second) ? i : second;
+	}
+	const double span = count > 0 ? distance(first, second) : 0.0;
+	if (!std::isfinite(span) || span <= 1e-9) {
+		return true;
+	}
+	const double du = (patch.controlU[second] - patch.controlU[first]) / span, dv = (patch.controlV[second] - patch.controlV[first]) / span;
+	double off = 0;
+	for (qsizetype i = 0; i < count; ++i) {
+		off = std::max(off, std::abs((patch.controlU[i] - patch.controlU[first]) * dv - (patch.controlV[i] - patch.controlV[first]) * du));
+	}
+	return off <= 1e-6 * span;
+}
 // A camera move or flip as the face's own shift or mirror, once its texture
 // axes are placed on screen (core/level_camera_texture.h).
 LevelSurfaceRequest cameraRequest(const LevelSurfaceRequest &request, const LevelCameraTextureAxes &axes)
@@ -208,7 +266,8 @@ LevelSurfaceRequest cameraRequest(const LevelSurfaceRequest &request, const Leve
 	local.y = (axes.uHorizontal ? upward : across) ? -1 : 1;
 	return local;
 }
-bool editFace(LevelMapBrushFace *face, const MapFacePolygon &polygon, const LevelSurfaceRequest &request, QSize imageSize, QString *error)
+bool editFace(LevelMapBrushFace *face, const MapFacePolygon &polygon, const LevelSurfaceRequest &request, QSize imageSize, QString *error,
+	Skip *skip = nullptr)
 {
 	const auto original = levelTextureProjection(*face);
 	if (!original.valid || !polygon.isValid()) {
@@ -284,6 +343,83 @@ bool editFace(LevelMapBrushFace *face, const MapFacePolygon &polygon, const Leve
 	if (needsSize && (imageSize.width() <= 0 || imageSize.height() <= 0)) {
 		return fail(error, SurfaceText::tr("Material %1 needs a known image size. Open its package or provide an explicit texture size.")
 							   .arg(face->textureName));
+	}
+	if (projectOperation(request.operation)) {
+		// NetRadiant Custom's Project Axial, Ortho and Camera: the default
+		// texture projected flat. Workflow reference: NRC radiant/surfacedialog.cpp
+		// SurfaceInspector_ProjectTexture and radiant/brush_primit.cpp
+		// Texdef_ProjectTexture at 449778b3 (GPL-2.0-or-later). Original code;
+		// see docs/CREDITS.md. That editor gives brush-primitive faces the
+		// direction projection with V running the other way from Valve 220
+		// faces; here every format takes the Valve 220 result, which reads the
+		// right way round from the side the direction points to.
+		LevelMapBrushFace projected = *face;
+		if (request.operation == LevelSurfaceOperation::ProjectAxial) {
+			// Natural's projection along the world axis the face looks down most.
+			LevelSurfaceRequest natural = request;
+			natural.operation = LevelSurfaceOperation::Natural;
+			if (!editFace(&projected, polygon, natural, imageSize, error)) {
+				return false;
+			}
+		} else {
+			const auto &d = request.projectionDirection;
+			const double size = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+			const LevelMapVec3 unit{d.x / size, d.y / size, d.z / size, true};
+			const auto &plane = polygon.plane;
+			if (std::abs(unit.x * plane.normalX + unit.y * plane.normalY + unit.z * plane.normalZ) < 1e-6) {
+				// The direction runs along the face: the texture would smear.
+				if (skip) {
+					*skip = Skip::EdgeOn;
+				}
+				return true;
+			}
+			const auto [s, t] = levelTexturePrimitiveBasis(unit);
+			const double width = matrix ? imageSize.width() : 1.0, height = matrix ? imageSize.height() : 1.0;
+			const double u = 1.0 / (request.x * width), v = 1.0 / (request.y * height);
+			LevelTextureProjection projection;
+			projection.u = {s.x * u, s.y * u, s.z * u, true};
+			projection.v = {t.x * v, t.y * v, t.z * v, true};
+			projection.normalizedCoordinates = matrix;
+			projection.valid = true;
+			QString problem;
+			if (!setLevelTextureProjection(&projected, projection, false, &problem)) {
+				if (!face->explicitTextureAxes && !matrix) {
+					// A classic face holds only projections along its own axis.
+					if (skip) {
+						*skip = Skip::Classic;
+					}
+					return true;
+				}
+				return fail(error, problem);
+			}
+			if (projected.explicitTextureAxes) {
+				// Valve 220 keeps the scale apart from its unit axes, as Radiant writes it.
+				projected.uAxis = {s.x, s.y, s.z, true};
+				projected.vAxis = {t.x, t.y, t.z, true};
+				projected.scaleX = request.x;
+				projected.scaleY = request.y;
+			}
+		}
+		if (matrix) {
+			// Radiant writes a projected matrix's offsets within one repeat
+			// (BPTexdef_fromST011).
+			for (int index : {2, 5}) {
+				projected.textureMatrix[index] -= std::floor(projected.textureMatrix[index]);
+			}
+		}
+		if (!writable(&projected)) {
+			return fail(error, SurfaceText::tr("The result is too large, too small or collapsed at map precision. Adjust the surface values."));
+		}
+		if (matrix) {
+			for (int index : {2, 5}) {
+				// An offset just under one repeat rounds to it at map precision.
+				if (projected.textureMatrix[index] >= 1.0) {
+					projected.textureMatrix[index] -= 1.0;
+				}
+			}
+		}
+		*face = projected;
+		return true;
 	}
 	if (request.operation == LevelSurfaceOperation::Natural || request.operation == LevelSurfaceOperation::FaceAligned
 		|| request.operation == LevelSurfaceOperation::RadiantReset) {
@@ -361,14 +497,15 @@ bool editFace(LevelMapBrushFace *face, const MapFacePolygon &polygon, const Leve
 			return false;
 		}
 	} else if (request.operation == LevelSurfaceOperation::Fit) {
-		// A repeat count of zero keeps that axis as it is.
+		// A repeat count of zero keeps that axis as it is, or, keeping
+		// proportions, scales it as the other and starts it at its minimum.
 		const auto extent = maximum - minimum;
 		if ((request.x > 0 && extent.x() <= 1e-10) || (request.y > 0 && extent.y() <= 1e-10)) {
 			return fail(error, SurfaceText::tr("The face's texture coordinates are collapsed; set a valid projection before fitting."));
 		}
-		const double x = request.x > 0 ? request.x * width / extent.x() : 1.0, y = request.y > 0 ? request.y * height / extent.y() : 1.0;
+		const auto [x, y] = fitFactors(request, extent.x(), extent.y(), width, height);
 		multiply(face, x, y);
-		offset(face, request.x > 0 ? -minimum.x() * x : 0.0, request.y > 0 ? -minimum.y() * y : 0.0);
+		offset(face, fitsAxis(request, true) ? -minimum.x() * x : 0.0, fitsAxis(request, false) ? -minimum.y() * y : 0.0);
 	} else {
 		const auto delta = [](LevelSurfaceAlignment mode, double lo, double hi, double size) {
 			if (mode == LevelSurfaceAlignment::Minimum) {
@@ -434,7 +571,7 @@ bool patchTextureDirections(const LevelMapPatch &patch, LevelMapVec3 *gradientU,
 // The same adjustments on a patch's control-point coordinates, which count
 // repeats. Rotation and scaling keep the middle of the patch's coordinates
 // where it is, as they keep a face's centre.
-bool editPatch(LevelMapPatch *patch, const LevelSurfaceRequest &request, QSize imageSize, QString *error)
+bool editPatch(LevelMapPatch *patch, const LevelSurfaceRequest &request, QSize imageSize, QString *error, Skip *skip = nullptr)
 {
 	const int count = static_cast<int>(patch->controlPoints.size());
 	if (count == 0 || patch->controlU.size() != count || patch->controlV.size() != count) {
@@ -557,12 +694,15 @@ bool editPatch(LevelMapPatch *patch, const LevelSurfaceRequest &request, QSize i
 		if ((request.x > 0 && maxU - minU <= 1e-10) || (request.y > 0 && maxV - minV <= 1e-10)) {
 			return fail(error, SurfaceText::tr("The patch's texture coordinates are collapsed; reset them before fitting."));
 		}
+		// Coordinates count repeats, so one factor on both keeps proportions.
+		const auto [factorU, factorV] = fitFactors(request, maxU - minU, maxV - minV, 1.0, 1.0);
+		const bool fitU = fitsAxis(request, true), fitV = fitsAxis(request, false);
 		for (int i = 0; i < count; ++i) {
-			if (request.x > 0) {
-				patch->controlU[i] = (patch->controlU[i] - minU) * request.x / (maxU - minU);
+			if (fitU) {
+				patch->controlU[i] = (patch->controlU[i] - minU) * factorU;
 			}
-			if (request.y > 0) {
-				patch->controlV[i] = (patch->controlV[i] - minV) * request.y / (maxV - minV);
+			if (fitV) {
+				patch->controlV[i] = (patch->controlV[i] - minV) * factorV;
 			}
 		}
 		break;
@@ -590,6 +730,25 @@ bool editPatch(LevelMapPatch *patch, const LevelSurfaceRequest &request, QSize i
 			return fail(error, problem);
 		}
 		break;
+	case LevelSurfaceOperation::ProjectAxial:
+	case LevelSurfaceOperation::ProjectDirection: {
+		const LevelMapPatch original = *patch;
+		const bool projected = request.operation == LevelSurfaceOperation::ProjectAxial
+			? axialLevelPatchTexture(patch, width * request.x, height * request.y, &problem)
+			: projectedLevelPatchTexture(patch, request.projectionDirection, width * request.x, height * request.y, &problem);
+		if (!projected) {
+			return fail(error, problem);
+		}
+		if (collapsedCoordinates(*patch)) {
+			// The projection runs along the patch: the texture would smear.
+			*patch = original;
+			if (skip) {
+				*skip = Skip::EdgeOn;
+			}
+			return true;
+		}
+		break;
+	}
 	case LevelSurfaceOperation::CameraShift:
 	case LevelSurfaceOperation::CameraFlip:
 	case LevelSurfaceOperation::ClockwiseRotate:
@@ -694,7 +853,7 @@ bool levelSurfaceOperationNeedsSize(LevelSurfaceOperation operation, bool repeat
 			|| operation == LevelSurfaceOperation::FaceAligned || operation == LevelSurfaceOperation::RadiantRotate
 			|| operation == LevelSurfaceOperation::RadiantScale || operation == LevelSurfaceOperation::CameraShift
 			|| operation == LevelSurfaceOperation::ClockwiseRotate || operation == LevelSurfaceOperation::Reset
-			|| operation == LevelSurfaceOperation::RadiantReset;
+			|| operation == LevelSurfaceOperation::RadiantReset || projectOperation(operation);
 	}
 	return operation == LevelSurfaceOperation::Fit || operation == LevelSurfaceOperation::Align;
 }
@@ -774,7 +933,8 @@ bool prepareLevelSurfaceEdits(const LevelMapDocument &document, const QVector<Le
 	}
 	for (const auto &request : requests) {
 		const bool reset = request.operation == LevelSurfaceOperation::Natural || request.operation == LevelSurfaceOperation::FaceAligned
-			|| request.operation == LevelSurfaceOperation::Reset || request.operation == LevelSurfaceOperation::RadiantReset;
+			|| request.operation == LevelSurfaceOperation::Reset || request.operation == LevelSurfaceOperation::RadiantReset
+			|| projectOperation(request.operation);
 		if (!std::isfinite(request.x) || !std::isfinite(request.y) || !std::isfinite(request.degrees) || std::abs(request.x) > 1e6 ||
 			std::abs(request.y) > 1e6 || std::abs(request.degrees) > 360000 ||
 			(request.operation == LevelSurfaceOperation::Scale && (std::abs(request.x) < 1e-6 || std::abs(request.y) < 1e-6)) ||
@@ -782,7 +942,7 @@ bool prepareLevelSurfaceEdits(const LevelMapDocument &document, const QVector<Le
 			 (request.x < 0 || request.y < 0 || (request.x < 1e-6 && request.y < 1e-6) || (request.x > 0 && request.x < 1e-6) ||
 			  (request.y > 0 && request.y < 1e-6))) ||
 			(reset && (request.x < 1e-6 || request.y < 1e-6)) ||
-			request.operation < LevelSurfaceOperation::Shift || request.operation > LevelSurfaceOperation::RadiantReset ||
+			request.operation < LevelSurfaceOperation::Shift || request.operation > LevelSurfaceOperation::ProjectDirection ||
 			request.alignU < LevelSurfaceAlignment::Keep || request.alignU > LevelSurfaceAlignment::Maximum ||
 			request.alignV < LevelSurfaceAlignment::Keep || request.alignV > LevelSurfaceAlignment::Maximum) {
 			return fail(error, SurfaceText::tr(
@@ -790,6 +950,13 @@ bool prepareLevelSurfaceEdits(const LevelMapDocument &document, const QVector<Le
 		}
 		if (cameraOperation(request.operation) && !levelCameraTextureBasisValid(request.cameraRight, request.cameraUp)) {
 			return fail(error, SurfaceText::tr("Camera texture moves need the camera's right and up directions, which must not be parallel."));
+		}
+		if (request.operation == LevelSurfaceOperation::ProjectDirection) {
+			const auto &d = request.projectionDirection;
+			const double size = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+			if (!d.valid || !std::isfinite(size) || size < 1e-9 || size > 1e9) {
+				return fail(error, SurfaceText::tr("A projection along a direction needs a finite direction that is not zero."));
+			}
 		}
 	}
 	QHash<QString, QSize> sizes;
@@ -814,6 +981,8 @@ bool prepareLevelSurfaceEdits(const LevelMapDocument &document, const QVector<Le
 	result.m_sourceHash = document.sourceContentHash;
 	result.m_revision = document.revision;
 	result.m_format = document.format;
+	// Faces and patches targeted, to tell a projection that skips them all.
+	int targetCount = 0;
 	for (auto it = targets.cbegin(); it != targets.cend(); ++it) {
 		if (cancelled && cancelled()) {
 			return fail(error, SurfaceText::tr("Surface preview cancelled."));
@@ -837,12 +1006,18 @@ bool prepareLevelSurfaceEdits(const LevelMapDocument &document, const QVector<Le
 			}
 			auto &face = after.faces[index];
 			QString problem;
+			Skip skipped = Skip::None;
 			for (const auto &request : requests) {
 				if (cancelled && cancelled()) { return fail(error, SurfaceText::tr("Surface preview cancelled.")); }
-				if (!editFace(&face, geometry.faces[index], request, sizes.value(materialKey(face.textureName)), &problem)) {
+				Skip skip = Skip::None;
+				if (!editFace(&face, geometry.faces[index], request, sizes.value(materialKey(face.textureName)), &problem, &skip)) {
 					return fail(error, SurfaceText::tr("Brush %1, face %2: %3").arg(it.key()).arg(index + 1).arg(problem));
 				}
+				skipped = skipped == Skip::None ? skip : skipped;
 			}
+			++targetCount;
+			result.m_skippedEdgeOn += skipped == Skip::EdgeOn;
+			result.m_skippedClassic += skipped == Skip::Classic;
 			if (!sameMapping(found->faces[index], face)) {
 				face.textureParametersDirty = true;
 				++changed;
@@ -866,12 +1041,17 @@ bool prepareLevelSurfaceEdits(const LevelMapDocument &document, const QVector<Le
 			continue;
 		}
 		auto after = patch;
+		Skip skipped = Skip::None;
 		for (const auto &request : requests) {
 			QString problem;
-			if (!editPatch(&after, request, sizes.value(materialKey(patch.textureName)), &problem)) {
+			Skip skip = Skip::None;
+			if (!editPatch(&after, request, sizes.value(materialKey(patch.textureName)), &problem, &skip)) {
 				return fail(error, SurfaceText::tr("Patch %1: %2").arg(patch.id).arg(problem));
 			}
+			skipped = skipped == Skip::None ? skip : skipped;
 		}
+		++targetCount;
+		result.m_skippedEdgeOn += skipped == Skip::EdgeOn;
 		if (after.controlU != patch.controlU || after.controlV != patch.controlV) {
 			after.definitionDirty = after.geometryDirty = true;
 			result.m_patchBefore.append(patch);
@@ -880,6 +1060,17 @@ bool prepareLevelSurfaceEdits(const LevelMapDocument &document, const QVector<Le
 	}
 	if (!wanted.isEmpty()) {
 		return fail(error, SurfaceText::tr("Patch %1 no longer exists.").arg(*wanted.cbegin()));
+	}
+	const int skipped = result.m_skippedEdgeOn + result.m_skippedClassic;
+	if (skipped > 0 && skipped == targetCount && result.m_faceCount == 0 && result.m_patchAfter.isEmpty()) {
+		// A projection that can take none of its targets says why.
+		if (result.m_skippedClassic == 0) {
+			return fail(error, SurfaceText::tr("The projection runs along every targeted surface, so none was changed. Project from a view that faces them."));
+		}
+		if (result.m_skippedEdgeOn == 0) {
+			return fail(error, SurfaceText::tr("Classic faces cannot hold this projection, so none of the targeted faces was changed. Project from a view that looks straight at them, or use Valve 220 or brush-primitive faces."));
+		}
+		return fail(error, SurfaceText::tr("None of the targeted surfaces can take this projection: it runs along some of them, and the classic faces among the others cannot hold it."));
 	}
 	result.m_ready = true;
 	*plan = std::move(result);

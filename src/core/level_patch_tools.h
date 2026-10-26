@@ -63,6 +63,15 @@ bool naturalLevelPatchTexture(LevelMapPatch* patch, double unitsPerRepeatU, doub
 // Radiant's Cap Texture: a flat projection across the patch along its
 // average normal, with the axes brush primitives use for that plane.
 bool planarLevelPatchTexture(LevelMapPatch* patch, double unitsPerRepeatU, double unitsPerRepeatV, QString* error = nullptr);
+// NetRadiant Custom's Project Axial on a patch: a flat projection along the
+// world axis nearest its average normal (the axis a face facing that way is
+// projected along, q3map2's TextureAxisFromPlane), with no shift or turn.
+bool axialLevelPatchTexture(LevelMapPatch* patch, double unitsPerRepeatU, double unitsPerRepeatV, QString* error = nullptr);
+// Its Project Ortho and Project Camera on a patch: a flat projection along
+// `direction` (any length but zero), with the axes brush primitives use for a
+// plane facing that way (q3map2's ComputeAxisBase).
+bool projectedLevelPatchTexture(LevelMapPatch* patch, const LevelMapVec3& direction, double unitsPerRepeatU, double unitsPerRepeatV,
+	QString* error = nullptr);
 
 struct LevelPatchThickenRequest {
 	// Map units; negative thickens the other way.

@@ -2,6 +2,8 @@
 
 #include "core/level_patch.h"
 #include "core/level_primitive.h"
+#include "core/level_scene_locks.h"
+#include "core/level_visibility.h"
 
 #include <QCoreApplication>
 
@@ -29,11 +31,11 @@ const ShapeInfo kShapes[] = {
 	{"wedge", QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "Wedge"),
 		QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "One brush sloping up across the box, for ramps and roofs."), "shape-wedge", false, "axis"},
 	{"cylinder", QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "Cylinder"),
-		QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "One brush with round sides along the depth axis, for pillars and pipes."), "shape-cylinder", false, "axis,sides"},
+		QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "One brush with round sides along the depth axis, for pillars and pipes."), "shape-cylinder", false, "axis,sides,fit"},
 	{"cone", QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "Cone"),
-		QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "One brush narrowing to a point along the depth axis, for spikes and spires."), "shape-cone", false, "axis,sides"},
+		QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "One brush narrowing to a point along the depth axis, for spikes and spires."), "shape-cone", false, "axis,sides,fit"},
 	{"sphere", QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "Sphere"),
-		QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "One brush rounded on every side, with its poles on the depth axis."), "shape-sphere", false, "axis,sides,bands"},
+		QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "One brush rounded on every side, with its poles on the depth axis."), "shape-sphere", false, "axis,sides,bands,fit"},
 	{"arch", QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "Arch"),
 		QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "Wall segments following a curve, one brush each, for doorways, bridges and curved walls."), "shape-arch", true,
 		"axis,sides,thickness,arc,start"},
@@ -440,6 +442,7 @@ bool addLevelMapShape(LevelMapDocument* document, const LevelShapeRequest& reque
 		primitive.sides = request.sides;
 		primitive.bands = request.bands;
 		primitive.texture = request.texture;
+		primitive.fit = request.fit;
 		int brushId = -1;
 		if (!addLevelMapBrushPrimitive(document, primitive, &brushId, error)) {
 			return false;
@@ -550,6 +553,132 @@ bool replaceLevelMapBrushesWithShape(LevelMapDocument* document, const QVector<i
 	setLevelMapSelection(document, chosen);
 	if (newBrushIds) {
 		*newBrushIds = added;
+	}
+	return true;
+}
+
+QString levelSidedPrismCommandId(int sides)
+{
+	return sides >= 3 && sides <= 9 ? QStringLiteral("map.make%1SidedPrism").arg(sides) : QString();
+}
+
+int levelSidedPrismSides(const QString& commandId)
+{
+	for (int sides = 3; sides <= 9; ++sides) {
+		if (commandId == levelSidedPrismCommandId(sides)) {
+			return sides;
+		}
+	}
+	return 0;
+}
+
+bool levelShapeRebuildsBrushes(const QString& shape)
+{
+	return isLevelShape(shape) && !levelShapeIsCompound(shape) && !levelShapeIsPatch(shape);
+}
+
+// Workflow reference: NetRadiant Custom radiant/brushmanip.cpp
+// Scene_BrushConstructPrefab, BrushPrefab and BrushMakeSided at 449778b3
+// (GPL-2.0-or-later), which rebuild the selected brush in its own bounds.
+// Original implementation; see docs/CREDITS.md.
+bool rebuildLevelMapBrushesAsShape(LevelMapDocument* document, const QVector<int>& brushIds, const LevelShapeRequest& request,
+	LevelShapeRebuildReport* report, QString* error)
+{
+	LevelShapeRebuildReport staged;
+	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
+			return rebuildLevelMapBrushesAsShape(candidate, brushIds, request, &staged, error);
+		});
+		guarded.has_value()) {
+		if (*guarded && report) {
+			*report = std::move(staged);
+		}
+		return *guarded;
+	}
+	if (error) {
+		error->clear();
+	}
+	if (report) {
+		*report = {};
+	}
+	if (!document || (document->format != LevelMapFormat::QuakeMap && document->format != LevelMapFormat::Quake3Map)) {
+		return fail(error, QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "Brushes can be rebuilt as shapes in Quake-family .map files only."));
+	}
+	if (!levelShapeRebuildsBrushes(request.shape)) {
+		return fail(error, QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "A brush can be rebuilt as a box, wedge, cylinder, cone or sphere."));
+	}
+	if (brushIds.isEmpty()) {
+		return fail(error, QT_TRANSLATE_NOOP("VibeStudioLevelShapes", "Select the brushes to rebuild."));
+	}
+	LevelBrushPrimitiveRequest primitive;
+	primitive.shape = request.shape;
+	primitive.axis = request.axis;
+	primitive.sides = request.sides;
+	primitive.bands = request.bands;
+	primitive.texture = request.texture.trimmed();
+	primitive.fit = request.fit;
+	// The settings themselves are checked once, on a box every shape fits.
+	{
+		LevelMapBrush probe;
+		if (!createLevelBrushPrimitive(primitive, &probe, error)) {
+			return false;
+		}
+	}
+	const QSet<int> wanted(brushIds.cbegin(), brushIds.cend());
+	for (const int id : wanted) {
+		if (std::none_of(document->brushes.cbegin(), document->brushes.cend(), [id](const LevelMapBrush& brush) { return brush.id == id; })) {
+			if (error) {
+				*error = QCoreApplication::translate("VibeStudioLevelShapes", "Brush %1 is not in the map.").arg(id);
+			}
+			return false;
+		}
+	}
+	const QSet<QString> hidden = levelMapHiddenObjects(*document);
+	QVector<LevelBrushHullRebuild> rebuilds;
+	for (const LevelMapBrush& brush : std::as_const(document->brushes)) {
+		if (!wanted.contains(brush.id)) {
+			continue;
+		}
+		if (hidden.contains(levelMapSelectionRefId({LevelMapSelectionKind::QuakeBrush, brush.id}))) {
+			staged.skipped << QCoreApplication::translate("VibeStudioLevelShapes", "Brush %1 is hidden, so it was left as it was.").arg(brush.id);
+			continue;
+		}
+		if (!brush.boundsSolved) {
+			staged.skipped << QCoreApplication::translate("VibeStudioLevelShapes", "Brush %1 is not a closed brush, so it was left as it was.").arg(brush.id);
+			continue;
+		}
+		if (brush.maxs.x - brush.mins.x < 1 || brush.maxs.y - brush.mins.y < 1 || brush.maxs.z - brush.mins.z < 1) {
+			staged.skipped << QCoreApplication::translate("VibeStudioLevelShapes", "Brush %1 is less than one unit across, so it was left as it was.")
+								  .arg(brush.id);
+			continue;
+		}
+		LevelBrushPrimitiveRequest own = primitive;
+		own.mins = brush.mins;
+		own.maxs = brush.maxs;
+		LevelMapBrush draft;
+		QString problem;
+		QVector<LevelMapVec3> points;
+		if (!levelBrushPrimitivePoints(own, &points, &problem) || !createLevelBrushPrimitive(own, &draft, &problem)) {
+			staged.skipped << QCoreApplication::translate("VibeStudioLevelShapes", "Brush %1 was left as it was: %2").arg(brush.id).arg(problem);
+			continue;
+		}
+		rebuilds.push_back({brush.id, points});
+		staged.brushIds << brush.id;
+	}
+	if (rebuilds.isEmpty()) {
+		if (error) {
+			*error = staged.skipped.value(0, QCoreApplication::translate("VibeStudioLevelShapes", "Select the brushes to rebuild."));
+		}
+		return false;
+	}
+	const int count = static_cast<int>(rebuilds.size());
+	const QString label = levelShapeLabel(request.shape);
+	if (!rebuildLevelMapBrushHulls(document, rebuilds, primitive.texture,
+			QCoreApplication::translate("VibeStudioLevelShapes", "Rebuild %n brush(es) in place as a shape: %1", nullptr, count).arg(label),
+			QCoreApplication::translate("VibeStudioLevelShapes", "Restore %n rebuilt brush(es)", nullptr, count), error)) {
+		return false;
+	}
+	if (report) {
+		*report = std::move(staged);
 	}
 	return true;
 }

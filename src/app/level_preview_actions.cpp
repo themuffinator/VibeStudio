@@ -3,6 +3,7 @@
 #include "app/map_viewport.h"
 #include "app/model_viewport.h"
 #include "app/studio_layout.h"
+#include "core/level_filter_tags.h"
 #include "core/level_view_filters.h"
 
 #include <QAction>
@@ -255,9 +256,10 @@ void ApplicationShell::refreshLevelMap3D()
 		}
 	}
 	// Caulk faces on otherwise textured brushes leave the camera while Caulk
-	// is off, as Radiant's caulk face filter does; the plan views keep each
-	// brush's whole outline, as Radiant's wireframes do.
-	QVector<LevelSurfaceFace> hiddenFaces = levelViewFilteredFaces(m_levelMapDocument, m_levelFiltersOff, currentLevelFilterMaterials());
+	// is off, as Radiant's caulk face filter does, and so do Skip's faces and
+	// the faces a hidden tag names; the plan views keep each brush's whole
+	// outline, as Radiant's wireframes do.
+	QVector<LevelSurfaceFace> hiddenFaces = currentLevelViewFilterHidden().faces;
 	std::sort(hiddenFaces.begin(), hiddenFaces.end(), [](const LevelSurfaceFace &a, const LevelSurfaceFace &b) {
 		return a.brushId != b.brushId ? a.brushId < b.brushId : a.faceIndex < b.faceIndex;
 	});

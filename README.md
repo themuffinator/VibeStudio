@@ -833,6 +833,20 @@ The additive material query, independent viewport face picks and staged deselect
 Component deletion and clip-point priority follow the pinned
 [TB/NRC deletion review](docs/CREDITS.md#level-deletion-policy).
 
+Levels also follows the same pinned editors for brush construction
+([points](docs/CREDITS.md#brushes-from-points-and-vertex-listings) and
+[Assemble Brush](docs/CREDITS.md#assemble-brush-tool)),
+[texture projection](docs/CREDITS.md#proportional-fits-and-texture-projections),
+[face flags](docs/CREDITS.md#face-flags-and-the-show-surfaces-toggle),
+[UV editing](docs/CREDITS.md#uv-editor), configurable
+[view filters](docs/CREDITS.md#view-filter-commands-and-radiants-world-rule),
+[smart-tag authoring](docs/CREDITS.md#smart-tag-authoring), and
+[grid overlays](docs/CREDITS.md#grid-coordinates-and-block-grid).
+Those reviews record the GPL-compatible licences and original implementations.
+
+Configured smart-tag authoring follows the same pinned TrenchBroom release;
+see [smart-tag credits](docs/CREDITS.md#smart-tag-authoring) for sources and licence.
+
 ## License
 
 VibeStudio's own code is licensed under the GNU General Public License,

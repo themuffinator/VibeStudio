@@ -731,6 +731,25 @@ the GtkRadiant contributors), compatible with this GPL-3.0 repository:
   face rather than by sewing windings; with Keep inner brush, caulk covers the
   faces between the walls and the brush and leaves the outside's materials,
   and the pull hollow keeps Make Room's filled corners.
+- Make Prism…, Make Cone…, Make Sphere… and Make 3- to 9-Sided Prism
+  (2026-10-26) follow
+  [`Brush_ConstructPrism`, `Brush_ConstructCone`, `Brush_ConstructSphere`, `max_extent_2d`, `Scene_BrushConstructPrefab`, `BrushPrefab` and `BrushMakeSided`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brushmanip.cpp)
+  at revision `449778b3840f8f2062daab15c87cb012f2ac945c`, GPL-2.0-or-later,
+  reviewed before implementation: the selected brush rebuilt in its own bounds
+  along the current 2D view's axis, side planes tangent to a circle on the
+  larger cross-section extent with a face towards the first axis, a cone's
+  apex over the centre of the high end, a sphere of sides × sides planes on the
+  largest extent with its poles on Z, and the Ctrl+3 to Ctrl+9 keys. The
+  circle fit in `core/level_primitive.*`, `rebuildLevelMapBrushesAsShape`
+  (`core/level_shapes.*`), `rebuildLevelMapBrushHulls` (`core/level_map.cpp`),
+  `app/level_prism_actions.cpp` and `map add-shape --in-place --fit` are
+  original VibeStudio implementations built on its own hull builder: they
+  compute the solid's corners rather than writing NetRadiant Custom's plane
+  points, and no upstream code was copied. Unlike upstream, every selected
+  brush is rebuilt rather than only the last one, its content flags are kept,
+  side counts stop at the component editor's 128 faces (126 for a prism, 127
+  for a cone, 11 × 11 for a sphere) and the keys act only in the map views
+  while a brush is selected, so the studio's Ctrl+digit mode keys keep working.
 
 The patch shapes, square cylinder, bevel and end cap follow the Patch menu of
 [GtkRadiant](https://github.com/TTimo/GtkRadiant) 1.5; Region Set XY, Region
@@ -765,6 +784,50 @@ The original Qt routing and worker integration preserve NRC's empty-component
 object fallback and ignored patch points, and TB's clip-point priority.
 VibeStudio refuses a whole invalid multi-brush edit atomically; NRC's per-brush
 hull builder can retain an invalid brush while changing another one.
+
+### Brushes from points and vertex listings
+
+**Create Brush from Points…**, **Copy Vertex Coordinates**,
+`map add-brush --points` and multi-brush `map brush-components` were reviewed on
+2026-10-26 against TB
+[`MapWindow::debugCreateBrush` and `MapWindow::debugPrintVertices`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapWindow.cpp)
+and their Debug menu entries in
+[`ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp),
+v2026.2 / `4c756be1a54a28d921d18c77716a5f170bdc31d0` (Kristian Duske and
+contributors, GPL-3.0-or-later, compatible with VibeStudio's GPL-3.0). Facts
+about behaviour only: a list of at least four `(x y z)` points becomes the
+convex brush enclosing them in the current material, and the selected faces'
+corners, or else the selected brushes', are written out at full precision.
+`core/level_brush_points.*`, `app/level_brush_points_*` and the CLI routes are
+original VibeStudio code over its own envelope builder and hull insertion; no
+code was copied. Unlike upstream, both are ordinary commands rather than
+debug-build ones, the dialog previews the brush and names flat or malformed
+input, several point forms and comments are accepted, edges, vertices and patch
+control points can be listed too, and coordinates use the shortest exact
+decimal rather than 17 significant digits.
+
+### Assemble Brush tool
+
+The **Assemble Brush Tool**, **Create Assembled Brush** and
+`map add-brush --points --extrude` were reviewed on 2026-10-26 against TB
+[`AssembleBrushTool`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/AssembleBrushTool.cpp),
+[`AssembleBrushToolController3D`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/AssembleBrushToolController3D.cpp),
+`MapViewToolBox` (its exclusive tool groups) and the "Menu/Edit/Tools/Brush
+Tool" (B) and "Controls/Map view/Create brush" (Return) entries in
+[`ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp),
+v2026.2 / `4c756be1a54a28d921d18c77716a5f170bdc31d0` (Kristian Duske and
+contributors, GPL-3.0-or-later, compatible with VibeStudio's GPL-3.0). Facts
+about behaviour only: a click on a face adds the grid point in its plane, a drag
+from a face draws the grid rectangle on that plane, a double-click adds the
+face's corners, Shift-drag duplicates a flat outline along its normal by grid
+steps, Escape clears the points, and Return builds their convex hull in the
+current material and clears them. `core/level_brush_assemble.*`,
+`app/level_brush_assemble_*`, `app/model_viewport_assemble.cpp`,
+`app/map_viewport_assemble.cpp` and the CLI option are original VibeStudio code
+over its own envelope builder; no code was copied. Unlike upstream, the 2D views
+collect, move and extrude points too, an empty camera view uses the Draw Brush
+construction plane, Backspace removes the last point, and the hull is checked on
+a worker before Enter publishes it.
 
 ## Materials, Shaders And Textures (2026-10-08)
 
@@ -3106,6 +3169,44 @@ background read and status line, `map filters --package` and the
 `level-filter-material-kinds` tests are original VibeStudio work over its own
 material library; no source was copied.
 
+Reviewed on 2026-10-26. Filter tags that game or project data define, and one
+filter per entity class, follow TrenchBroom v2026.2
+(`4c756be1a54a28d921d18c77716a5f170bdc31d0`, Kristian Duske and contributors,
+GPL-3.0-or-later): the generated "Toggle *tag* visible" and "Toggle *class*
+visible" actions of `ActionManager::createTagActions` and
+`createEntityDefinitionActions` in
+[`lib/TbUiLib/src/ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp),
+`MapViewBase::toggleTagVisible` and `toggleEntityDefinitionVisible` in
+[`lib/TbUiLib/src/MapViewBase.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapViewBase.cpp),
+and the tag check boxes and the prefix-grouped `EntityDefinitionCheckBoxList`
+with Show all and Hide all in
+[`lib/TbUiLib/src/ViewEditor.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ViewEditor.cpp).
+The tag layout VibeStudio reads (`"tags"` with `"brush"` and `"brushface"`
+lists of `name`, `match` = material/texture, surfaceparm, contentflag,
+surfaceflag or classname, `pattern` and `flags`, and `"faceattribs"` flag names
+in bit order) is TrenchBroom's documented game configuration format, read so
+that a game configuration can be used as it is; no TrenchBroom game
+configuration ships with VibeStudio. The text those configurations are written
+in is TrenchBroom's expression language, a superset of JSON; VibeStudio reads
+the parts its game configurations use (`//` and `/* */` comments, bare names,
+a comma before a closing bracket, and a backslash JSON does not define kept as
+written, as TrenchBroom keeps `"\**"`) by turning the text into strict JSON in
+an original reader, and the test configuration is original data in that
+layout. Hiding a brush whose faces all carry hidden tags or kinds follows
+TrenchBroom's `EditorContext` visibility check
+(`BrushNode::allFacesHaveAnyTagInMask`). NetRadiant Custom's Hints filter taking a
+hint face only follows `g_filter_brush_hint` in
+[`radiant/brushmanip.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brushmanip.cpp)
+(`449778b3840f8f2062daab15c87cb012f2ac945c`, GPL-2.0-or-later). CONTENTS_FOG
+(0x40) and SURF_HINT/SURF_SKIP (0x100, 0x200) are the values of id Software's
+Quake II and Quake III sources (GPL-2.0-or-later); only the numbers are used.
+Only behaviour and data layout were used; no source was copied.
+`src/core/level_filter_tags.*`, the Skip and Fog kinds, the glob matcher, the
+configuration text reader, the face-by-face hiding of skip and face tags,
+`src/app/level_filter_tag_actions.cpp`,
+`map filters --tags/--project/--class/--classes`, `map visibility --class` and
+the `level-filter-tags` tests are original VibeStudio work.
+
 ## Level camera levelling, focus and zoom reset
 
 Reviewed on 2026-10-22. **Level Camera** (pitch to zero, heading to the nearest
@@ -3190,6 +3291,33 @@ combination splitter proportions, revealing a pane from **Top/Front/Side View**,
 `LevelPlanPanes` in `src/core/level_editor_controls.*`,
 `src/app/level_plan_pane_actions.cpp`, `editor layout --panes` and the
 `level-plan-panes` tests are original VibeStudio work.
+
+## Grid coordinates and block grid
+
+Reviewed on 2026-10-26. **Show Grid Coordinates** (numbers on the 2D grid
+lines, at least 32 pixels apart) and **Show Block Grid** (the compiler block
+grid from worldspawn `_blocksize`: one or three numbers, 1024 by default, 0
+leaving an axis unsplit, kept inside the region, no default keys) follow the
+`ShowCoordinates` and `ShowBlocks` toggles, `XYWnd::XY_DrawGrid` and
+`XYWnd::XY_DrawBlockGrid` in
+[`radiant/xywindow.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/xywindow.cpp)
+and their **View** > **Show** menu items in
+[`radiant/mainframe.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/mainframe.cpp)
+of NetRadiant Custom revision `449778b3840f8f2062daab15c87cb012f2ac945c`
+(GPL-2.0-or-later, compatible with VibeStudio's GPL-3.0-or-later licence).
+How the key is read (`_blocksize`, then `blocksize` and `chopsize`, `%d %d %d`
+with the legacy one- and two-number forms) follows `ProcessWorldModel` in
+`tools/quake3/q3map2/bsp.cpp` of VibeMap3 (the q3map2 fork pinned under
+`external/compilers/vibemap3`, GPL-2.0). Only behaviour was used; no source was
+copied. Unlike NetRadiant Custom, the views draw the size the compiler uses
+rather than clamping it to 256-65536, thin dense block lines onto real
+boundaries, dash them, keep coordinate labels clear of the status tags and of
+each other, put the vertical labels on the leading edge with numbers read left
+to right, and leave both overlays off by default. `src/core/level_block_grid.*`,
+the label and block-line helpers in `src/app/map_grid.*`,
+`src/app/map_viewport_grid_overlays.cpp`, `src/app/level_grid_overlay_actions.cpp`,
+`map render --block-grid` and the `level-block-grid` and `level-grid-overlays`
+tests are original VibeStudio work.
 
 ## Radiant texture steps
 
@@ -3296,6 +3424,103 @@ the `level-texture-reset` tests are original VibeStudio work; the plane basis
 reuses the `ComputeAxisBase` convention already credited for
 `level_texture_mapping.cpp`.
 
+## Proportional fits and texture projections
+
+**Fit Texture Width**, **Fit Texture Height** and the **Project Texture**
+commands were added on 2026-10-26 from behavioural facts only; no source was
+copied. They follow NetRadiant Custom at
+`449778b3840f8f2062daab15c87cb012f2ac945c` (GPL-2.0-or-later, compatible with
+VibeStudio's GPL-3.0-or-later licence): the "FitTextureWidth",
+"FitTextureHeight", "FitTextureWidthOnly", "FitTextureHeightOnly",
+"TextureProjectAxial", "TextureProjectOrtho" and "TextureProjectCam"
+registrations and `SurfaceInspector_ProjectTexture` in
+[`radiant/surfacedialog.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/surfacedialog.cpp),
+`Texdef_FitTexture`, `Texdef_ProjectTexture`,
+`Texdef_Construct_local2tex4projection`, `Normal_GetTransform` and
+`BPTexdef_fromST011` in
+[`radiant/brush_primit.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brush_primit.cpp),
+`projectionaxis_for_normal` in
+[`radiant/winding.h`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/winding.h),
+and `Patch::ProjectTexture`, `Patch::SetTextureRepeat` and
+`Patch::Calculate_AvgNormal` in
+[`radiant/patch.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/patch.cpp).
+VibeStudio departs from it in three documented places: classic faces take a
+projection wherever the classic format holds it exactly, rather than never;
+brush-primitive faces and patches take the Valve 220 direction projection,
+which reads the right way round, rather than one mirrored down V; and a
+proportional fit keeps a patch's proportions rather than re-tiling it to one
+repeat. The `keepProportions` fit, the `ProjectAxial` and `ProjectDirection`
+operations in `src/core/level_surface.*`, `axialLevelPatchTexture()` and
+`projectedLevelPatchTexture()` in `src/core/level_patch_tools.*`, the Levels
+commands, the `map align-textures` options and the `level-texture-projection`
+tests are original VibeStudio work; the projection axes reuse the
+`TextureAxisFromPlane` and `ComputeAxisBase` conventions already credited for
+`level_texture_mapping.cpp`.
+
+## Face flags and the Show Surfaces toggle
+
+The **Flags** section of the Levels **Surfaces** tab, **Clear Face Flags**,
+`map face-flags` and the **Show Surfaces** toggle were added on 2026-10-26 from
+behavioural facts only; no source was copied. They follow NetRadiant Custom at
+`449778b3840f8f2062daab15c87cb012f2ac945c` (GPL-2.0-or-later, compatible with
+VibeStudio's GPL-3.0-or-later licence): the Surface Inspector's flag boxes,
+Value field and Unset button (`SurfaceInspector::ApplyFlags`, `OnBtnUnsetFlags`)
+and the "SurfaceInspector" toggle on <kbd>S</kbd>
+(`SurfaceInspector_toggleShown`) in
+[`radiant/surfacedialog.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/surfacedialog.cpp),
+and the detail bit kept through every flag edit by `ContentsFlagsValue_assignMasked`
+in [`radiant/brush.h`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brush.h).
+The same <kbd>S</kbd> in Xonotic NetRadiant `b4b295d7a37797cc2752e48aa8ce42492e7016f0`
+[`radiant/surfacedialog.cpp`](https://github.com/xonotic/netradiant/blob/b4b295d7a37797cc2752e48aa8ce42492e7016f0/radiant/surfacedialog.cpp)
+(GPL-2.0-or-later) keeps the key in the NetRadiant profile. TrenchBroom's Face
+Inspector surface and content flag editors (`FaceAttribsEditor` in
+`lib/TbUiLib/src/FaceAttribsEditor.cpp` at `4c756be1`, GPL-3.0-or-later) were
+read for the mixed state across several faces. The flag values and names are
+facts from id Software's
+[Quake II `qcommon/qfiles.h`](https://github.com/id-Software/Quake-2/blob/master/qcommon/qfiles.h)
+(through the Materials module's existing lists) and
+[Quake III Arena `code/game/surfaceflags.h`](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/surfaceflags.h)
+(GPL-2.0, read 2026-10-26), and the note that a Quake III face's flags reach
+the compiler only as the detail bit follows `ParseRawBrush` in VibeMap3's
+`tools/quake3/q3map2/map.cpp` (GPL-2.0, pinned under `external/compilers`).
+Unlike NetRadiant Custom, one box changes only its own flag on every targeted
+face, so faces whose flags differ keep the rest (NetRadiant Custom writes the
+whole set from its boxes), the boxes show flags set on some faces as partly
+ticked, Quake III maps get flag names too, and Show Surfaces hides the tab by
+going back to the tab it replaced or folding the sidebar it opened.
+`src/core/level_face_flags.*`, `src/app/level_face_flags_actions.cpp`, the
+Flags section in `src/app/level_surface_tools.cpp`, `src/cli/level_face_flags.*`
+and the `level-face-flags` tests are original VibeStudio work.
+
+## UV Editor
+
+The Levels **UV Editor** and `map edit-uv` were added on 2026-10-26 from
+behavioural facts only; no source was copied. They follow NetRadiant Custom's
+TexTool plugin at `449778b3840f8f2062daab15c87cb012f2ac945c`
+(GPL-2.0-or-later, compatible with VibeStudio's GPL-3.0-or-later licence; Id
+Software and contributors, GtkRadiant port by Leonardo Zide, original by
+Timothee Besset): the face winding or patch control grid drawn over the tiled
+texture, a dragged face point that moves the whole texture and becomes the
+anchor for turns of the next dragged point, patch points dragged one at a
+time, snapping to whole texels, the 1.2 framing margin, the right-drag pan,
+<kbd>Insert</kbd> and <kbd>Delete</kbd> zoom, the right-click menu and the live
+camera update with commit or cancel, in
+[`plugins/textool/TexTool.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/plugins/textool/TexTool.cpp),
+[`plugins/textool/ControlPointsManager.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/plugins/textool/ControlPointsManager.cpp)
+and
+[`plugins/textool/2DView.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/plugins/textool/2DView.cpp).
+Unlike TexTool, which needs brush primitives, the editor works on classic,
+Valve 220 and brush-primitive faces and on patches: a move changes only a
+face's offsets, a Valve 220 face keeps its scale values, a classic face that
+cannot hold a turn takes the nearest classic mapping (reusing
+`nearestClassicLevelTextureProjection()`) or converts to Valve 220 when asked,
+patch selections move and turn together, and the editor adds keyboard nudges,
+turns, point stepping, its own undo and redo, a point list with exact
+coordinates and an embedded preview. `src/core/level_uv_edit.*`,
+`src/app/level_uv_view.*`, `src/app/level_uv_editor_dialog.*`,
+`src/app/level_uv_editor_actions.cpp`, `src/cli/level_uv_edit.*` and the
+`level-uv-edit` and `level-uv-editor-ui` tests are original VibeStudio work.
+
 ## Arbitrary rotation and scale
 
 NetRadiant Custom's **Arbitrary Rotation** and **Arbitrary Scale** windows were
@@ -3320,3 +3545,15 @@ path of `rotateLevelMapSelection()` and `scaleLevelMapSelection()` in
 `src/app/level_rotation_actions.cpp`, `map rotate --euler`,
 `map resize --factors` and the `level-arbitrary-transform` tests are original
 VibeStudio work.
+
+## Smart-tag authoring
+
+**Make &lt;tag&gt;** and **Make non-&lt;tag&gt;** follow the behavioural review of
+[TrenchBroom 2026.2 tag actions](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp)
+and game-configuration tags at revision `4c756be1a54a28d921d18c77716a5f170bdc31d0`
+(reviewed 2026-10-26, GPL-3.0-or-later, compatible with VibeStudio's licence).
+The reviewed behaviour includes matching material/shader choices, content and
+surface masks, classname conversion and optional tag textures. No source was
+copied. The shared tag matcher, candidate transaction, Qt commands, CLI and
+fixtures in `level_smart_tags.*` and `level_smart_tags_*_test.cpp` are original
+VibeStudio code.

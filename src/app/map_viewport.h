@@ -22,6 +22,7 @@
 #include "core/level_map.h"
 #include "core/level_surface.h"
 #include "app/level_clip_state.h"
+#include "app/level_brush_assemble_state.h"
 #include "app/level_component_gizmo.h"
 #include "app/level_linked_group_boxes.h"
 #include "app/level_vertex_insertion.h"
@@ -33,6 +34,7 @@
 #include "app/map_viewport_overlay_worker.h"
 #include "app/viewport_ring_cache.h"
 #include "app/map_grid.h"
+#include "core/level_block_grid.h"
 
 #include <QHash>
 #include <QKeySequence>
@@ -130,6 +132,23 @@ public:
 	[[nodiscard]] bool showVertices() const;
 	void setShowLabels(bool show);
 	[[nodiscard]] bool showLabels() const;
+	// Numbers on the grid lines along the bottom edge and the leading edge
+	// (left, or right in right-to-left layouts), read left to right and kept
+	// clear of the status tags, as NetRadiant Custom's Show Coordinates
+	// prints them (see mapGridCoordinateLabels()). Off by default.
+	void setShowGridCoordinates(bool show);
+	[[nodiscard]] bool showGridCoordinates() const;
+	// The labels as they are painted now, in widget pixels; empty while off.
+	[[nodiscard]] MapGridCoordinateLayout gridCoordinateLabels() const;
+	// The compiler block grid from worldspawn _blocksize (core/level_block_grid.h),
+	// dashed and kept inside the region, as NetRadiant Custom's Show Blocks
+	// draws it. Quake-family maps only; off by default.
+	void setShowBlockGrid(bool show);
+	[[nodiscard]] bool showBlockGrid() const;
+	// The open map's block size, and whether block lines are drawn now: shown,
+	// a Quake-family map, and an axis of this projection split.
+	[[nodiscard]] LevelMapBlockSize blockGridSize() const;
+	[[nodiscard]] bool drawsBlockGrid() const;
 	// Arrows from each entity's target-style keys to the entities they name.
 	// Links that touch the selection are drawn heavier either way.
 	void setShowTargetLinks(bool show);
@@ -237,6 +256,28 @@ public:
 	// pixels; null when there are no handles.
 	[[nodiscard]] QPointF resizeHandlePosition(int edges) const;
 	[[nodiscard]] bool isResizing() const;
+
+	// The Assemble Brush tool (map_viewport_assemble.cpp): the points the plan
+	// views and the camera share. A click adds a grid point at the last
+	// point's depth, a drag over empty space a rectangle, a drag on a point
+	// moves it, and Shift-drag extrudes a flat outline shown side-on. Enter
+	// requests the brush; Backspace removes the last point; Escape cancels a
+	// drag, then clears the points, then leaves. No document is changed here.
+	void setBrushAssembleTool(bool enabled);
+	[[nodiscard]] bool brushAssembleTool() const { return m_assembleTool; }
+	bool setBrushAssembleState(const LevelBrushAssembleState& state);
+	[[nodiscard]] const LevelBrushAssembleState& brushAssembleState() const { return m_assembleState; }
+	void setBrushAssemblePreview(const LevelBrushAssemblePreview& preview);
+	[[nodiscard]] const LevelBrushAssemblePreview& brushAssemblePreview() const { return m_assemblePreview; }
+	[[nodiscard]] QPointF brushAssemblePointPosition(int index) const;
+	bool beginBrushAssemble(const QPointF& position, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
+	bool updateBrushAssemble(const QPointF& position);
+	void finishBrushAssemble(bool commit);
+	[[nodiscard]] bool isAssemblingBrush() const { return m_assembleGesture != 0; }
+	void removeLastBrushAssemblePoint();
+	void clearBrushAssemblePoints();
+	void requestBrushAssemble();
+	[[nodiscard]] QString brushAssembleSummary(bool full = true) const;
 
 	// Shared world-space clip mode. Clicks place up to three points; an initial
 	// drag places two. Existing points can move in this pane's visible axes.
@@ -447,6 +488,9 @@ Q_SIGNALS:
 	void clipModeChanged(bool enabled);
 	void clipStateChanged();
 	void quickClipRequested();
+	void brushAssembleToolChanged(bool enabled);
+	void brushAssembleStateChanged();
+	void brushAssembleRequested();
 	void drawModeChanged(bool enabled);
 	void shapeDrawModeChanged(bool enabled);
 	void shearModeChanged(bool enabled);
@@ -550,6 +594,15 @@ private:
 	[[nodiscard]] bool tagLinkShown(const LevelMapTagLink& link) const;
 	[[nodiscard]] MapViewportHit hitTest(const QPointF& viewPoint) const;
 	void paintGrid(QPainter& painter, const Palette& palette) const;
+	// The grid as the image path and the labels see it: navigation and grid
+	// size only, then with the device, colours, Show > Grid and block grid.
+	[[nodiscard]] MapGridView planGridView() const;
+	[[nodiscard]] MapGridView gridView(const QTransform& deviceTransform, const Palette& palette) const;
+	void paintGridCoordinates(QPainter& painter, const Palette& palette, const ViewportHudLayout& hud) const;
+	[[nodiscard]] QString blockGridDescription() const;
+	// "Blocks 1024" for the status tag while block lines are drawn.
+	[[nodiscard]] QString blockGridTag() const;
+	[[nodiscard]] QString gridCoordinatesDescription() const;
 	void paintDoom(QPainter& painter, const Palette& palette) const;
 	void paintQuake(QPainter& painter, const Palette& palette);
 	void paintQuakeGeometry(QPainter& painter, const Palette& palette, int worldspawnId);
@@ -643,6 +696,8 @@ private:
 	void updateResizeCursor(int edges);
 	void paintClip(QPainter& painter, const Palette& palette) const;
 	[[nodiscard]] QString clipSummary() const;
+	void paintBrushAssemble(QPainter& painter, const Palette& palette) const;
+	[[nodiscard]] QVector<int> brushAssemblePointsAt(const QPointF& position) const;
 	void paintDraw(QPainter& painter, const Palette& palette) const;
 	[[nodiscard]] QString drawSummary() const;
 	// Where a corner clicked at `viewPoint` goes: on a vertex, or the first
@@ -755,6 +810,11 @@ private:
 	bool m_showSectorFill = true;
 	bool m_showVertices = false;
 	bool m_showLabels = false;
+	bool m_showGridCoordinates = false;
+	bool m_showBlockGrid = false;
+	// The source document's block size, read again when the scene changes.
+	mutable quint64 m_blockSizeRevision = ~quint64(0);
+	mutable LevelMapBlockSize m_blockSize;
 	QVector<LevelMapVec3> m_leakTrail;
 	QVector<QVector<LevelMapVec3>> m_portals;
 	QVector<LevelMapTargetLink> m_targetLinks;
@@ -804,6 +864,20 @@ private:
 	bool m_clipAdding = false;
 	bool m_clipChanging = false;
 	bool m_clipDrawing = false;
+	bool m_assembleTool = false;
+	// 0 none, 1 a click or rectangle, 2 moving points, 3 an extrusion.
+	int m_assembleGesture = 0;
+	bool m_assembleDragged = false;
+	bool m_assembleChanging = false;
+	QPointF m_assemblePress;
+	QPointF m_assemblePressPlane;
+	LevelMapVec3 m_assembleDepth;
+	QVector<int> m_assembleGrabbed;
+	LevelBrushAssembleState m_assembleState;
+	LevelBrushAssembleState m_assembleBefore;
+	LevelBrushAssembleOutline m_assembleOutline;
+	LevelBrushAssemblePreview m_assemblePreview;
+	QString m_assembleMessage;
 	// A palette drag over the view, and where it would drop.
 	bool m_dropActive = false;
 	QPointF m_dropPoint;

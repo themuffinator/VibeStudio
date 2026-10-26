@@ -14,6 +14,7 @@
 #include "app/studio_sidebar.h"
 #include "app/studio_theme.h"
 #include "core/entity_builtin_catalogue.h"
+#include "core/level_filter_tags.h"
 #include "core/level_placement.h"
 #include "core/level_view_filters.h"
 
@@ -31,6 +32,7 @@
 #include <QFontMetrics>
 #include <QFormLayout>
 #include <QGridLayout>
+#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
@@ -44,6 +46,7 @@
 #include <QTreeWidgetItemIterator>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
 
 namespace vibestudio {
@@ -444,8 +447,13 @@ void ApplicationShell::refreshLevelViewFilters()
 	// The material kinds read the package's shader scripts for a Quake III
 	// map; a new map, package or staged edit starts a fresh read.
 	refreshLevelViewFilterMaterials();
+	// Class filters belong to the map session; tags follow the project and
+	// the chosen tag file.
+	syncLevelClassFilterSession();
+	refreshLevelFilterTags();
 	// The View > Filters commands follow the open map's format either way.
 	refreshLevelViewFilterCommands();
+	refreshLevelClassFilterPanel();
 	if (!m_levelFilterPanel) {
 		return;
 	}
@@ -478,6 +486,58 @@ void ApplicationShell::refreshLevelViewFilters()
 			m_levelFilterBoxes.insert(filter.id, box);
 		}
 		if (!filters.isEmpty()) {
+			// The tags game or project data define, after the built-in kinds,
+			// with where they came from and a way to choose a tag file.
+			auto* tagPanel = new QWidget;
+			tagPanel->setObjectName(QStringLiteral("levelFilterTags"));
+			auto* tagLayout = new QVBoxLayout(tagPanel);
+			tagLayout->setContentsMargins(0, 4, 0, 0);
+			tagLayout->setSpacing(4);
+			auto* tagHeading = new QLabel(tr("Tags"));
+			tagHeading->setObjectName(QStringLiteral("levelFilterTagsHeading"));
+			tagHeading->setProperty("sidebarHint", true);
+			tagHeading->setAccessibleName(tr("Tags from game or project data"));
+			tagLayout->addWidget(tagHeading);
+			auto* tagStatus = new QLabel;
+			tagStatus->setObjectName(QStringLiteral("levelFilterTagStatus"));
+			tagStatus->setProperty("sidebarHint", true);
+			tagStatus->setWordWrap(true);
+			tagStatus->setTextFormat(Qt::PlainText);
+			tagStatus->setAccessibleName(tr("Where the filter tags come from"));
+			tagLayout->addWidget(tagStatus);
+			m_levelFilterTagStatus = tagStatus;
+			auto* tagButtons = new QHBoxLayout;
+			tagButtons->setContentsMargins(0, 0, 0, 0);
+			tagButtons->setSpacing(4);
+			const auto tagButton = [this, tagButtons](const QString& name, const QString& text, const QString& icon, const QString& tip,
+									   void (ApplicationShell::*slot)()) {
+				auto* button = new QToolButton;
+				button->setObjectName(name);
+				button->setText(text);
+				button->setIcon(studioIcon(icon));
+				button->setToolTip(tip);
+				button->setAccessibleName(text);
+				button->setAccessibleDescription(tip);
+				button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+				button->setAutoRaise(true);
+				button->setFocusPolicy(Qt::TabFocus);
+				setBaseIconSize(button, QSize(16, 16));
+				connect(button, &QToolButton::clicked, this, slot);
+				tagButtons->addWidget(button);
+				return button;
+			};
+			tagButton(QStringLiteral("levelFilterTagFile"), tr("Tag File…"), QStringLiteral("open"),
+				tr("Choose a tag file, or a TrenchBroom game configuration, whose tags become filters with Toggle Visible commands. The map is unchanged."),
+				&ApplicationShell::chooseLevelFilterTagFile);
+			m_levelFilterTagClear = tagButton(QStringLiteral("levelFilterTagFileClear"), tr("Forget Tag File"), QStringLiteral("close"),
+				tr("Stop using the chosen tag file; the project's own tags stay."), &ApplicationShell::clearLevelFilterTagFile);
+			tagButtons->addStretch(1);
+			tagLayout->addLayout(tagButtons);
+			layout->addWidget(tagPanel);
+			m_levelFilterTagPanel = tagPanel;
+			// Never a real key, so the boxes are built again even for no tags.
+			m_levelFilterTagBoxesKey = QStringLiteral("\t-");
+			refreshLevelFilterTagBoxes();
 			// What the material kinds read on a Quake III map, and a way to read
 			// the shader scripts again after editing them outside the studio.
 			auto* status = new QLabel;
@@ -530,6 +590,8 @@ void ApplicationShell::refreshLevelViewFilters()
 				tr("Invert the view filters"), &ApplicationShell::invertLevelViewFilters);
 		}
 	}
+	// The tags' boxes and counts follow the loaded tags and the open map.
+	refreshLevelFilterTagBoxes();
 	// Counts are said with each kind, for the open map, while the tab shows.
 	SidebarPage* page = levelSidebarPage(QStringLiteral("view"));
 	if (!page || !page->isVisible() || m_levelFilterBoxes.isEmpty()) {
@@ -550,13 +612,10 @@ void ApplicationShell::applyLevelViewFilters()
 	if (!m_levelMapViewport || !m_levelMapViewport->hasDocument()) {
 		return;
 	}
-	QStringList off;
-	for (const QString& id : std::as_const(m_levelFiltersOff)) {
-		if (levelViewFilterForId(m_levelMapDocument, id)) {
-			off << id;
-		}
-	}
-	QVector<LevelMapSelectionRef> filtered = off.isEmpty() ? QVector<LevelMapSelectionRef>() : levelViewFilteredObjects(m_levelMapDocument, off, currentLevelFilterMaterials());
+	// Built-in kinds, the tags game or project data define, and the map
+	// session's class filters.
+	syncLevelClassFilterSession();
+	QVector<LevelMapSelectionRef> filtered = currentLevelViewFilterHidden().objects;
 	// A region hides what lies outside it, unless asked only to shade it.
 	if (levelRegionActive() && m_levelRegionHideOutside) {
 		filtered += levelMapOutsideRegionObjects(m_levelMapDocument, m_levelRegionMins, m_levelRegionMaxs);
@@ -832,17 +891,18 @@ void ApplicationShell::setLevelViewFilter(const QString& filterId, bool shown)
 	} else if (!off.contains(filterId)) {
 		off << filterId;
 	}
+	// Caulk, Skip and face tags also leave faces on other brushes out of the
+	// camera; say how many this change added.
+	const int facesBefore = shown ? 0 : static_cast<int>(currentLevelViewFilterHidden().faces.size());
 	// Saves the list and brings the check boxes, the View > Filters commands
 	// and every view up to date.
 	applyLevelViewFilterState(off);
-	LevelViewFilter filter;
-	if (levelViewFilterForId(m_levelMapDocument, filterId, &filter)) {
-		// Caulk also leaves caulk faces on other brushes out of the camera.
-		const int faces = shown || filterId != QLatin1String("caulk") ? 0
-			: static_cast<int>(levelViewFilteredFaces(m_levelMapDocument, m_levelFiltersOff, currentLevelFilterMaterials()).size());
-		statusBar()->showMessage(shown ? tr("%1 shown again.").arg(filter.title)
-				: faces > 0 ? tr("%1 hidden from the views, with %n face(s) on other brushes in the camera; the map is unchanged.", nullptr, faces).arg(filter.title)
-							: tr("%1 hidden from the views; the map is unchanged.").arg(filter.title),
+	const QString title = levelViewFilterTitle(filterId);
+	if (!title.isEmpty()) {
+		const int faces = shown ? 0 : std::max(0, static_cast<int>(currentLevelViewFilterHidden().faces.size()) - facesBefore);
+		statusBar()->showMessage(shown ? tr("%1 shown again.").arg(title)
+				: faces > 0 ? tr("%1 hidden from the views, with %n face(s) on other brushes in the camera; the map is unchanged.", nullptr, faces).arg(title)
+							: tr("%1 hidden from the views; the map is unchanged.").arg(title),
 			4000);
 	}
 }

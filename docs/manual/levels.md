@@ -65,6 +65,10 @@ its tab's tooltip.
   **Reset Sidebars** to where your editor profile keeps them.
 - The **View** menu has **Level Sidebars** commands to show each tab and to fold either sidebar. Like every
   command, they are in command search and can be given keys in **Help** > **Keyboard Shortcuts**.
+- **Show Surfaces** also hides the **Surfaces** tab again when it is showing: its sidebar goes back to the tab
+  it showed before, or folds if it was folded. The NetRadiant Custom and NetRadiant profiles give it
+  <kbd>S</kbd>, as NetRadiant Custom shows and hides its Surface Inspector; in mouse look <kbd>S</kbd>
+  still moves the camera.
 - Your [editor profile](editor-profiles.md) decides where the tabs start and what they are called. Radiant profiles
   open on the texture browser and call the outliner **Entity List**. TrenchBroom keeps everything in one inspector
   on the right. Hammer-family profiles have **Objects**, **Properties**, **Face Edit** and **Primitives**, and Doom
@@ -151,21 +155,38 @@ the tools the open map can use are shown, and the material strip below holds the
   own proportions. The choice is saved, applies to every three-plan layout and waits unused in the one-plan layouts;
   it never changes the map or its undo history. `editor layout --panes front,side` sets it from the command line.
 - **Show.** The **Show** menu chooses what the 2D views draw: **Things** (Doom) or **Entities** (Quake), **Sector Fill**
-  (Doom), **Grid**, **Vertices**, **Labels**, **Target Links** and **Linked Groups** (Quake). The **View** tab has the same options with
-  the grid, snapping, texture locks, layouts and view links.
+  (Doom), **Grid**, **Grid Coordinates**, **Block Grid** (Quake), **Vertices**, **Labels**, **Target Links** and **Linked
+  Groups** (Quake). The **View** tab has the same options with the grid, snapping, texture locks, layouts and view links.
+- **Read coordinates off the grid.** Turn on **Show** > **Grid Coordinates** to number the grid lines in every 2D view,
+  as NetRadiant Custom's **Show Coordinates** does: values across along the bottom edge, values up along the left edge
+  (the right edge in right-to-left languages). The numbers are spaced so they never crowd each other, show the
+  fractions a fine grid needs, and stay clear of the status tags in the corners. The pointer readout below the views
+  still gives the exact point under the pointer.
+- **See the compiler's blocks.** Turn on **Show** > **Block Grid** on a Quake-family map to draw dashed lines where the
+  compiler first splits the world into blocks, as NetRadiant Custom's **Show Blocks** does. The size comes from the
+  worldspawn `_blocksize` key, which you can set in the **Map** tab: one number for every axis, three for x, y and z,
+  and 0 to leave an axis unsplit. Without the key the blocks are 1024 units. The older `blocksize` and `chopsize` keys
+  are read too, and a value is read exactly as q3map2 reads it, so a lone second number is ignored and the status bar
+  says so. The status tag shows the size, and inside a region the lines stay within it. q3map2-family compilers such
+  as VibeMap3 split on these lines; Quake and Quake II compilers such as VibeMap2 do not, so treat the lines as a guide
+  for Quake III-family builds. **Export Image** and `map render --block-grid` draw the same lines.
+- **Toggle them from anywhere.** **View** > **Show Grid Coordinates** and **Show Block Grid** do the same as the
+  **Show** menu, with check marks, and are in command search. Neither has a key, as in NetRadiant Custom; give them
+  one in **Help** > **Keyboard Shortcuts**. Both are off until you turn them on, the choice is kept for the next
+  session, and neither ever changes the map or its undo history.
 - **Filters.** The **Filters** section of the **View** tab hides whole kinds of object in every view, each with a
   count: world brushes, entities, brushes, brush entities, func groups, patches, detail, structural, clip, player
-  clip, monster clip, weapon clip, bot clip, hint and skip, caulk, nodraw, area portals, cluster portals, light grid,
-  sky, liquids, translucent, decals, point entities, lights, triggers, monsters, items, player starts, paths and
+  clip, monster clip, weapon clip, bot clip, hint, skip, caulk, nodraw, area portals, cluster portals, light grid,
+  sky, liquids, fog, translucent, decals, point entities, lights, triggers, monsters, items, player starts, paths and
   models, or on a Doom map each category of thing. A ticked kind is shown. The same kinds are checkable commands under **View** > **Filters**,
   in the **Filters** submenu of the view bar's **Select** menu and in command search, so you can give them keys;
   the NetRadiant Custom and NetRadiant profiles use theirs: <kbd>Alt+1</kbd> **World Brushes**, <kbd>Alt+2</kbd>
   **Entities**, <kbd>Alt+3</kbd> **Area Portals**, <kbd>Alt+4</kbd> **Translucent**, <kbd>Alt+5</kbd> **Liquids**,
   <kbd>Alt+6</kbd> **Caulk**, <kbd>Alt+7</kbd> **Clip**, <kbd>Alt+8</kbd> **Paths**, <kbd>Alt+9</kbd> **Cluster Portals**, <kbd>Alt+0</kbd>
-  **Lights**, <kbd>Ctrl+D</kbd> **Detail**, <kbd>Ctrl+Shift+D</kbd> **Structural**, <kbd>Ctrl+H</kbd> **Hint and
-  Skip**, <kbd>Shift+M</kbd> **Models**, <kbd>Ctrl+Shift+T</kbd> **Triggers**, <kbd>Alt+M</kbd> **Bot Clip** and
+  **Lights**, <kbd>Ctrl+D</kbd> **Detail**, <kbd>Ctrl+Shift+D</kbd> **Structural**, <kbd>Ctrl+H</kbd> **Hint**,
+  <kbd>Shift+M</kbd> **Models**, <kbd>Ctrl+Shift+T</kbd> **Triggers**, <kbd>Alt+M</kbd> **Bot Clip** and
   <kbd>Shift+D</kbd> **Decals** (<kbd>Ctrl+P</kbd> stays **Go to File**, so **Patches** has no key, and **Light Grid**
-  has none in NetRadiant Custom either). **Invert Filters** hides every kind that is
+  has none in NetRadiant Custom either; **Skip** and **Fog** have no key there). **Invert Filters** hides every kind that is
   shown and shows every kind that is hidden, as Radiant's **Invert filters** does, and **Show Every Kind** brings
   them all back.
 
@@ -177,7 +198,13 @@ the tools the open map can use are shown, and the material strip below holds the
   func_detail, and on Quake maps worldspawn and every brush entity but func_detail. **Caulk** hides brushes caulked on
   every face, and while it is off the camera also leaves out caulk faces on other brushes, so you see the surfaces
   players see; the 2D views keep each brush's whole outline, as Radiant's do, and the status bar says how many faces
-  went. On a Quake map, skip counts as caulk rather than as **Hint and Skip**.
+  went. **Hint** takes a brush with a hint face, and **Skip** a brush skipped on every face; while **Skip** is off
+  the camera also leaves out the skip sides of other brushes, so hiding it leaves a hint brush's hint face. When the
+  faces that go one by one cover a whole brush, say caulk on some sides and skip on the rest, the brush leaves the 2D
+  views too. On a Quake map, skip counts as caulk and only ericw-tools' hintskip counts as **Skip**; Quake II maps
+  also read the hint and skip surface flags. **Fog** takes Quake III fog volumes: a shader with surfaceparm fog or fogParms, the fog
+  content flag, or else, where no shader is known, a texture in a `fog` or `fogs` folder or named after fog, such as
+  `sfx/fog_red` (not `fogged_glass`).
 
   The material kinds read what a surface is made of. On a Quake III map the **Filters** section reads the shader
   scripts of the package you have open, staged edits included, and says how many shaders it read; press **Reload
@@ -204,6 +231,42 @@ the tools the open map can use are shown, and the material strip below holds the
   visibility. Filters are separate from hidden objects, so **Show All Hidden**
   leaves them on, and they only change what you see and can pick, never the map. `map filters` reports the same
   kinds and counts from the command line.
+- **Filter tags from your game or project.** A game or project can name its own kinds as tags, the way TrenchBroom's
+  game configurations do: by texture pattern, Quake III surfaceparm, content or surface flag, or brush entity class.
+  Put them in the project manifest under `levelFilterTags`, either written out or as the path of a tag file beside
+  the project, or choose **Tag File…** under **Tags** in the **Filters** section. A TrenchBroom game configuration
+  (`GameConfig.cfg`) works as it is: its comments, bare names and trailing commas are read as TrenchBroom reads
+  them, and a pattern such as `"\**"` keeps its backslash, so it takes textures whose names start with `*`. If a file
+  cannot be read, the message names the line. Each tag gets a check box with its count and a checkable **Toggle**
+  *tag* **Visible** command in command search, the **Filters** menus and **Help** > **Keyboard Shortcuts**, so you
+  can give it a key. A texture, surfaceparm or flag tag hides a brush whose every face matches and, in the camera,
+  the matching faces of other brushes one by one; a brush whose faces all go under several tags or kinds together is
+  hidden whole. A class tag hides the brush entities of that class. Surfaceparm tags read the shaders of the package
+  you have open, as the material kinds do. Tags are remembered with the other kinds, **Invert Filters** flips them
+  too and says how many it hid, and **Forget Tag File** stops using the file. The **Tags** line says where the tags
+  came from and how many entries it skipped; point at it for the details. Names written entirely in non-Latin
+  scripts keep their display text and receive a stable generated command ID.
+
+  ```json
+  "levelFilterTags": {
+    "brush": [ { "name": "Triggers", "match": "classname", "pattern": "trigger_*" } ],
+    "brushface": [ { "name": "Fog", "match": "surfaceparm", "pattern": "fog" },
+                   { "name": "Water", "match": "texture", "pattern": "*water*" },
+                   { "name": "Trans", "match": "surfaceflag", "flags": [ "trans33", "trans66" ] } ]
+  }
+  ```
+
+  Texture patterns match the texture's own name, or its path when the pattern has a `/`; `*` and `?` are wildcards,
+  `\` makes the next character plain, and case does not matter. Flags are the game's names (as the **Surfaces** tab
+  shows them), numbers, or the names a game configuration's `faceattribs` lists.
+- **Entity classes.** The **Entity Classes** section of the **View** tab lists every class of the loaded entity
+  definitions and every class the map uses, grouped by the part of the name before the first `_` and counted.
+  Untick a class, or a whole group, to hide every entity of it in all the views, including ones you add later;
+  **Hide All Classes** and **Show All Classes** do the lot, and **Find a class** narrows the list. Each class also has
+  a checkable **Toggle** *class* **Visible** command, as in TrenchBroom, that you can find in command search and give
+  a key. Class filters last until you open another map and never change the map; **Show Every Kind** clears them
+  too. A class whose name holds a comma has no filter, as commas separate the lists filters are kept in.
+  `map visibility --class` and `map filters --class` report what they hide.
 - **Region.** To work on one area of a big map, choose **Set to Selection** or **Set to View** in the **Region**
   section of the **View** tab (or **Select** > **Set Region to Selection**). **Draw Region** lets you drag the box in
   a 2D view, through the whole map's depth; **Set Region to Brush** uses the selected brushes' bounds and removes
@@ -369,7 +432,7 @@ Most actions are in the **Edit** menu, the right-click menu of the views and the
 | Round to the grid | **Round Selection to Grid** rounds every brush vertex, patch control point and point-entity origin of the selection onto the grid on its own, as Radiant's Snap To Grid does, so off-grid shapes are cleaned up where they stand; brush entities round their brushes and keep their origin key. In **Edit Vertices**, **Edit Edges** or **Edit Faces** it rounds only the picked components. It is one undo step, follows **Lock Component UVs**, and leaves a brush the grid would collapse as it was, saying why. The NetRadiant Custom profile runs it with <kbd>Ctrl</kbd>+<kbd>G</kbd>; **Snap Selection to Grid** instead moves each object whole so its corner or origin lands on the grid. In Doom-format maps it snaps objects as **Snap Selection to Grid** does. |
 | Merge brushes | **Merge Brushes…** previews their convex union and lets you choose where conflicting materials, mappings and flags come from. |
 | Apply a texture | Select brushes or patches and choose **Apply Texture…**, or press <kbd>Enter</kbd> on a tile on the **Textures** tab. **Find and Replace Textures…** finds or swaps one texture across the map, the selection or the picked faces, and **Reveal Material** shows the selection's texture on the **Textures** tab; see [Find, replace and reveal textures](#find-replace-and-reveal-textures). |
-| Align textures | Edit a classic or Valve 220 face's shift, rotation and scale on the **Inspector** tab, or use the **Surfaces** tab. In Face mode, both targets use exactly the [picked face components](#edit-surfaces-from-component-faces). In object mode, **Target** chooses the selection, patches included, or **Picked Faces**: the faces you pick in the camera with your profile's face-pick click, holding its add key to gather more, or else the face in the **Inspector**. **Adjust** shifts, rotates, scales, fits or centres in steps, adds or subtracts a Radiant **Scale step** (see [Step textures by Radiant increments](#step-textures-by-radiant-increments)), and has one-click **Flip U** and **Flip V**, **Fit U** and **Fit V** (one repeat across that axis only), **Justify Left**, **Right**, **Top** and **Bottom**, **Natural** (the texture at its natural scale, square to the world, as Radiant's Natural does), **Align to Face** (the texture laid along the face's own slope), and **Reset** and **Radiant Reset** (see [Reset textures](#reset-textures)). **Copy and Paste** carries one face's material, mapping and flags to others. **Surface Alignment…** gives a detailed preview. To move or flip textures the way the camera shows them, see [Move and flip textures from the camera](#move-and-flip-textures-from-the-camera). |
+| Align textures | Edit a classic or Valve 220 face's shift, rotation and scale on the **Inspector** tab, or use the **Surfaces** tab. In Face mode, both targets use exactly the [picked face components](#edit-surfaces-from-component-faces). In object mode, **Target** chooses the selection, patches included, or **Picked Faces**: the faces you pick in the camera with your profile's face-pick click, holding its add key to gather more, or else the face in the **Inspector**. **Adjust** shifts, rotates, scales, fits or centres in steps, adds or subtracts a Radiant **Scale step** (see [Step textures by Radiant increments](#step-textures-by-radiant-increments)), and has one-click **Flip U** and **Flip V**, **Fit U** and **Fit V** (one repeat across that axis only), **Fit Width** and **Fit Height** (one repeat, keeping the texture's proportions), **Justify Left**, **Right**, **Top** and **Bottom**, **Natural** (the texture at its natural scale, square to the world, as Radiant's Natural does), **Align to Face** (the texture laid along the face's own slope), **Axial**, **2D View** and **Camera** under **Project texture** (see [Fit and project textures](#fit-and-project-textures)), and **Reset** and **Radiant Reset** (see [Reset textures](#reset-textures)). **Copy and Paste** carries one face's material, mapping and flags to others. **Surface Alignment…** gives a detailed preview, and **UV Editor…** drags one face's or patch's points over its texture (see [Edit texture coordinates in the UV Editor](#edit-texture-coordinates-in-the-uv-editor)). To move or flip textures the way the camera shows them, see [Move and flip textures from the camera](#move-and-flip-textures-from-the-camera). |
 | Paint materials | Choose a material in the **Material** box above the views, set the camera tool to **Paint**, then click or drag across surfaces in the 3D view. Each stroke is one undo step. **Sample** picks up a surface's material instead. |
 | Reshape a brush | Turn on **Edit Vertices**, **Edit Edges** or **Edit Faces** (**Geometry** or **Tools > Vertices**) to show corners, edge middles or face centres in the plan views and camera. Picks are shared between panes. In a plan view, click stacked handles, use the profile's add/toggle modifier or drag a selection band, then drag them or nudge them with your profile's **Nudge** keys (<kbd>Shift</kbd>: eight grid steps; see [Nudge the selection](#nudge-the-selection)). The camera supports visible/X-ray picks and XYZ movement; see [camera components](#move-components-in-the-camera). A corner moved onto another merges with it; **Undo** restores it. **Snap Vertices to Grid** rounds brush corners onto the grid. **Edit Brush Components…** provides exact numbers and a preview. |
 | Make curves (Quake III) | **Add Patch…** creates a plane, cylinder, square cylinder, cone, sphere, bevel or end cap, its cylinders, cones and spheres true circles of as many spans as you choose; the **Shapes** tab draws them too. **Edit Patch Control Points…**, **Stitch Patches…** and **Cap Patch…** reshape, join and close patches, and **Edit Vertices** drags their control points in the plan views and camera. The **Patch Rows and Columns** commands, also in the patch editor, insert, add or delete rows and columns without changing the surface, **Transpose**, **Re-disperse** and **Smooth** them, as Radiant's Patch menu does, and **Thicken Patch…** gives patches a back and walls along their open edges, as NetRadiant Custom does. |
@@ -1506,12 +1569,15 @@ one patch filling the box; **Segments** sets how many spans go round a cylinder,
 2. Choose **Draw in a View**, then drag a box in a 2D view or the 3D view. **Add at View Centre** puts one in the
    middle of the active 2D view instead.
 3. To turn existing brushes into the shape, select them and choose **Replace Selected Brushes**: the shape fills their
-   bounds, as the Radiant editors' arbitrary-sided brush commands do. Brushes of a brush entity are left alone.
+   bounds, as the Radiant editors' arbitrary-sided brush commands do. Brushes of a brush entity are left alone. To
+   rebuild each brush in its own bounds instead, brush entities included, see
+   [Rebuild brushes as prisms, cones and spheres](#rebuild-brushes-as-prisms-cones-and-spheres).
 
 | Setting | What it does |
 | --- | --- |
 | **Axis** | The axis a cylinder or cone runs along, a sphere's poles, a wedge's height, and what an arch or ring turns about. **Across the View** follows the view you draw in, so an arch drawn in the **Front** view stands up as a doorway. |
-| **Sides** or **Segments** | How round a cylinder, cone or sphere is, or how many brushes make an arch or ring. |
+| **Sides** or **Segments** | How round a cylinder, cone or sphere is, or how many brushes make an arch or ring. A cylinder takes up to 126 sides and a cone up to 127, the most a brush's 128 faces allow; a sphere's sides times **Bands** is at most 128. |
+| **Fit** | How a cylinder, cone or sphere sits in the box. **Fill the Box** stretches it to every side of the box. **Round on the Larger Side** builds it as NetRadiant Custom does: round on the box's larger side with a face square to the first axis across the view, so a four-sided cylinder is a square and an eight-sided one keeps the box's own faces; a sphere is a true sphere on the largest side. Such a shape can overhang the box's shorter sides. |
 | **Walls** | How thick an arch, ring or room is. Walls as thick as an arch is wide close it into slices. |
 | **Sweep** and **Start** | How far round an arch goes, and where it starts, in degrees from the view's right towards its top. |
 | **Steps** and **Climbs** | How many solid steps stairs have, and which way they rise: along the longer side, or towards +X, −X, +Y or −Y. |
@@ -1523,6 +1589,103 @@ out in the void, and the shape fills it, as Doom Builder's rectangle and ellipse
 more, and press <kbd>Escape</kbd> to stop. **Add at View Centre** adds one of the **Width** and **Depth** you set in the
 middle of the view instead. For a sector of any outline, use **Draw Sector** on the tool bar. Rebuild the nodes
 before playing.
+
+### Rebuild brushes as prisms, cones and spheres
+
+**Partial:** NetRadiant Custom's Brush menu shapes, on Quake-family maps. Select brushes, or a brush entity, and choose
+**Make Prism…**, **Make Cone…** or **Make Sphere…** (**Edit** > **Brush Shapes**, the **Geometry** menu above the
+views, the **Brush Shapes** section of the **Tools** tab, or command search), then give the number of sides. Each brush
+is rebuilt in place within its own bounds, round on its larger side with a face square to the first axis, in the
+material chosen on the **Textures** tab:
+
+- a prism or cone runs along the active 2D view's depth axis: Z in **Top**, Y in **Front** and X in **Side**. A cone's
+  base is at the low end and its point over the middle of the high end.
+- a sphere keeps its poles on Z, with as many latitude bands as sides, up to 11 of each.
+
+**Make 3-Sided Prism** to **Make 9-Sided Prism** do the same without asking. In the NetRadiant Custom profile they are
+<kbd>Ctrl</kbd>+<kbd>3</kbd> to <kbd>Ctrl</kbd>+<kbd>9</kbd> while a 2D view or the camera has the keyboard and a brush
+is selected; anywhere else, or with nothing selected, those keys still switch work modes.
+
+The brushes keep their numbers, their brush entity, layer or group and their place in the file, and the selection stays
+as it was. Their faces get a fresh default alignment and keep the brush's content flags. The whole change is one undo
+step. Hidden brushes, and brushes too small for that many sides, are left as they were and named in the status bar; a
+brush on a locked layer, or outside the open group, stops the change. `map add-shape --in-place --fit circle` does the
+same from the [command line](cli.md).
+
+### Create a brush from typed points
+
+**Partial:** TrenchBroom's debug **Create Brush** as an ordinary command, on Quake-family maps. Choose **Create Brush
+from Points…** (**Edit** > **Brush Shapes**, the **Create** menu above the views, the **Brush Shapes** section of the
+**Tools** tab, or command search) and type four or more points. The new brush is the convex solid that encloses them.
+
+1. Type the points in **Points**, in any of these forms. Each line can use a different one, and text after `//` is
+   ignored:
+   - `x,y,z` groups separated by spaces or semicolons: `0,0,0 128,0,0 0,128,0 0,0,64`
+   - one or more `x y z` points per line
+   - TrenchBroom's bracketed form: `(0 0 0) (128 0 0) (0 128 0) (0 0 64)`
+2. **Add Selected Corners** appends the corners of the selected brushes, or of the picked faces, edges and vertices,
+   in the same form [Copy Vertex Coordinates](#copy-vertex-coordinates) writes.
+3. Check the material in **Material**; it starts as the one chosen on the **Textures** tab.
+4. Watch the status line and the preview. They say how many corners and faces the brush will have, and how many
+   points add no corner because they lie inside the brush or on its faces. Points all in one place, on one line or on
+   one plane cannot enclose a volume and are refused, as are more than 4,096 points or a result with more than 128
+   faces or 256 corners.
+5. Choose **Create Brush**.
+
+The brush goes to worldspawn in the map's own face format, into the open group or the active layer, and is selected.
+It is one undo step; a locked destination stops it, and a linked group's copies get it too. The dialog remembers the
+last points you typed. `map add-brush --points` does the same from the [command line](cli.md).
+
+### Assemble a brush from clicked points
+
+**Partial:** TrenchBroom's **Brush Tool**, on Quake-family maps. Choose **Assemble Brush Tool** (<kbd>B</kbd> in the
+TrenchBroom profile; **Edit** > **Brush Shapes**, the **Create** menu above the views, the **Brush Shapes** section of
+the **Tools** tab, or command search). The 2D views and the camera share one set of points, drawn as squares, with the
+outline or brush they make. While the tool is on, clicks add points instead of selecting.
+
+In the camera:
+
+- Click a brush face to add a point on the grid in that face's plane. Where no face is under the pointer, the point
+  goes on the construction plane that **Draw Brush** uses, the work zone's floor unless you change it.
+- Drag from a face to draw a rectangle on its plane, its corners rounded outwards to the grid.
+- Double-click a face to add its corners.
+- Hold <kbd>Shift</kbd> over a flat outline, which fills to show it can be picked, and drag to extrude it along its
+  normal in grid steps.
+
+In a 2D view:
+
+- Click to add a grid point at the depth of the last point, or at the work zone's floor.
+- Drag over empty space for a rectangle at that depth. Drag a point to move it, and any points drawn on top of it,
+  across the view.
+- <kbd>Shift</kbd>-drag a flat outline in a view that shows its side to extrude it: draw a rectangle in **Top**, then
+  extrude it upwards in **Front**.
+
+The points are checked in the background as you add them. The readout says how many corners and faces the brush will
+have, or why there is no brush yet: fewer than four points, or points on one line or one plane. A dashed line shows
+the outline while it is flat and a solid one the checked brush. Press <kbd>Enter</kbd> in any view, or choose **Create
+Assembled Brush**, to add it in the material chosen on the **Textures** tab. As with **Create Brush from Points…**, it
+goes into the open group or the active layer, is selected and is one undo step, and a locked layer stops it with a
+message. The points then clear and the tool stays on.
+
+<kbd>Backspace</kbd> or <kbd>Delete</kbd> removes the last point. <kbd>Esc</kbd> cancels a drag, then clears the points,
+then leaves the tool; choosing another tool, such as the clip tool or a vertex mode, also leaves it. Hidden brushes
+cannot be clicked. Up to 4,096 points within ±32768 units are kept. `map add-brush --points` with `--extrude dx,dy,dz`
+builds the same brushes from the [command line](cli.md). To type or paste exact points, use
+[Create Brush from Points…](#create-a-brush-from-typed-points).
+
+### Copy vertex coordinates
+
+**Partial:** TrenchBroom's debug **Print Vertices** as an ordinary command. Choose **Copy Vertex Coordinates**
+(**Edit** > **Brush Shapes**, the **Geometry** menu above the views, the **Vertices** section of the **Tools** tab, or
+command search). With faces, edges or vertices picked in a component mode, it copies their corners; otherwise it copies
+every corner of each selected brush, including the brushes of a selected brush entity. Hidden and filtered brushes are
+left out, and the map does not change.
+
+Each brush or component gets a comment line such as `// brush:3` or `// brush:3 face:2 base/metal`, followed by its
+corners as `(x y z)` at full precision: the shortest decimal that reads back as exactly the stored value. The same text
+goes to the **Activity** panel. Paste it into **Create Brush from Points…**, a script or a report.
+`map brush-components` lists one or more brushes, with each face's corner coordinates, from the
+[command line](cli.md).
 
 ### Work with layers
 
@@ -1968,7 +2131,7 @@ vibestudio --cli map move ./maps/start.map --object brush:12 --delta 16,0,0 --ou
 | `map find` | List the objects a query matches, as the **Objects** filter does; `--number 0,12` finds the object a compiler names as `Entity 0, Brush 12` |
 | `map new` | Create an empty map or starter room |
 | `map edit` | Change entity keys, a face's texture and alignment, or Doom sector, linedef and side fields |
-| `map add-entity`, `map add-brush`, `map add-thing` | Add a point entity, a brush shape or a Doom thing |
+| `map add-entity`, `map add-brush`, `map add-thing` | Add a point entity, a brush shape, the brush enclosing typed points (`--points`) or a Doom thing |
 | `map delete`, `map duplicate`, `map paste` | Delete objects, copy them with an offset (`map duplicate --copies N` creates a linear array), or insert `.map` text |
 | `map move`, `map rotate`, `map flip`, `map resize`, `map snap` | Transform objects, with texture lock options |
 | `map round-to-grid` | Round each brush vertex, patch control point and point-entity origin of `--object` objects onto `--grid`, or only `--set` components, as **Round Selection to Grid** does; optional `--uv-lock off\|on\|fit` |
@@ -2374,6 +2537,191 @@ vibestudio --cli map align-textures room.map --object brush:12 --radiant-reset 0
 vibestudio --cli map align-textures room.map --whole-map --only-texture base_wall/concrete --rename base_wall/metal --set-rotation 0 --output retextured.map
 ```
 
+## Fit and project textures
+
+**Status: Partial.** These commands fit a texture to a face without
+stretching it, and lay one flat projection across several surfaces, as
+NetRadiant Custom's Surface Inspector does. They are on the **Surfaces** tab,
+in the **Surfaces** menu, on the **Tools** tab and in the command palette.
+
+To fit a texture and keep its proportions:
+
+- **Fit Texture Width** (**Fit Width** on the **Surfaces** tab) fits one
+  repeat across each face's width and scales its height by the same amount,
+  starting it at the face's edge.
+- **Fit Texture Height** (**Fit Height**) does the same down the height.
+- **Fit Texture Width Only** and **Fit Texture Height Only** (**Fit U** and
+  **Fit V**) fit one axis and leave the other as it is.
+
+For other repeat counts, use **Surface Alignment…**: choose **Fit**, set the
+axis to keep to 0 and tick **Keep proportions**.
+
+To project a texture, use the **Project texture** buttons. Each lays the
+default texture, with no shift or rotation at the default scale, flat across
+the surfaces:
+
+- **Project Texture Axially** (**Axial**) projects each face along the world
+  axis it faces most, as **Natural** does, and each patch along the axis
+  nearest its facing, rather than spreading the texture along the patch.
+- **Project Texture from 2D View** (**2D View**) projects straight from the 2D
+  view you used last, so every surface shares one projection, reading the
+  right way round from that view.
+- **Project Texture from Camera** (**Camera**) projects along the 3D camera's
+  view in the same way.
+
+The fits act on the **Surfaces** tab's target. The projections act on the
+faces you picked in the camera or with **Select Textured**, or with no face
+picked on the **Surfaces** tab's target. Each command, or a quick burst of
+them, is one undo step. **Project Texture from Camera** keeps using the
+camera's last direction when its pane is hidden. The fits need the material's image size from the open
+package, except on brush-primitive faces and patches; the projections need it
+on brush-primitive faces and patches. Hidden objects are not targets, and a
+locked layer refuses the edit, with the reason on the **Surfaces** tab.
+
+A projection leaves some surfaces as they were, and the **Surfaces** tab says
+how many: faces it runs along (the walls, when you project from the **Top**
+view), and classic faces whose format cannot hold it. A classic face holds a
+projection only where it suits the face's own axis, such as the **Top** view's
+on a floor, whereas NetRadiant Custom leaves every classic face alone. When no
+targeted surface can take the projection, nothing changes and the tab says
+why. Unlike NetRadiant Custom, brush-primitive faces and patches take the same
+projection as Valve 220 faces, which reads the right way round, and **Fit
+Width** keeps a patch's proportions rather than re-tiling it to one repeat.
+
+NetRadiant Custom has no default keys for these commands, so no profile binds
+them; give them your own in **Help** > **Keyboard Shortcuts**.
+
+On the command line, **map align-textures --fit U,V --keep-proportions**,
+**--project axial|x|y|z|-x|-y|-z|camera** and **--project-direction X,Y,Z** do
+the same:
+
+```sh
+vibestudio --cli map align-textures room.map --object brush:12 --fit 1,0 --keep-proportions --package ./assets --output fitted.map
+vibestudio --cli map align-textures room.map --object brush:12 --project z --output projected.map --json
+```
+
+## Edit texture coordinates in the UV Editor
+
+**Status: Partial.** The **UV Editor** shows one brush face's outline, or one
+patch's control grid, laid over its texture, so you can drag the texture into
+place by eye, as NetRadiant Custom's TexTool plugin does. It works with
+classic, Valve 220 and brush-primitive faces and with Quake III patches.
+
+To edit a face's texture:
+
+1. Pick one face in the camera or in Face mode, or select one brush and choose
+   its face in the **Inspector**. For a patch, select just that patch.
+2. Choose **UV Editor…** in the **Surfaces** menu, on the **Tools** tab, from
+   the right-click menu or in command search.
+3. Drag any numbered point. The whole texture follows it, and the point lands
+   on the **Snap** grid. When you let go, that point becomes the **anchor**,
+   drawn as a ringed cross.
+4. Drag another point to turn the texture about the anchor. Hold
+   <kbd>Shift</kbd> to turn in **Turn step** increments. Drag the anchor
+   itself, or inside the face, to move the texture again.
+5. Check the preview beside the view, then choose **Apply**. **Cancel** or
+   <kbd>Esc</kbd> leaves the map as it was.
+
+A patch's control points move one at a time: drag a point, or drag across
+several to select them, holding <kbd>Ctrl</kbd> to add, and drag one of the
+selected points to move them together.
+
+The view's keys work while it has keyboard focus:
+
+| Key | Action |
+| --- | --- |
+| Arrow keys | Nudge by the snap step (<kbd>Shift</kbd>: eight steps). A face moves as a whole; a patch moves its selected points, or all of them. |
+| <kbd>[</kbd> and <kbd>]</kbd> | Turn anticlockwise or clockwise by the **Turn step**, about the anchor or else the centre. <kbd>{</kbd> and <kbd>}</kbd> turn by one degree. |
+| <kbd>N</kbd>, <kbd>Shift</kbd>+<kbd>N</kbd> | Step to the next or previous point. |
+| <kbd>A</kbd> | Make the current point the anchor, or clear it. |
+| <kbd>Ctrl</kbd>+<kbd>A</kbd> | Select every patch point. |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> | Undo or redo inside the editor. |
+| <kbd>+</kbd>, <kbd>-</kbd>, <kbd>Delete</kbd>, <kbd>Insert</kbd>, the wheel | Zoom (<kbd>Delete</kbd> in and <kbd>Insert</kbd> out, as in TexTool). |
+| <kbd>Ctrl</kbd>+arrow keys, right- or middle-drag | Pan. A right-click without dragging opens a menu. |
+| <kbd>Home</kbd> or <kbd>F</kbd> | Frame all the points. |
+| <kbd>Enter</kbd> | **Apply**. |
+
+The **U** and **V** cells in the point list move a point to exact texel
+coordinates; on a face, the whole texture follows. The buttons beside the view
+do the same as the keys.
+
+Things to know:
+
+- **Apply** makes every change you made in the editor one undo step. Hidden
+  objects, locked layers and objects outside the open group cannot be edited.
+- Coordinates are in texels, with U to the right and V down the image. A move
+  changes only the face's offsets. A Valve 220 face keeps its scale values, and
+  a brush-primitive face turns exactly.
+- A classic face whose texture is scaled differently along U and V cannot hold
+  every turn. It takes the nearest classic mapping, keeping the anchor in
+  place, and the status says so. Tick **Convert to Valve 220 when a turn needs
+  it** to keep the turn exactly.
+- Brush-primitive faces and patches count their coordinates in repeats, so
+  they need the image's size. Without an open package, **Use explicit texture
+  size** is ticked at 64 × 64 texels; change it before you edit. Classic and
+  Valve 220 faces show a checker when the image is not found.
+- The preview shows the face's brush, or the patch, with the edited texture.
+  The camera and plan views update when you choose **Apply**.
+
+No profile binds a key to the **UV Editor**, because neither NetRadiant Custom
+nor TrenchBroom does; give it one in **Help** > **Keyboard Shortcuts**.
+
+On the command line, `map edit-uv` lists a face's or patch's points in texels
+and moves or turns them through the same service:
+
+```sh
+vibestudio --cli map edit-uv base.map --target face:3:1 --json
+vibestudio --cli map edit-uv base.map --target face:3:1 --rotate 15 --anchor 1 --output base-turned.map
+vibestudio --cli map edit-uv curves.map --target patch:0 --move-point 5 --to 32,16 --texture-size 128,128 --output curves-uv.map
+```
+
+## Set face flags
+
+**Status: Partial.** Quake II and Quake III brush faces carry content flags,
+surface flags and a surface value after their texture. The **Flags** section
+of the **Surfaces** tab shows and changes them, as NetRadiant Custom's Surface
+Inspector and TrenchBroom's Face Inspector do.
+
+To change a face's flags:
+
+1. Pick faces in the camera, or select brushes. With no face picked, the
+   section follows the **Surfaces** tab's target.
+2. Open the **Surfaces** tab and find **Flags**. Each flag has a box named as
+   the game names it, such as **Light** or **Player clip**. A ticked box is set
+   on every targeted face; a partly ticked box is set on some of them.
+3. Tick or clear a box. A partly ticked box ticks on every face. Only that flag
+   changes; each face keeps its other flags.
+4. To set the surface value, such as a Quake II light's brightness, type it in
+   **Value** and press <kbd>Enter</kbd>. **Value** is empty when the faces'
+   values differ.
+
+**Clear Flags** (**Clear Face Flags** in the **Surfaces** menu, on the
+**Tools** tab and in command search) clears every flag but detail and sets the
+value to 0, as NetRadiant Custom's **Unset** does.
+
+Each change is one undo step, and the boxes follow **Undo**. The detail flag is
+shown but cannot be changed here, because it belongs to whole brushes: use
+**Make Detail** or **Make Structural**. Bits the game leaves unnamed are kept,
+and the section says when any are set. Hidden objects are not targets, and a
+locked layer or a face outside the open group refuses the change, with the
+reason on the **Surfaces** tab. Quake maps have no face flags, so the section
+has no boxes there. A Quake II map whose faces write no flag numbers yet is
+still recognised by its header or its Quake II classes, and only the faces you
+change gain the numbers. Texture folders alone do not identify the game for
+flag edits: modern Quake maps use them too. Changed flags are written as
+signed numbers, as NetRadiant Custom and TrenchBroom write them, so
+a flag in the top bit, such as **N64 scroll flip** or **No drop**, appears as
+a negative number that every compiler reads. On Quake III maps the compiler reads only the detail flag
+from a face, and shader surfaceparms decide the rest in game; the section
+says so.
+
+On the command line, `map face-flags` reads and changes the same flags by name:
+
+```sh
+vibestudio --cli map face-flags base.map --face 3:1 --json
+vibestudio --cli map face-flags base.map --object brush:3 --set-content playerclip --output base-clip.map
+```
+
 ## Select textured surfaces
 
 **Status: Partial.** **Select Textured** in **Edit**, the viewport **Select**
@@ -2652,3 +3000,32 @@ remain unverified. NRC model-derived entity bounds, TB game-specific world-limit
 clipping for Tall, and complete foreign group/filter semantics remain integration
 gaps. Matching TB's grid-edge patch test does not provide continuous curved-surface
 intersection. The default profile's empty query keeps its existing selection.
+
+### Apply a smart tag
+
+**Partial.** Load game or project tags under **View** > **Filters** > **Tag File…**.
+The command palette and **Edit** > **Smart Tags** then offer **Make &lt;tag&gt;**, and
+**Make non-&lt;tag&gt;** for flag and classname tags. You can assign keys to these
+commands in **Keyboard Shortcuts**; there are no default keys to conflict with
+your editor profile.
+
+Select brushes or patches, or pick individual faces. A texture tag applies a
+matching material; a surfaceparm tag offers only loaded shaders declaring that
+parameter. If several names match, choose one. Texture patterns can also name
+an asset outside the open package. A classname tag needs whole objects: choose
+a matching brush class, and the tag's optional `texture` is applied before the
+brushes are tied to it. **Make non-&lt;tag&gt;** returns matching brush entities to
+worldspawn; it does not restore an earlier texture.
+
+Flag tags set or clear their named bits while retaining every other bit.
+Detail requires whole brushes; patches have no face flags. Texture and
+surfaceparm tags have no remove command: apply another material instead.
+Hidden, filtered, locked and out-of-context targets are refused. Open a closed
+group before editing individual faces inside it. Preparation is cancellable,
+and each completed command is one undo step. Changes appear in the same map,
+linked groups, compiler inputs and package workflow as other surface edits.
+The GUI currently refuses the whole target brush when any face on it is
+filtered, including a pick of a different, visible face on that brush.
+
+`map smart-tag` provides the same edit and choice query from the CLI. Native
+input and macOS/Linux acceptance testing remain open.

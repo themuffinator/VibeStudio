@@ -38,6 +38,9 @@ LevelPlacementResult LevelPlacementTaskDialog::prepare(QWidget* parent, const Le
 													   const LevelPlacementRequest& request) {
 	LevelPlacementTaskDialog dialog(parent);
 	switch (request.operation) {
+	case LevelPlacementOperation::SmartTag:
+		dialog.setWindowTitle(request.smartTag.enabled ? tr("Make %1").arg(request.smartTag.tag.name) : tr("Make non-%1").arg(request.smartTag.tag.name));
+		break;
 	case LevelPlacementOperation::DeleteObjects:
 		dialog.setWindowTitle(tr("Delete Map Objects"));
 		break;

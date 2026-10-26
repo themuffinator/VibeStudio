@@ -346,9 +346,10 @@ void commands()
 		CommandPaletteEntry entry;
 		expect(commandPaletteEntryForCommandId(it.value(), &entry) && !entry.label.isEmpty() && !entry.summary.isEmpty(), "palette entry", it.value());
 	}
-	// The clip parts follow Clip, and Translucent follows Liquids, in the menu.
+	// The clip parts follow Clip, and Fog then Translucent follow Liquids, in the menu.
 	expect(kinds.indexOf(QStringLiteral("player-clip")) == kinds.indexOf(QStringLiteral("clip")) + 1
-			&& kinds.indexOf(QStringLiteral("translucent")) == kinds.indexOf(QStringLiteral("liquids")) + 1
+			&& kinds.indexOf(QStringLiteral("translucent")) == kinds.indexOf(QStringLiteral("liquids")) + 2
+			&& kinds.indexOf(QStringLiteral("fog")) == kinds.indexOf(QStringLiteral("liquids")) + 1
 			&& kinds.indexOf(QStringLiteral("nodraw")) == kinds.indexOf(QStringLiteral("caulk")) + 1,
 		"menu order", kinds.join(QLatin1Char(',')));
 	// NetRadiant Custom's and NetRadiant's ConstructFilters bind Alt+4 to

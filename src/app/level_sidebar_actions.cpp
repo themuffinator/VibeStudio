@@ -12,6 +12,7 @@
 #include "app/studio_layout.h"
 #include "app/studio_sidebar.h"
 #include "core/editor_profiles.h"
+#include "core/level_smart_tags.h"
 
 #include <QAbstractItemView>
 #include <QAction>
@@ -271,6 +272,7 @@ void ApplicationShell::buildLevelSidebars(const LevelSidebarContent& content)
 	SidebarPage* view = createLevelSidebarPage(QStringLiteral("view"), true);
 	addLevelSidebarSection(view, QStringLiteral("view.display"), tr("Display"), buildLevelViewOptions());
 	addLevelSidebarSection(view, QStringLiteral("view.filters"), tr("Filters"), buildLevelFilterOptions());
+	addLevelSidebarSection(view, QStringLiteral("view.classFilters"), tr("Entity Classes"), buildLevelClassFilterPanel(), 0, false);
 	addLevelSidebarSection(view, QStringLiteral("view.region"), tr("Region"), buildLevelRegionPanel());
 	addLevelSidebarSection(view, QStringLiteral("view.layout"), tr("Layout"), buildLevelLayoutOptions());
 	addLevelSidebarSection(view, QStringLiteral("view.navigation"), tr("Navigation"), buildLevelNavigationOptions());
@@ -302,6 +304,7 @@ void ApplicationShell::buildLevelSidebars(const LevelSidebarContent& content)
 	for (StudioSidebar* sidebar : {m_levelLeadingSidebar, m_levelTrailingSidebar}) {
 		connect(sidebar, &StudioSidebar::currentPageChanged, this, [this](const QString& pageId) {
 			saveLevelSidebarState();
+			refreshLevelSurfacesToggle();
 			if (pageId == QLatin1String("models") || pageId == QLatin1String("sounds") || pageId == QLatin1String("prefabs")) {
 				refreshLevelAssetBrowsers();
 			} else if (pageId == QLatin1String("view")) {
@@ -310,7 +313,10 @@ void ApplicationShell::buildLevelSidebars(const LevelSidebarContent& content)
 				refreshLevelMapSettings();
 			}
 		});
-		connect(sidebar, &StudioSidebar::foldedChanged, this, [this]() { saveLevelSidebarState(); });
+		connect(sidebar, &StudioSidebar::foldedChanged, this, [this]() {
+			saveLevelSidebarState();
+			refreshLevelSurfacesToggle();
+		});
 		connect(sidebar, &StudioSidebar::tabMenuRequested, this, [this, sidebar](const QString& pageId, const QPoint& global) {
 			showLevelSidebarTabMenu(sidebar, pageId, global);
 		});
@@ -331,6 +337,8 @@ QWidget* ApplicationShell::buildLevelViewOptions()
 	layout->setSpacing(4);
 	const QList<QPair<QAction*, QString>> toggles {
 		{m_levelMapShowGrid, QStringLiteral("levelViewShowGrid")},
+		{m_levelMapShowCoordinates, QStringLiteral("levelViewShowCoordinates")},
+		{m_levelMapShowBlockGrid, QStringLiteral("levelViewShowBlockGrid")},
 		{m_levelMapShowThings, QStringLiteral("levelViewShowThings")},
 		{m_levelMapShowSectors, QStringLiteral("levelViewShowSectors")},
 		{m_levelMapShowVertices, QStringLiteral("levelViewShowVertices")},
@@ -596,6 +604,7 @@ void ApplicationShell::arrangeLevelSidebars(const LevelSidebarArrangement& reque
 	place(m_levelLeadingSidebar, arrangement.leading, arrangement.leadingCurrent);
 	place(m_levelTrailingSidebar, arrangement.trailing, arrangement.trailingCurrent);
 	refreshLevelSidebarTitles();
+	refreshLevelSurfacesToggle();
 }
 
 LevelSidebarArrangement ApplicationShell::currentLevelSidebarArrangement() const
@@ -857,7 +866,17 @@ void ApplicationShell::registerLevelSidebarCommands()
 			setMode(StudioMode::Levels);
 			showLevelSidebarPage(id, QString(), true);
 		};
+		// Show Surfaces toggles, as NetRadiant Custom's S shows and hides its
+		// Surface Inspector (level_face_flags_actions.cpp).
+		const bool surfaces = tab.id == QLatin1String("surfaces");
+		if (surfaces) {
+			command.checkable = true;
+			command.handler = [this]() { toggleLevelSurfacesTab(); };
+		}
 		m_commands->registerCommand(command);
+		if (surfaces) {
+			refreshLevelSurfacesToggle();
+		}
 	}
 	const auto add = [this, &section](const QString& id, const QString& label, const QString& tip, const QString& icon, std::function<void()> handler) {
 		StudioCommandRegistration command;
@@ -984,33 +1003,7 @@ QStringList ApplicationShell::levelPackageTextureNames()
 	if (!archive.isOpen()) {
 		return m_levelPackageTextureNames;
 	}
-	QSet<QString> seen;
-	for (const PackageEntry& entry : archive.entries()) {
-		if (entry.kind != PackageEntryKind::File) {
-			continue;
-		}
-		QString name;
-		const QString path = entry.virtualPath;
-		if (entry.typeHint == QLatin1String("wad-texture")) {
-			// A WAD2 or WAD3 lump is named by itself in a map.
-			name = QFileInfo(path).completeBaseName();
-		} else if (path.startsWith(QStringLiteral("textures/"), Qt::CaseInsensitive)
-			&& assetPreviewKindForEntry(path, entry.typeHint) == AssetPreviewKind::Image) {
-			// Quake II and Quake III name textures below textures/, without
-			// their extension.
-			name = path.mid(9);
-			const qsizetype dot = name.lastIndexOf(QLatin1Char('.'));
-			if (dot > name.lastIndexOf(QLatin1Char('/'))) {
-				name.truncate(dot);
-			}
-		}
-		if (!name.isEmpty() && !seen.contains(name.toCaseFolded())) {
-			seen.insert(name.toCaseFolded());
-			m_levelPackageTextureNames << name;
-		}
-	}
-	std::sort(m_levelPackageTextureNames.begin(), m_levelPackageTextureNames.end(),
-		[](const QString& left, const QString& right) { return left.compare(right, Qt::CaseInsensitive) < 0; });
+	m_levelPackageTextureNames = levelSmartTagPackageMaterials(archive);
 	return m_levelPackageTextureNames;
 }
 

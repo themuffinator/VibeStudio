@@ -3108,3 +3108,148 @@ Remaining: 1. Shader scripts come only from the open package or folder, with its
 ### Package camera-face-render-modes **What shipped** - `src/core/level_camera_render.*` holds the camera display as three saved choices: textures, faces hidden and edges. - It gives TrenchBroom's face modes (Show Textures, Hide Textures, Hide Faces) and NetRadiant Custom's wrapping four-mode cycle (Wireframe, Flat Shaded, Textured, Textured with Edges) with translated names and announcements. - `src/app/level_camera_render_actions.cpp` registers these View > Camera Display commands: - map.previewTextures: the old unregistered toggle, now one command with the status-strip and View tab boxes, synced both ways. - map.previewEdges: new, with a View tab box. - map.showCameraTextures, map.hideCameraTextures and map.hideCameraFaces. - map.nextCameraMode and map.previousCameraMode. - map.previewWireframe now toggles the saved hidden-faces choice, and the camera re-applies the saved display after every preview rebuild. Wireframe outlasts edits, undo and Reload, and turning it off restores textured or flat faces with their edges. - The choices are kept in the shell layout state. - The NetRadiant Custom profile binds Shift+] and Shift+[; the NetRadiant baseline and TrenchBroom leave them unbound, as upstream does. - `ModelViewport::setPolygonEdges` (level camera only) marks fan diagonals per triangle. The surface shader's edge overlay and the wireframe stroke list skip them, so brush faces and patch quads are outlined rather than triangulated. **Tests** - level-camera-render-smoke and level-camera-render-ui-smoke pass. The UI test covers NRC and TB at 100% and 200% with high contrast, RTL and expanded text, persistence across shells, and GPU pixel checks of the outline and missing diagonal. - Related suites pass: studio-semantics, editor-profiles, render-device, model-viewport, model-editor-ui, level-materials-ui, level-sidebar-ui (passes alone), level-camera-focus-ui, level-view-filters-ui and doom-preview-ui. - shell-interaction-smoke fails only its three known baseline checkPaletteRecents checks. **Limits left** - Doom 3's lighting mode is not in the cycle. - Placed models are still outlined triangle by triangle. - The edge colour follows the theme, with no separate preference. - TrenchBroom's Shade Faces and Use Fog toggles are not built. - Level dialog previews still draw triangle edges. - Physical-keyboard and macOS/Linux acceptance remain open.
 
 Remaining: 1. Doom 3's lighting camera mode is not part of the cycle, because the camera has no lighting renderer. 2. Placed models and other triangle-by-triangle surfaces still show their triangle edges under Edges in Camera and in wireframe. 3. Edges in Camera uses the theme's edge colour, with no separate colour preference, and is off by default (TrenchBroom defaults it on). 4. Hidden faces always show the edges; TrenchBroom's hidden-faces-with-edges-off state (an empty camera) is not offered. 5. TrenchBroom's Shade Faces and Use Fog view toggles are not implemented. 6. Level dialog previews (brush editor, primitive, prefab and similar) still draw triangle edges. 7. Physical-keyboard acceptance of Shift+] and Shift+[ on non-US layouts, and macOS/Linux acceptance, remain open.
+
+### Package `nrc-prism-primitives`
+
+nrc-prism-primitives (lane1, wave 3) shipped NetRadiant Custom's Brush > Prism…, Cone… and Sphere… and its Brush3Sided to Brush9Sided commands.
+
+Core:
+- `LevelBrushPrimitiveFit::Circle` (core/level_primitive.*) builds cylinders, cones and spheres as NRC's Brush_ConstructPrism, Brush_ConstructCone and Brush_ConstructSphere do. The corners are computed so that the side planes touch a circle on the larger cross-section extent, with a face square to the first axis. A cone's point sits over the centre of the high end. A sphere is a true sphere on the largest extent, with NRC's longitude/latitude grid and its poles on the depth axis.
+- `levelBrushPrimitiveMaxSides` raises the limits to the component editor's 128 faces: 126 for a cylinder and 127 for a cone.
+- `levelBrushPrimitivePoints` exposes the corners. `addLevelMapBrushPrimitive` checks a circle-fit brush against the solid it drafted, because it may overhang the box.
+- `rebuildLevelMapBrushHulls` (core/level_map.cpp) rebuilds brushes in place through the existing brush replacement. Each brush keeps its id, owner entity, file position, scene membership, comments and `// brush N` marker, face style and most used content flags. The selection is unchanged and the change is one replace-objects undo step.
+- `rebuildLevelMapBrushesAsShape` (core/level_shapes.*) applies that to box, wedge, cylinder, cone and sphere requests in each brush's own bounds. It runs inside guardLevelSceneEdit, so locks and the open group stop it, and linked copies follow. It skips hidden, open and too-small brushes and reports why.
+
+GUI (app/level_prism_actions.cpp):
+- Make Prism…, Make Cone… and Make Sphere… ask for a side count, remembered under the shell layout state `levelPrismSides`. Spheres use the count for sides and bands, up to 11.
+- Make 3- to 9-Sided Prism run with no prompt.
+- All of them use the active plan view's depth axis (Z for spheres), the circle fit and the current material, and are enabled only when the selection reaches brushes in a Quake-family map. They appear in the Edit > Brush Shapes submenu, the Geometry menu, a new Brush Shapes section of the Tools tab and the palette (`map.make-prism`, `map.make-cone`, `map.make-sphere`, `map.make3-sided-prism` to `map.make9-sided-prism`).
+- The NRC profile binds Ctrl+3 to Ctrl+9. They are scoped, claiming keys on the map views, and `handleLevelPrismKey` accepts them only while a brush is selected, so the window-wide Ctrl+digit mode keys keep working everywhere else.
+- The Shapes tab gains a saved Fit choice (Fill the Box / Round on the Larger Side). It and the Add Brush dialog now allow up to 126 sides for a cylinder and 127 for a cone.
+
+CLI: `map add-shape` gains `--fit box|circle` and `--in-place`, with JSON fields inPlace, fit, brushes and skipped. `map add-brush` gains `--fit`.
+
+Continuation verification: level-prism-smoke, level-prism-ui-smoke, level-primitive-ui-smoke passed. The three main brush UI suites exercise NetRadiant Custom, TrenchBroom and VibeStudio profiles at 100%, plus 200% with high contrast, expanded translations and RTL. All 26 targeted brush, grid, scene, linked-group and map suites passed after the focused detail-classifier retry. validate_source_layout.py and validate_docs.py passed. The unrelated shell-interaction baseline was not rerun; historical results are retained separately.
+
+Limits left:
+- Side counts stop at the component editor's 128 faces: 126 for a prism and 127 for a cone, against NRC's 1022, and 11 × 11 for a sphere from the prompt, against NRC's 31.
+- Every selected brush is rebuilt, not only the last-selected one.
+- Surface flags and values reset.
+- The Ctrl+digit keys act only in a focused map view with a brush selected.
+- Native physical input and macOS/Linux acceptance remain open.
+
+The continuation review also made held prism shortcuts perform only one rebuild, limited Add Brush sides to the chosen primitive, and clarified a missing output-brush programming error. Regression checks cover repeat key events and per-shape side limits.
+
+The initial map-tools failure came from guessing a Quake II game from a material folder. Lane3 changed detail conversion to use headers, classes and flags. Final incremental rebuild and six focused retries passed, superseding the initial failure.
+
+Remaining: - Side counts are capped by the component editor's 128-face, 256-vertex bound: 126 for a prism and 127 for a cone, against NetRadiant Custom's 1022. Make Sphere… stops at 11 × 11 faces (128 faces as sides × bands on the Shapes tab and CLI), against NRC's 31 × 31.
+- All selected brushes are rebuilt, where NRC rebuilds only the last-selected one.
+- Rebuilt faces keep the brush's most used content flags, but their surface flags and values reset.
+- In the NetRadiant Custom profile, Ctrl+3 to Ctrl+9 rebuild brushes only while a 2D view or the camera has focus and a brush is selected. In other panels, or with nothing selected, they keep switching work modes.
+- Native physical keyboard input and macOS/Linux acceptance remain open.
+
+### Package `brush-from-points`
+
+Create Brush from Points and Copy Vertex Coordinates bring TrenchBroom's debug Create Brush and Print Vertices (MapWindow::debugCreateBrush and debugPrintVertices at 4c756be1) into VibeStudio as ordinary commands. The shared service is src/core/level_brush_points.{h,cpp}. parseLevelBrushPoints reads x,y,z groups, x y z points and TrenchBroom's (x y z) form, one form per line, ignores // comments, and accepts up to 4,096 points. levelBrushPointsHull refuses points that all lie in one place, on one line or on one plane before calling createLevelBrushEnvelope. addLevelMapBrushFromPoints passes the envelope's corners to addLevelMapBrushHulls, so the brush goes to worldspawn and the active creation node in the map's face dialect, in the given material, selected, as one guarded undo step. Locked destinations refuse it and linked groups propagate it. levelMapVertexListings and levelVertexListingText list whole brushes, faces, edges, picked vertices and patch control points as `// brush:3 face:2 base/metal` lines followed by (x y z) points in the shortest exact decimal, which parse back bit for bit. The shell (app/level_brush_points_actions.cpp, app/level_brush_points_dialog.cpp) registers map.createBrushFromPoints and map.copyVertexCoordinates. They appear in the palette, Edit > Brush Shapes, the Levels Create and Geometry menus and the Tools tab, with no default keys in any profile. The dialog checks and previews the brush on a worker after a pause in typing. It offers Add Selected Corners, starts at the current material, remembers the last points under the shell layout state levelBrushPoints, and publishes only the checked candidate through levelPlacementCommitter. Copy Vertex Coordinates uses component and independent face picks when there are any, and otherwise the selected brushes and brush-entity brushes, minus hidden or filtered ones; it writes to the clipboard and Activity. `map add-brush --points` (repeatable, mutually exclusive with the shape options, checked before the map loads) and multi-brush `map brush-components` (repeated or comma-separated --brush, face positions, full-precision plain text, `brush` kept for the first brush) share the services. Continuation verification: level-brush-points-smoke, level-brush-points-ui-smoke passed. The three main brush UI suites exercise NetRadiant Custom, TrenchBroom and VibeStudio profiles at 100%, plus 200% with high contrast, expanded translations and RTL. All 26 targeted brush, grid, scene, linked-group and map suites passed after the focused detail-classifier retry. validate_source_layout.py and validate_docs.py passed. The unrelated shell-interaction baseline was not rerun; historical results are retained separately.
+
+Limits that remain: this dialog accepts typed or selected corners; the companion Assemble Brush Tool collects clicked points; the brush always goes to the current creation context rather than into a selected brush entity; a face dialect that cannot hold a corner within 0.02 units refuses the brush; the Edit Brush Components dialog still shows ten significant digits; coordinates go to the clipboard and Activity rather than a console; native input, screen readers and macOS/Linux acceptance are open.
+
+The continuation review deferred collecting selection corners until Add Selected Corners is pressed, installed placement cancellation around hull generation, and made counted status text translatable without ambiguous plurals. Tests cover lazy collection and cancellation without map/history mutation.
+
+The initial map-tools failure came from guessing a Quake II game from a material folder. Lane3 changed detail conversion to use headers, classes and flags. Final incremental rebuild and six focused retries passed, superseding the initial failure.
+
+Remaining: This dialog accepts typed points or selection corners; the companion Assemble Brush Tool supplies clicked points in plan and camera views. A brush from points always goes to the current creation context (worldspawn and the open group or active layer), never into a selected brush entity. A face dialect that cannot store a corner within 0.02 units refuses the brush. The Edit Brush Components dialog still shows ten significant digits. Copy Vertex Coordinates writes to the clipboard and Activity, not a console log, and lists at most 4,096 brushes or components at once. Native physical input, screen readers and macOS/Linux acceptance remain open.
+
+### Package `assemble-brush-tool`
+
+TrenchBroom's Brush Tool and its Return action (Create brush, AssembleBrushTool and AssembleBrushToolController3D at 4c756be1) are now the checkable Assemble Brush Tool (map.assembleBrushTool, B in the TrenchBroom profile) and Create Assembled Brush (map.createAssembledBrush). Both are in Edit > Brush Shapes, the Create menu above the views, the Tools tab's Brush Shapes section and the palette. The geometry is in core/level_brush_assemble.h: the outline classifier, face grid points (TB Grid::snap on a plane), grid rectangles (DrawFaceDragDelegate), ray-plane and ray-outline picks, and the snapped extrusion distance (DuplicateFaceDragDelegate). Creation reuses addLevelMapBrushFromPoints from brush-from-points.
+
+In the camera, clicks add grid points on brush faces, or on the Draw Brush construction plane where nothing is rendered under the pointer. A drag from a face adds the grid rectangle on its plane, a double-click adds a face's corners, and Shift-drag extrudes a flat outline, which fills while it can be picked. The 2D views go beyond TB: clicks and empty drags add points or rectangles at the last point's depth or the work zone's floor, a drag on a point moves it and the points under it, and Shift-drag extrudes an outline the view shows side-on.
+
+Every view keeps a copy of the shared points. The shell checks the hull on a cancellable worker against a copy of the map, and Enter publishes the checked copy through levelPlacementCommitter. If the map, selection, creation layer or material changed, it rechecks and then creates. The brush lands in the open group or active layer, selected, as one undo step; a locked layer refuses it with a message, and the points then clear. The tool is exclusive with the clip tool, component modes, shear, region drawing and the camera's Draw Brush, Paint and Sample, and leaves the tool bar showing no tool. A map load turns it off. map add-brush --points --extrude dx,dy,dz scripts the extruded result.
+
+Continuation verification: level-brush-assemble-smoke, level-brush-assemble-ui-smoke, level-brush-points-smoke passed. The three main brush UI suites exercise NetRadiant Custom, TrenchBroom and VibeStudio profiles at 100%, plus 200% with high contrast, expanded translations and RTL. All 26 targeted brush, grid, scene, linked-group and map suites passed after the focused detail-classifier retry. validate_source_layout.py and validate_docs.py passed. The unrelated shell-interaction baseline was not rerun; historical results are retained separately.
+
+Limits left:
+- Points cannot be dragged in the camera, as upstream.
+- The hull wire is hidden while a new check runs.
+- Each check copies the whole map, which is slower on very large maps.
+- Native physical input, screen readers and macOS/Linux acceptance remain open.
+
+The continuation review fixed plan-view Shift-drag extrusion: every movement uses the press-time flat outline, rather than the changing live preview. Tests check each movement, shrinking, release, shared views and final single-step commit. The original test checked only release and missed the alternating draft.
+
+The initial map-tools failure came from guessing a Quake II game from a material folder. Lane3 changed detail conversion to use headers, classes and flags. Final incremental rebuild and six focused retries passed, superseding the initial failure.
+
+Remaining: - Points cannot be dragged in the camera, as upstream, and the tool has no numeric entry for a single point; typed points go through Create Brush from Points…
+- While a new hull check runs, the views show only the points and any flat outline, not the previous hull.
+- Every change is checked against a full copy of the map on a worker, which is slower on very large maps.
+- Native physical-input, screen-reader and macOS/Linux acceptance remain open.
+
+### Package `texture-fit-and-projection`
+
+Proportional Fit Width/Height and axial, active-plan-view and camera projection share the surface/patch services, as one undo step, across classic, Valve 220 and brush-primitive faces and patches. Unsupported classic or edge-on projections are counted and skipped. Surfaces, Tools, menus and command search expose the operations; Surface Alignment exposes Keep proportions. The camera action uses its last direction while the pane is hidden. map align-textures provides --keep-proportions, --project, --project-direction and --project-scale, including options before the map path. The dispatcher preserves model tool --fit as a boolean. Core and offscreen UI coverage exercises mapping, one-step undo, guards and profile/accessibility variants. Final Windows /WX build and twelve selected core, CLI and offscreen UI regression suites passed, including the package-specific suites and shared surface, patch, semantic and editor-profile checks. Documentation, source-layout and CLI-documentation validators passed.
+
+Remaining: Partial parity: fixed one-repeat quick fits; projections have no Surface Alignment preview; exact classic projection limitations are reported. Native physical input and macOS/Linux acceptance remain open.
+
+### Package `surface-inspector-toggle-and-flags`
+
+Show Surfaces toggles the Surfaces tab and preserves the previous tab, including when another studio mode is active; NRC and NetRadiant retain S. The Flags section, Clear Face Flags and map face-flags inspect and edit Q2/Q3 content flags, surface flags and value via a shared one-step surface plan. Mixed values, named bits and set/clear masks preserve unrelated bits. Quake II maps without trailing face flags require explicit game-header or Quake II-only classname evidence. The generic classic-map engineFamily and soft texture-folder heuristic do not choose destructive flag/detail semantics; modern Quake maps use folders too. Changed bit 31 words serialize as signed 32-bit values for compiler compatibility. Plain Quake maps decline face flags. Recovered verifier fixes remain present and are included in the final regression run. Final Windows /WX build and twelve selected core, CLI and offscreen UI regression suites passed, including the package-specific suites and shared surface, patch, semantic and editor-profile checks. Documentation, source-layout and CLI-documentation validators passed.
+
+Remaining: Quake has no per-face flags. Unlabelled classic maps with only texture-folder hints decline flag edits; Quake II header/classname evidence or existing flag fields is required. Native physical input and macOS/Linux acceptance remain open.
+
+### Package `uv-editor-view`
+
+UV Editor opens one picked brush face or selected patch over its material image. Dragging a face moves its texture; an anchor permits rotation. Patch points support multiple selection and individual UV edits. Zoom, pan, snap, keyboard nudges, numeric points, local undo/redo/reset and a live embedded 3D material preview provide the authoring workflow. Apply commits one surface-service undo step; Cancel leaves the map unchanged. map edit-uv queries or applies matching offset, rotation, anchor and patch-point edits. The reusable core supports classic, Valve 220, brushDef/brushDef3 and patches, checks bounds and current target geometry, and produces shared surface edit plans. The dialog resolves material data asynchronously, exposes loading/cancellation and keyboard-accessible controls, and follows scale, high-contrast, translation and RTL settings. Hidden, locked and closed-group targets are refused. Apply checks map revision, package source/staging/reload identity and palette; the plan refuses changed face winding or patch definition. Review fixed multi-row point selection, malformed CLI point lists that could otherwise address every point, and stale neighbouring brush-plane changes. Documentation, accessibility/setup notes and upstream licence/credit references are present. Pending surface workers also block opening or applying the editor. Final Windows /WX build and twelve selected core, CLI and offscreen UI regression suites passed, including the package-specific suites and shared surface, patch, semantic and editor-profile checks. Documentation, source-layout and CLI-documentation validators passed.
+
+Remaining: The live camera preview is embedded in the dialog; the main camera updates on Apply. Classic maps approximate turns their format cannot express, or explicitly convert the face to Valve 220. Brush primitives and patches require an image size, with explicit override when no package image is available. Shader effects are not reproduced. No default profile shortcut, matching the source-only upstream plugin. Native physical input and macOS/Linux acceptance remain open.
+
+### Package `data-driven-filter-tags`
+
+Data-defined tags and per-class filters share matching and visibility services across plan views, the camera and CLI. Hint and Skip are separate; Fog reads shader declarations, flags or recognised names. Tag files accept TrenchBroom configuration syntax, including comments, bare names, trailing commas and escaped wildcard strings; fixtures check parse errors and matching. Non-Latin names retain their display text with stable digest command IDs. Mixed hidden face tags combine to hide whole brushes. Class filters reject comma-containing names, include entities created later, and stay session-only. Accessible tag counts and Invert Filters status handle plurals. map filters accepts tags, project and class queries, and map visibility accepts class filters. All 12 related core/CLI/offscreen UI suites and source-layout, documentation, credits and 324-command CLI documentation validators pass. No native input or cross-platform acceptance is claimed.
+
+Remaining: No stock tag files or transparent rendering attributes ship. Surfaceparm tags require loaded Quake III shaders. Individually hidden faces retain plan outlines. Class filters are session-only, are not inverted, and exclude comma-containing classnames. Dynamic commands are not enumerated in static ui semantics. Native input, screen readers and macOS/Linux remain unverified.
+
+### Package `smart-tag-commands`
+
+Loaded game/project tags generate Make &lt;tag&gt; and Make non-&lt;tag&gt; commands in the palette, Edit Smart Tags menu and bindable shortcut registry. Texture/shader tags use matching material choices, with surfaceparm choices verified against loaded shaders; classname tags tie primitives and apply an optional configured texture. Flag tags use explicit format evidence, set or clear only their mask; detail requires whole brushes. Classname disable returns matching owners to worldspawn. The asynchronous placement worker prepares candidates with stale-result rejection and cancellation; existing surface, entity and linked-group services fold into one undo transaction. map smart-tag exposes matching choices and the same guarded edit with safe save/dry-run. Original core/CLI regressions cover individual faces and patches, flag preservation and signed bit 31, classname texture transactions, linked propagation, undo/redo, hidden/locked/context refusals, cancellation, bounded history and package-only raw texture choices. Offscreen UI coverage exercises both familiar profiles at 100% and 200%, high contrast, expanded translation and RTL. Both new suites and 10 related integration suites pass, as do source-layout, documentation, credits and 324-command CLI documentation validators.
+
+Remaining: Texture and surfaceparm tags cannot be disabled. No stock game tags or transparent attribute rendering ship. Surfaceparm tags require loaded Quake III shaders. The GUI refuses a selected brush if any face on it is filtered, including visible face picks on such a brush. Dynamic commands have no default keys and are not enumerated by static ui semantics. Native input, screen readers and macOS/Linux acceptance remain open.
+
+### Package `plan-grid-overlays`
+
+Levels has saved Show > Grid Coordinates and Show > Block Grid choices, matching bindable View commands and View tab check boxes. Coordinate labels follow the drawing plane, keep clear of the status tags, support fractional grids and right-to-left layouts, and describe their range accessibly. The existing viewChanged connection refreshes that description after navigation, fit and resize.
+
+The shared level_block_grid service reads worldspawn _blocksize, blocksize and chopsize with the compiler's one/two/three-number rules and 1024-unit default. Dashed boundaries use actual block sizes, stay inside regions (including flat and point regions), and are drawn through the same grid image in synchronous and worker paths. Enumeration remains bounded for extreme finite coordinates. Doom has no block grid. map render --block-grid exports the same boundaries and structured size/source diagnostics; the normal export stays unchanged.
+
+The level-block-grid-smoke and level-grid-overlays-ui-smoke suites cover key parsing, CLI/SVG output, clipping, worker rendering, accessible descriptions, persistence, profile commands, scaling, contrast and expanded RTL text. The continuation added regressions for degenerate regions, extreme coordinates and navigation/resize descriptions. See the wave 3 integration record for final verification results.
+
+Remaining: Coordinate labels are not exported; the 3D camera has no block overlay. Coordinates default to off, and labels sit along the bottom rather than NRC's top edge. VibeMap2 does not split on _blocksize. Native physical-input, screen-reader and macOS/Linux acceptance remain open.
+
+### Wave 3 integration verification (2026-10-26)
+
+The nine packages above were completed together in the existing Windows
+clang-cl debug builds with warnings treated as errors. Across the three lanes,
+44 distinct core, CLI and offscreen UI suites passed. This includes linked
+groups, nested extraction, protected properties, group transfer, brush tools,
+surface editing, UV editing, filter tags, smart tags and grid overlays.
+The UI coverage exercises the NetRadiant Custom and TrenchBroom profiles,
+100% and 200% text scaling, high contrast, expanded translations and RTL.
+
+Integration found and fixed a format-classification regression: texture folders
+alone cannot turn a Quake map into Quake II for flag or detail authoring.
+The original map-tools test and new explicit-header/omitted-field Quake II
+tests pass. Smart-tag fixture assertions were also corrected to follow the
+existing entity service's replacement object identities; their final core/CLI
+and UI runs pass.
+
+Source layout, documentation, credits, the 324-command CLI reference, runtime
+command routes, build/version smoke checks, branding, changelog and release
+artifact checks pass. All 48 translation catalogues were regenerated, including
+760 English plural messages, and the offline guide and 22-page HTML manual
+were rebuilt. Release checks validate the Windows, macOS and Linux packaging
+targets; they do not constitute native macOS/Linux application testing.
+
+The prior session's three palette-recents failures in `shell-interaction-smoke`
+were outside this pass and were not rerun. Native physical-input, screen-reader
+and cross-platform acceptance remain open. These workflows retain **Partial**
+status; the wider level-editor parity roadmap is still unfinished.

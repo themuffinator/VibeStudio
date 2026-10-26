@@ -74,6 +74,9 @@ LevelPlacementResult prepareLevelPlacement(const LevelMapDocument& source, const
 		auto candidate = source;
 		bool applied = false;
 		switch (request.operation) {
+		case LevelPlacementOperation::SmartTag:
+			applied = applyLevelSmartTag(&candidate, request.smartTag, &result.error);
+			break;
 		case LevelPlacementOperation::DeleteObjects:
 			detail::placementCheckpoint(LevelPlacementPhase::Deleting);
 			applied = deleteLevelMapSelection(&candidate, &result.error);

@@ -509,6 +509,13 @@ available. It shares theme, text scale, palette and reduced-motion preferences;
 there are no new setup steps or dependencies. Save map changes before the next
 compile/package operation. See [Surface Alignment](LEVEL_EDITOR.md#surface-alignment).
 
+The **UV Editor** uses the same open package, palette, theme and text scale.
+Choose one face or patch, then **UV Editor…** from the **Surfaces** menu. Its
+texture-space view works offline; when a brush-primitive face or patch has no
+resolved image, confirm the explicit texture size before editing. Changes stay
+inside the preview until **Apply** commits one map undo step. It adds no setup
+step, dependency or connector. See [UV Editor](manual/levels.md#edit-texture-coordinates-in-the-uv-editor).
+
 Level material previews work offline with the open package or asset folder and
 its staged edits. Open the project's content explicitly; automatic merging of
 project roots and installation packages is not implemented for the camera.
@@ -1593,6 +1600,29 @@ alone, caulk on, inner brush removed) and saves every change under
 `levels/csgTool`; its caulk uses the material Make Room's options choose. See
 [Hollow, shrink and expand with the CSG Tool](manual/levels.md#hollow-shrink-and-expand-with-the-csg-tool).
 
+**Make Prism…**, **Make Cone…** and **Make Sphere…** need no setup either: each
+prompt starts at 8 sides and remembers the last count under the shell layout
+state `levelPrismSides`. The **Shapes** tab's **Fit** is saved with its other
+settings, starting at **Fill the Box**. Only the NetRadiant Custom profile
+binds Ctrl+3 to Ctrl+9 to the sided prisms, in the map views while a brush is
+selected; other profiles keep those keys for the work modes. See
+[Rebuild brushes as prisms, cones and spheres](manual/levels.md#rebuild-brushes-as-prisms-cones-and-spheres).
+
+**Create Brush from Points…** and **Copy Vertex Coordinates** need no setup and
+have no keys in any profile, as in TrenchBroom, where both are debug commands;
+add keys in **Help** > **Keyboard Shortcuts**. The dialog starts empty and then
+remembers the last points typed, up to 64 KB, under the shell layout state
+`levelBrushPoints`; its material starts as the **Textures** tab's. See
+[Create a brush from typed points](manual/levels.md#create-a-brush-from-typed-points).
+
+The **Assemble Brush Tool** needs no setup and saves nothing: its points last
+until the brush is created, the points are cleared or the tool is left, and a
+new map turns it off. Only the TrenchBroom profile binds it, to **B**, as
+TrenchBroom's Brush Tool; add keys for it or **Create Assembled Brush** in
+**Help** > **Keyboard Shortcuts**. It snaps to the plan views' grid while
+**Snap** is on and uses the **Textures** tab's material. See
+[Assemble a brush from clicked points](manual/levels.md#assemble-a-brush-from-clicked-points).
+
 The NRC profile also enables `camera.clipViewAxis`: two camera points choose a
 view-dependent plane and correct parallel segments or outer-face-only planes.
 It requires no connector, package or additional setup. **Customize Gestures… >
@@ -1877,3 +1907,9 @@ with `-Dggml=enabled` (release packages are built without it) and a `.gguf`
 file named as its model. AI-free mode stays on until you turn it off. Claude
 Code, Codex and Custom Command also need **Allow cloud AI connectors**.
 See [AI assistant](manual/ai.md#use-your-claude-or-chatgpt-login).
+
+A chosen game/project tag file also supplies **Make &lt;tag&gt;** authoring commands
+and **Make non-&lt;tag&gt;** for flags and brush classes. They appear in the palette
+and shortcut settings once loaded; no cloud service or extra setup is needed.
+Load the game package for surfaceparm shader choices and entity definitions
+for the full brush-class choice list.

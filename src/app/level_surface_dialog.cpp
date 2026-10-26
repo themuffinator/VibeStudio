@@ -119,6 +119,15 @@ LevelSurfaceDialog::LevelSurfaceDialog(const LevelMapDocument &document, const Q
 	m_yLabel->setBuddy(m_y);
 	form->addRow(m_xLabel, m_x);
 	form->addRow(m_yLabel, m_y);
+	// NetRadiant Custom's Fit Width and Fit Height, against their Width Only
+	// and Height Only (LevelSurfaceRequest::keepProportions).
+	m_keepProportions = new QCheckBox(tr("Keep proportions"), controls);
+	m_keepProportions->setObjectName(QStringLiteral("surfaceKeepProportions"));
+	m_keepProportions->setAccessibleName(m_keepProportions->text());
+	m_keepProportions->setToolTip(tr("With one repeat count at 0, scale that axis as much as the fitted one and start it at the face's edge, so the texture keeps its proportions. Unticked, that axis stays as it is."));
+	m_keepProportions->setAccessibleDescription(m_keepProportions->toolTip());
+	form->addRow(m_keepProportions);
+	connect(m_keepProportions, &QCheckBox::toggled, this, [this] { schedule(); });
 	m_degrees = number(QStringLiteral("surfaceDegrees"),
 					   tr("Rotate the mapping around the face centre while keeping its centre texture coordinate fixed."));
 	m_degrees->setAccessibleName(tr("Texture rotation in degrees"));
@@ -261,12 +270,14 @@ LevelSurfaceDialog::~LevelSurfaceDialog()
 }
 LevelSurfaceRequest LevelSurfaceDialog::request() const
 {
-	return {static_cast<LevelSurfaceOperation>(m_operation->currentIndex()),
+	LevelSurfaceRequest result{static_cast<LevelSurfaceOperation>(m_operation->currentIndex()),
 			m_x->value(),
 			m_y->value(),
 			m_degrees->value(),
 			static_cast<LevelSurfaceAlignment>(m_alignU->currentIndex()),
 			static_cast<LevelSurfaceAlignment>(m_alignV->currentIndex())};
+	result.keepProportions = result.operation == LevelSurfaceOperation::Fit && m_keepProportions->isChecked();
+	return result;
 }
 void LevelSurfaceDialog::setRequest(const LevelSurfaceRequest &value)
 {
@@ -280,6 +291,7 @@ void LevelSurfaceDialog::setRequest(const LevelSurfaceRequest &value)
 	m_degrees->setValue(value.degrees);
 	m_alignU->setCurrentIndex(static_cast<int>(value.alignU));
 	m_alignV->setCurrentIndex(static_cast<int>(value.alignV));
+	m_keepProportions->setChecked(value.keepProportions);
 	m_updating = false;
 	schedule();
 }
@@ -329,6 +341,7 @@ void LevelSurfaceDialog::updateControls()
 	m_y->setAccessibleName(m_yLabel->text());
 	m_x->setEnabled(op == LevelSurfaceOperation::Shift || op == LevelSurfaceOperation::Scale || op == LevelSurfaceOperation::Fit);
 	m_y->setEnabled(m_x->isEnabled());
+	m_keepProportions->setEnabled(op == LevelSurfaceOperation::Fit);
 	m_degrees->setEnabled(op == LevelSurfaceOperation::Rotate);
 	m_alignU->setEnabled(op == LevelSurfaceOperation::Align);
 	m_alignV->setEnabled(op == LevelSurfaceOperation::Align);

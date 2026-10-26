@@ -212,6 +212,8 @@ bool LevelSurfaceWorker::start(LevelSurfaceWork request)
 			work->result.changedPatches = plan.patchCount();
 			work->result.convertedFaces = plan.convertedFaceCount();
 			work->result.edgeOnFaces = plan.edgeOnFaceCount();
+			work->result.skippedEdgeOn = plan.skippedEdgeOnCount();
+			work->result.skippedClassic = plan.skippedClassicCount();
 			work->result.document = std::move(request.document);
 			work->result.textureSizes = std::move(request.textureSizes);
 		} catch (const std::exception& error) {

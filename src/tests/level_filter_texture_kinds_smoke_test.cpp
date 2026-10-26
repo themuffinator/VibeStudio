@@ -158,7 +158,7 @@ QStringList allKinds()
 }
 
 const QStringList quake3Only {QStringLiteral("patches"), QStringLiteral("botclip"), QStringLiteral("clusterportals"), QStringLiteral("lightgrid"),
-	QStringLiteral("decals")};
+	QStringLiteral("fog"), QStringLiteral("decals")};
 
 void quake3()
 {
@@ -206,9 +206,14 @@ void quake3()
 		QStringLiteral("18/0"), QStringLiteral("18/1"), QStringLiteral("18/2"), QStringLiteral("18/4"), QStringLiteral("18/5")};
 	expect(faceIds(levelViewFilterFaceMatches(document, QStringLiteral("caulk"))) == caulkFaces, "Caulk's faces on mixed brushes",
 		faceIds(levelViewFilterFaceMatches(document, QStringLiteral("caulk"))).join(QLatin1Char(',')));
+	// Skip hides the hint brush's skip sides one by one (level-filter-tags-smoke
+	// covers it); no other kind does.
+	const QStringList skipFaces {QStringLiteral("16/0"), QStringLiteral("16/2"), QStringLiteral("16/3"), QStringLiteral("16/4"), QStringLiteral("16/5")};
+	expect(faceIds(levelViewFilterFaceMatches(document, QStringLiteral("skip"))) == skipFaces, "Skip's faces on the hint brush",
+		faceIds(levelViewFilterFaceMatches(document, QStringLiteral("skip"))).join(QLatin1Char(',')));
 	for (const QString& id : allKinds()) {
-		if (id != QLatin1String("caulk")) {
-			expect(levelViewFilterFaceMatches(document, id).isEmpty(), "only Caulk hides single faces", id);
+		if (id != QLatin1String("caulk") && id != QLatin1String("skip")) {
+			expect(levelViewFilterFaceMatches(document, id).isEmpty(), "only Caulk and Skip hide single faces", id);
 		}
 	}
 	expect(levelViewFilteredFaces(document, {}).isEmpty() && levelViewFilteredFaces(document, {QStringLiteral("clip")}).isEmpty(),

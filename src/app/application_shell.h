@@ -95,6 +95,8 @@ struct LevelMapComponentSet;
 struct LevelSurfaceFacePicks;
 struct LevelSurfaceFaceTransformReport;
 struct LevelViewFilterMaterials;
+struct LevelFilterTagSet;
+struct LevelViewFilterHidden;
 enum class LevelPatchMatrixOperation;
 
 enum class LevelObjectSelectionMode;
@@ -642,6 +644,10 @@ private:
 	void resetLevelSidebars();
 	void setLevelSidebarCaptions(bool show);
 	void toggleLevelSidebar(bool leading);
+	// Show Surfaces shows the Surfaces tab, or hides it again when it is
+	// showing, as NetRadiant Custom's S toggles its Surface Inspector.
+	void toggleLevelSurfacesTab();
+	void refreshLevelSurfacesToggle();
 	void registerLevelSidebarCommands();
 	// Tools from the other editors (level_editing_actions.cpp): brush
 	// entities, region selections, detail, drop to floor, intersection.
@@ -754,6 +760,25 @@ private:
 	void reloadLevelViewFilterMaterials();
 	void refreshLevelViewFilterMaterialStatus();
 	[[nodiscard]] const LevelViewFilterMaterials& currentLevelFilterMaterials() const;
+	// Tags the project manifest or a chosen tag file define, and one filter
+	// per entity class for the map session, each with a checkable Toggle
+	// <name> Visible command (level_filter_tag_actions.cpp,
+	// core/level_filter_tags.h).
+	void refreshLevelFilterTags();
+	void refreshLevelFilterTagBoxes();
+	void refreshLevelDataFilterCommands();
+	void refreshLevelSmartTagCommands();
+	void applyLevelSmartTagFromUi(const QString& tagId, bool enabled);
+	void chooseLevelFilterTagFile();
+	void clearLevelFilterTagFile();
+	void attachLevelFilterTagMenu(QMenu* menu);
+	QWidget* buildLevelClassFilterPanel();
+	void refreshLevelClassFilterPanel();
+	void setLevelClassFiltersShown(const QStringList& classIds, bool shown);
+	void syncLevelClassFilterSession();
+	[[nodiscard]] const LevelFilterTagSet& currentLevelFilterTags() const;
+	[[nodiscard]] LevelViewFilterHidden currentLevelViewFilterHidden() const;
+	[[nodiscard]] QString levelViewFilterTitle(const QString& filterId) const;
 	// View > Camera: Level Camera, Focus Camera on Selection, Reset Camera
 	// Zoom and the held free-focus key. They move only the level camera
 	// (level_camera_focus_actions.cpp, core/level_camera_focus.h).
@@ -773,6 +798,12 @@ private:
 	// picture (level_camera_render_actions.cpp, core/level_camera_render.h).
 	void registerLevelCameraRenderCommands();
 	void refreshLevelCameraRenderCommands();
+	// View > Show Grid Coordinates and Show Block Grid: the Show menu's Grid
+	// Coordinates and Block Grid items as bindable commands, with their check
+	// marks and availability (level_grid_overlay_actions.cpp).
+	void registerLevelGridOverlayCommands();
+	void refreshLevelGridOverlayCommands();
+	void toggleLevelGridOverlay(QAction* toggle);
 	void applyLevelCameraRender();
 	void setLevelCameraRender(const LevelCameraRenderState& state, const QString& message);
 	void stepLevelCameraDrawMode(int steps);
@@ -793,6 +824,32 @@ private:
 	bool addLevelShapeFromUi(const LevelMapVec3& mins, const LevelMapVec3& maxs, int viewAxis, bool drawn);
 	void addLevelShapeAtViewCentre();
 	void replaceLevelSelectionWithShape();
+	// NetRadiant Custom's Make Prism…, Make Cone…, Make Sphere… and Make 3- to
+	// 9-Sided Prism (app/level_prism_actions.cpp): each selected brush rebuilt
+	// in place along the view's depth axis; `sides` 0 asks for the count.
+	void registerLevelPrismCommands();
+	void refreshLevelPrismCommands();
+	void makeLevelPrismFromUi(const QString& shape, int sides, QWidget* source = nullptr);
+	// The Levels views claim the Make N-Sided Prism keys (NRC's Ctrl+3 to
+	// Ctrl+9) ahead of the window-wide mode keys while a brush is selected.
+	bool handleLevelPrismKey(QObject* watched, QEvent* event);
+	// TrenchBroom's Create Brush and Print Vertices as Create Brush from
+	// Points… and Copy Vertex Coordinates (app/level_brush_points_actions.cpp).
+	void registerLevelBrushPointsCommands();
+	void refreshLevelBrushPointsCommands();
+	void createLevelBrushFromPointsFromUi();
+	void copyLevelVertexCoordinatesFromUi();
+	// The picked faces, edges and vertices' corners, or else the selected
+	// visible brushes', as levelVertexListingText() writes them.
+	[[nodiscard]] QString levelSelectionCornerText(int* listings = nullptr, int* points = nullptr, QString* error = nullptr) const;
+	// TrenchBroom's Brush Tool as Assemble Brush Tool and Create Assembled
+	// Brush (app/level_brush_assemble_actions.cpp): points the plan views and
+	// the camera share, a hull checked on a worker, and one undo step.
+	void registerLevelBrushAssembleCommands();
+	void refreshLevelBrushAssembleCommands();
+	void connectLevelBrushAssemble();
+	void setLevelBrushAssembleTool(bool enabled);
+	[[nodiscard]] bool levelBrushAssembleActive() const;
 	void addLevelSectorShapeAtViewCentre();
 	// The Shapes tab's sector shape filling a box, drawn or typed.
 	void addLevelSectorShape(double minX, double minY, double maxX, double maxY);
@@ -1163,6 +1220,18 @@ private:
 	QWidget* buildLevelSurfaceTools();
 	void registerLevelSurfaceCommands();
 	void refreshLevelSurfaceTools();
+	// The Surfaces tab's Flags section (level_face_flags_actions.cpp): the
+	// picked faces, or the Surfaces target's brush faces, and their flags.
+	void registerLevelFaceFlagCommands();
+	void refreshLevelFaceFlags();
+	bool applyLevelFaceFlags(const LevelFaceFlagsEdit& edit, QString* error = nullptr);
+	// The UV Editor (level_uv_editor_actions.cpp): one picked face, or one
+	// selected patch, in texture space.
+	void registerLevelUvEditorCommands();
+	void refreshLevelUvEditorCommand();
+	[[nodiscard]] bool levelUvEditorTarget(LevelMaterialTarget* target = nullptr, QString* reason = nullptr) const;
+	void openLevelUvEditorFromUi();
+	bool applyLevelUvEdit(const LevelSurfaceEditPlan& plan, QString* error = nullptr);
 	void startLevelSurfaceBatch();
 	std::function<bool()> levelSurfaceContextGuard() const;
 	bool startLevelSurfacePaste(const QVector<LevelMaterialTarget>& targets, const LevelSurfacePasteOptions& options,
@@ -1298,6 +1367,10 @@ private:
 	bool m_levelQuickClip = false;
 	std::function<void()> m_levelClipPreferencesChanged;
 	std::function<void()> m_levelClipRefresh;
+	// The Assemble Brush tool's recheck after map or material changes, and
+	// its Enter (app/level_brush_assemble_actions.cpp).
+	std::function<void()> m_levelBrushAssembleRefresh;
+	std::function<void()> m_levelBrushAssembleCommit;
 	std::function<void()> m_levelClipCommit;
 	QWidget* buildLevelBrushTools();
 	void connectLevelCameraBrush();
@@ -1943,6 +2016,9 @@ private:
 	StudioSidebar* m_levelTrailingSidebar = nullptr;
 	QHash<QString, SidebarPage*> m_levelSidebarPages;
 	QString m_levelSidebarFamily;
+	// The tab Show Surfaces replaced, which hiding Surfaces again brings
+	// back; empty when it unfolded the sidebar, so hiding folds it.
+	QString m_levelSurfacesReturnTab;
 	bool m_arrangingLevelSidebars = false;
 	bool m_restoringLevelSidebars = false;
 	// The Objects section, which counts what the filter keeps while one is typed.
@@ -1961,6 +2037,8 @@ private:
 	QButtonGroup* m_levelShapeButtons = nullptr;
 	QFormLayout* m_levelShapeForm = nullptr;
 	QComboBox* m_levelShapeAxis = nullptr;
+	// Fill the box, or round on its larger extent as NetRadiant Custom.
+	QComboBox* m_levelShapeFit = nullptr;
 	QSpinBox* m_levelShapeSides = nullptr;
 	QSpinBox* m_levelShapeBands = nullptr;
 	QSpinBox* m_levelShapeThickness = nullptr;
@@ -2028,6 +2106,26 @@ private:
 	std::shared_ptr<std::atomic_bool> m_levelFilterMaterialsCancel;
 	QPointer<QLabel> m_levelFilterMaterialStatus;
 	QPointer<QToolButton> m_levelFilterMaterialReload;
+	// Tags from the project and the chosen tag file, the key they were read
+	// for, and their generated commands; the class filters' commands, the
+	// class list they follow, and the map session they belong to.
+	std::shared_ptr<const LevelFilterTagSet> m_levelFilterTags;
+	QString m_levelFilterTagsKey;
+	QString m_levelFilterTagBoxesKey;
+	QStringList m_levelFilterTagCommandIds;
+	QStringList m_levelSmartTagCommandIds;
+	QStringList m_levelClassFilterCommandIds;
+	QString m_levelClassFilterCommandsKey;
+	QPointer<QWidget> m_levelFilterTagPanel;
+	QPointer<QLabel> m_levelFilterTagStatus;
+	QPointer<QToolButton> m_levelFilterTagClear;
+	QPointer<QWidget> m_levelClassFilterPanel;
+	QPointer<QTreeWidget> m_levelClassFilterTree;
+	QPointer<QLabel> m_levelClassFilterSummary;
+	QPointer<QLineEdit> m_levelClassFilterFind;
+	QString m_levelClassFilterTreeKey;
+	quint64 m_levelClassFiltersLoad = 0;
+	QString m_levelClassFiltersPath;
 	// View > Camera: the last selection the camera focus falls back to (for
 	// the map load it came from), and the held free focus while it lasts.
 	struct LevelCameraFocusState {
@@ -2150,6 +2248,8 @@ private:
 	QAction* m_levelMapShowThings = nullptr;
 	QAction* m_levelMapShowSectors = nullptr;
 	QAction* m_levelMapShowGrid = nullptr;
+	QAction* m_levelMapShowCoordinates = nullptr;
+	QAction* m_levelMapShowBlockGrid = nullptr;
 	QAction* m_levelMapShowVertices = nullptr;
 	QAction* m_levelMapShowLabels = nullptr;
 	QAction* m_levelMapShowLinks = nullptr;

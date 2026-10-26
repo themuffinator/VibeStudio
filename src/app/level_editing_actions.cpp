@@ -552,6 +552,9 @@ void ApplicationShell::setLevelShearMode(bool enabled)
 	if (enabled && !levelMap2DShowing()) {
 		setLevelMap3D(false);
 	}
+	if (enabled) {
+		setLevelBrushAssembleTool(false);
+	}
 	for (MapViewport* view : std::as_const(m_levelPlanViews)) {
 		const QSignalBlocker blocker(view);
 		view->setShearMode(enabled);

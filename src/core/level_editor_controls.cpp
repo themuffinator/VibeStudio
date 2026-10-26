@@ -272,6 +272,10 @@ LevelEditorControls trenchBroomLevelControls()
 		bind("map.showAll", {QStringLiteral("Ctrl+Shift+I")}),
 		bind("map.clipTool", {QStringLiteral("C")}),
 		bind("map.sweepTool", {QStringLiteral("Y")}),
+		// TB ActionManager "Menu/Edit/Tools/Brush Tool" at 4c756be1
+		// (GPL-3.0-or-later). Key facts only; see docs/CREDITS.md. Its Return
+		// ("Controls/Map view/Create brush") is the views' own Enter.
+		bind("map.assembleBrushTool", {QStringLiteral("B")}),
 		bind("map.gridSmaller", {QStringLiteral("-"), QStringLiteral("[")}),
 		bind("map.gridLarger", {QStringLiteral("+"), QStringLiteral("="), QStringLiteral("]")}),
 		bind("map.toggleSnap", {QStringLiteral("Alt+0")}),
@@ -560,6 +564,11 @@ LevelEditorControls netRadiantCustomLevelControls()
 		// (GPL-2.0-or-later) resets textures and caps patches on Shift+N. Key
 		// facts only; see docs/CREDITS.md.
 		bind("map.surfaceRadiantReset", {QStringLiteral("Shift+N")}),
+		// NRC radiant/surfacedialog.cpp "SurfaceInspector" at 449778b3
+		// (GPL-2.0-or-later) shows and hides the Surface Inspector on S; here
+		// Show Surfaces toggles the Surfaces tab. S flies the camera only in
+		// mouse look, which claims it first. Key facts only; see docs/CREDITS.md.
+		bind("map.sidebar.surfaces", {QStringLiteral("S")}),
 		bind("map.textureLock", {QStringLiteral("Shift+T")}),
 		bind("map.makeDetail", {QStringLiteral("Alt+D")}),
 		bind("map.makeStructural", {QStringLiteral("Alt+S")}),
@@ -594,6 +603,18 @@ LevelEditorControls netRadiantCustomLevelControls()
 		// only; see docs/CREDITS.md.
 		bind("map.rotatePrecisely", {QStringLiteral("Shift+R")}),
 		bind("map.scaleSelection", {QStringLiteral("Ctrl+Shift+S")}),
+		// NRC radiant/brushmanip.cpp Brush3Sided to Brush9Sided at 449778b3
+		// (GPL-2.0-or-later): Ctrl+3 to Ctrl+9 rebuild the selected brush as a
+		// 3- to 9-sided prism. The views claim them while a brush is selected
+		// (app/level_prism_actions.cpp); elsewhere, and with no brush selected,
+		// they still switch modes. Key facts only; see docs/CREDITS.md.
+		bind("map.make3SidedPrism", {QStringLiteral("Ctrl+3")}),
+		bind("map.make4SidedPrism", {QStringLiteral("Ctrl+4")}),
+		bind("map.make5SidedPrism", {QStringLiteral("Ctrl+5")}),
+		bind("map.make6SidedPrism", {QStringLiteral("Ctrl+6")}),
+		bind("map.make7SidedPrism", {QStringLiteral("Ctrl+7")}),
+		bind("map.make8SidedPrism", {QStringLiteral("Ctrl+8")}),
+		bind("map.make9SidedPrism", {QStringLiteral("Ctrl+9")}),
 		// NRC radiant/filters.cpp ConstructFilters at 449778b3
 		// (GPL-2.0-or-later): the Filter menu's keys, for the kinds VibeStudio
 		// filters. Key facts only; see docs/CREDITS.md. Ctrl+P (Patches) stays

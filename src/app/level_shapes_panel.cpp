@@ -161,6 +161,15 @@ void ApplicationShell::buildLevelShapesPage(SidebarPage* page)
 		tr("How many sides round shapes have, or how many segments an arch or ring is built of."));
 	m_levelShapeBands = shapeSpin(QStringLiteral("levelShapeBands"), 2, 16, 4, tr("Sphere bands"),
 		tr("A sphere's latitude bands; sides times bands is at most 128."));
+	// NetRadiant Custom's prisms, cones and spheres sit round on the larger
+	// extent with a face on the first axis (core/level_primitive.h).
+	m_levelShapeFit = new QComboBox;
+	m_levelShapeFit->setObjectName(QStringLiteral("levelShapeFit"));
+	m_levelShapeFit->addItem(tr("Fill the Box"), QStringLiteral("box"));
+	m_levelShapeFit->addItem(tr("Round on the Larger Side"), QStringLiteral("circle"));
+	m_levelShapeFit->setAccessibleName(tr("Shape fit"));
+	m_levelShapeFit->setToolTip(tr("Fill the Box stretches a cylinder, cone or sphere to the box's sides. Round on the Larger Side makes it round "
+								   "on the box's larger side with a face square to the first axis, as NetRadiant Custom does, so it can overhang the shorter sides."));
 	m_levelShapeThickness = shapeSpin(QStringLiteral("levelShapeThickness"), 1, 4096, 16, tr("Wall thickness"),
 		tr("How thick the walls of arches, rings and rooms are, in map units. Walls as thick as the radius close an arch into slices."));
 	m_levelShapeArc = shapeSpin(QStringLiteral("levelShapeArc"), 1, 360, 180, tr("Sweep"),
@@ -186,6 +195,7 @@ void ApplicationShell::buildLevelShapesPage(SidebarPage* page)
 	m_levelShapeForm->addRow(fieldLabel(tr("Axis"), m_levelShapeAxis), m_levelShapeAxis);
 	m_levelShapeForm->addRow(fieldLabel(tr("Sides"), m_levelShapeSides), m_levelShapeSides);
 	m_levelShapeForm->addRow(fieldLabel(tr("Bands"), m_levelShapeBands), m_levelShapeBands);
+	m_levelShapeForm->addRow(fieldLabel(tr("Fit"), m_levelShapeFit), m_levelShapeFit);
 	m_levelShapeForm->addRow(fieldLabel(tr("Walls"), m_levelShapeThickness), m_levelShapeThickness);
 	m_levelShapeForm->addRow(fieldLabel(tr("Sweep"), m_levelShapeArc), m_levelShapeArc);
 	m_levelShapeForm->addRow(fieldLabel(tr("Start"), m_levelShapeStart), m_levelShapeStart);
@@ -200,7 +210,7 @@ void ApplicationShell::buildLevelShapesPage(SidebarPage* page)
 			 m_levelShapeWidth, m_levelShapeDepth, m_levelShapeStepHeight, m_levelShapeColumns, m_levelShapeRows}) {
 		connect(spin, &QSpinBox::valueChanged, this, [this]() { saveLevelShapeSettings(); });
 	}
-	for (QComboBox* combo : {m_levelShapeAxis, m_levelShapeRise}) {
+	for (QComboBox* combo : {m_levelShapeAxis, m_levelShapeRise, m_levelShapeFit}) {
 		connect(combo, &QComboBox::currentIndexChanged, this, [this]() { saveLevelShapeSettings(); });
 	}
 	m_levelShapeSettingsSection = addLevelSidebarSection(page, QStringLiteral("shapes.settings"), tr("Settings"), settings);
@@ -274,6 +284,9 @@ void ApplicationShell::buildLevelShapesPage(SidebarPage* page)
 	if (const int rise = m_levelShapeRise->findData(saved.value(QStringLiteral("rise")).toString()); rise >= 0) {
 		m_levelShapeRise->setCurrentIndex(rise);
 	}
+	if (const int fit = m_levelShapeFit->findData(saved.value(QStringLiteral("fit")).toString()); fit >= 0) {
+		m_levelShapeFit->setCurrentIndex(fit);
+	}
 	const QString sectorShape = saved.value(QStringLiteral("sectorShape")).toString();
 	m_levelSectorShape = isSectorShape(sectorShape) ? sectorShape : QString(kSectorRectangle);
 	chooseLevelShape(saved.value(QStringLiteral("shape")).toString(QStringLiteral("box")));
@@ -334,6 +347,7 @@ void ApplicationShell::refreshLevelShapesPanel()
 	show(m_levelShapeAxis, "axis");
 	show(m_levelShapeSides, "sides");
 	show(m_levelShapeBands, "bands");
+	show(m_levelShapeFit, "fit");
 	show(m_levelShapeThickness, "thickness");
 	show(m_levelShapeArc, "arc");
 	show(m_levelShapeStart, "start");
@@ -357,7 +371,9 @@ void ApplicationShell::refreshLevelShapesPanel()
 		const QSignalBlocker sides(m_levelShapeSides);
 		const QSignalBlocker bands(m_levelShapeBands);
 		m_levelShapeSides->setMinimum(current == QLatin1String("arch") ? 1 : 3);
-		m_levelShapeSides->setMaximum(patchShape ? 15 : 64);
+		// Cylinders and cones go as far as the component editor's 128 faces.
+		const int radial = levelBrushPrimitiveMaxSides(current);
+		m_levelShapeSides->setMaximum(patchShape ? 15 : (current == QLatin1String("sphere") || radial == 0 ? 64 : radial));
 		m_levelShapeBands->setMaximum(patchShape ? 15 : 16);
 	}
 	if (m_levelShapeSettingsSection) {
@@ -419,6 +435,7 @@ void ApplicationShell::saveLevelShapeSettings()
 		{QStringLiteral("start"), m_levelShapeStart->value()},
 		{QStringLiteral("steps"), m_levelShapeSteps->value()},
 		{QStringLiteral("rise"), m_levelShapeRise->currentData().toString()},
+		{QStringLiteral("fit"), m_levelShapeFit->currentData().toString()},
 		{QStringLiteral("width"), m_levelShapeWidth->value()},
 		{QStringLiteral("depth"), m_levelShapeDepth->value()},
 		{QStringLiteral("stepHeight"), m_levelShapeStepHeight->value()},
@@ -460,6 +477,7 @@ LevelShapeRequest ApplicationShell::levelShapeRequest(const LevelMapVec3& mins, 
 		request.startAngle = m_levelShapeStart->value();
 		request.steps = m_levelShapeSteps->value();
 		request.rise = m_levelShapeRise->currentData().toString();
+		levelBrushPrimitiveFitFromId(m_levelShapeFit->currentData().toString(), &request.fit);
 	}
 	request.texture = levelBrushMaterial();
 	return request;

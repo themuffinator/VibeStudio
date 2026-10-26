@@ -8,6 +8,7 @@
 #include "core/editor_profiles.h"
 #include "core/level_patch_tools.h"
 #include "core/level_face_clipboard.h"
+#include "core/level_nudge.h"
 #include "core/level_scene.h"
 #include <QClipboard>
 #include <QGuiApplication>
@@ -18,6 +19,22 @@
 #include <algorithm>
 
 namespace vibestudio {
+namespace {
+// The plan view's projection, for its screen and depth axes (core/level_nudge.h).
+MapRenderProjection planRenderProjection(MapViewportProjection projection)
+{
+	switch (projection) {
+	case MapViewportProjection::FrontXZ:
+		return MapRenderProjection::FrontXZ;
+	case MapViewportProjection::SideZY:
+		return MapRenderProjection::SideZY;
+	case MapViewportProjection::TopXY:
+		break;
+	}
+	return MapRenderProjection::TopXY;
+}
+} // namespace
+
 bool ApplicationShell::levelSurfaceGeometryBusy() const
 {
 	return m_levelQuickClip || std::any_of(m_levelPlanViews.cbegin(),m_levelPlanViews.cend(),[](const auto* view) {
@@ -35,6 +52,14 @@ QWidget* ApplicationShell::buildLevelSurfaceTools()
 	m_levelSurfaceTools->setProfileSteps(controls.surfaceRotationStep, controls.surfaceRotateAboutOrigin);
 	m_levelSurfaceTools->targetChanged = [this] { cancelLevelSurfaceEdits(); refreshLevelSurfaceTools(); };
 	m_levelSurfaceTools->cancelRequested = [this] { cancelLevelSurfaceEdits(); };
+	// The Flags section's boxes and Value field (level_face_flags_actions.cpp).
+	m_levelSurfaceTools->flagsEdited = [this](const LevelFaceFlagsEdit& edit) {
+		QString error;
+		if (!applyLevelFaceFlags(edit, &error)) {
+			m_levelSurfaceTools->setStatus(error, levelSurfaceEditsPending());
+			statusBar()->showMessage(error, 6000);
+		}
+	};
 	connect(m_entityInspector, &QTreeWidget::currentItemChanged, this, [this] {
 		// The inspector clears and restores its current row during a refresh.
 		QTimer::singleShot(0, this, [this] { refreshLevelSurfaceTools(); });
@@ -99,6 +124,12 @@ QWidget* ApplicationShell::buildLevelSurfaceTools()
 			}
 			if (advancedClipboard) { message += QLatin1Char(' ') + tr("The wrapped face is now the source for the next paste."); }
 			if (result.edgeOnFaces > 0) { message += QLatin1Char(' ') + tr("Radiant projection left %n face(s) edge-on to the copied mapping. Use Radiant values for face-relative alignment.", nullptr, result.edgeOnFaces); }
+			if (result.skippedEdgeOn > 0) {
+				message += QLatin1Char(' ') + tr("%n surface(s) run along the projection and kept their mapping.", nullptr, result.skippedEdgeOn);
+			}
+			if (result.skippedClassic > 0) {
+				message += QLatin1Char(' ') + tr("%n classic face(s) cannot hold the projection and kept their mapping.", nullptr, result.skippedClassic);
+			}
 			m_levelSurfaceTools->setStatus(message, false); statusBar()->showMessage(message, 6000);
 			if (result.pasted) { showLevelMaterialPaintMessage(message); }
 		}
@@ -111,31 +142,65 @@ void ApplicationShell::registerLevelSurfaceCommands()
 	const QStringList labels{tr("Shift Texture U −"), tr("Shift Texture U +"), tr("Shift Texture V −"), tr("Shift Texture V +"),
 		tr("Rotate Texture −"), tr("Rotate Texture +"), tr("Shrink Texture U"), tr("Grow Texture U"),
 		tr("Shrink Texture V"), tr("Grow Texture V"), tr("Fit Texture 1 × 1"), tr("Centre Texture"),
-		tr("Flip Texture U"), tr("Flip Texture V"), tr("Fit Texture Width"), tr("Fit Texture Height"),
+		tr("Flip Texture U"), tr("Flip Texture V"), tr("Fit Texture Width Only"), tr("Fit Texture Height Only"),
 		tr("Justify Texture Left"), tr("Justify Texture Right"), tr("Justify Texture Top"), tr("Justify Texture Bottom"),
 		tr("Natural Texture Mapping"), tr("Align Texture to Face"),
 		tr("Texture Scale U −"), tr("Texture Scale U +"), tr("Texture Scale V −"), tr("Texture Scale V +"),
-		tr("Reset Texture Alignment"), tr("Radiant Texture Reset")};
+		tr("Reset Texture Alignment"), tr("Radiant Texture Reset"), tr("Fit Texture Width"), tr("Fit Texture Height"),
+		tr("Project Texture Axially"), tr("Project Texture from 2D View"), tr("Project Texture from Camera")};
 	const auto ids = LevelSurfaceTools::commandIds();
 	for (int i = 0; i < ids.size(); ++i) {
 		StudioCommandRegistration command;
 		command.commandId = ids[i]; command.label = labels[i]; command.group = StudioCommandGroup::Edit;
 		command.menuSection = tr("Surface Adjustments"); command.iconName = QStringLiteral("image");
 		command.statusTip = tr("Adjust the texture mapping of the targeted brush faces and patches using the step values in Levels > Surfaces.");
-		// The resets act on the picked faces when there are any, as
-		// TrenchBroom's and Radiant's resets act on their face selection.
+		// The resets and projections act on the picked faces when there are
+		// any, as TrenchBroom's and Radiant's act on their face selection.
 		const bool reset = ids[i] == QLatin1String("map.surfaceReset") || ids[i] == QLatin1String("map.surfaceRadiantReset");
+		const bool projection = ids[i].startsWith(QLatin1String("map.surfaceProject"));
 		if (ids[i] == QLatin1String("map.surfaceReset")) {
 			command.statusTip = tr("Reset the picked faces, or the Surfaces target, to no shift or rotation at the default scale, each in its own format: classic faces natural, Valve 220 and brush-primitive faces in their plane, patches their natural spread.");
 		} else if (ids[i] == QLatin1String("map.surfaceRadiantReset")) {
 			command.statusTip = tr("Reset the picked faces, or the Surfaces target, as Radiant does: classic faces natural, Valve 220 and brush-primitive faces in their plane's own basis, patches capped.");
+		} else if (ids[i] == QLatin1String("map.surfaceFitU")) {
+			command.statusTip = tr("Fit one texture repeat across the width (U) of each targeted face and patch and leave its height (V) as it is, as NetRadiant Custom's Fit Width Only does.");
+		} else if (ids[i] == QLatin1String("map.surfaceFitV")) {
+			command.statusTip = tr("Fit one texture repeat down the height (V) of each targeted face and patch and leave its width (U) as it is, as NetRadiant Custom's Fit Height Only does.");
+		} else if (ids[i] == QLatin1String("map.surfaceFitWidth")) {
+			command.statusTip = tr("Fit one texture repeat across the width (U) of each targeted face and patch and scale its height (V) to match, so the texture keeps its proportions, as NetRadiant Custom's Fit Width does.");
+		} else if (ids[i] == QLatin1String("map.surfaceFitHeight")) {
+			command.statusTip = tr("Fit one texture repeat down the height (V) of each targeted face and patch and scale its width (U) to match, so the texture keeps its proportions, as NetRadiant Custom's Fit Height does.");
+		} else if (ids[i] == QLatin1String("map.surfaceProjectAxial")) {
+			command.statusTip = tr("Project the default texture onto the picked faces, or the Surfaces target, along the world axis each face looks down most, and onto patches along the axis nearest their facing, as NetRadiant Custom's Project Axial does.");
+		} else if (ids[i] == QLatin1String("map.surfaceProjectView")) {
+			command.statusTip = tr("Project the default texture onto the picked faces, or the Surfaces target, straight from the active 2D view, so they share one flat projection, as NetRadiant Custom's Project Ortho does. Faces the view sees edge-on keep their mapping.");
+		} else if (ids[i] == QLatin1String("map.surfaceProjectCamera")) {
+			command.statusTip = tr("Project the default texture onto the picked faces, or the Surfaces target, along the 3D camera's view, so they share one flat projection, as NetRadiant Custom's Project Camera does. Faces the camera sees edge-on keep their mapping.");
 		}
-		command.handler = [this, id = ids[i], reset] {
+		command.handler = [this, id = ids[i], picked = reset || projection] {
 			if (!m_levelSurfaceTools) { return; }
 			setMode(StudioMode::Levels);
 			showLevelSidebarPage(QStringLiteral("surfaces"));
 			QString error;
-			if (!queueLevelSurfaceEdit(m_levelSurfaceTools->request(id), &error, reset)) {
+			LevelSurfaceRequest request = m_levelSurfaceTools->request(id);
+			if (id == QLatin1String("map.surfaceProjectView")) {
+				// Towards the viewer of the active 2D view (Top +Z, Front -Y,
+				// Side +X), as Radiant's Project Ortho takes the current view's axis.
+				if (m_levelMapViewport) {
+					request.projectionDirection = levelPlanNudgeAxis(planRenderProjection(m_levelMapViewport->projection()), LevelNudgeDirection::DepthUp);
+				} else {
+					error = tr("Show a 2D view to project a texture from it.");
+				}
+			} else if (id == QLatin1String("map.surfaceProjectCamera")) {
+				// Back towards the camera, as Radiant projects along the negated view vector.
+				if (m_levelMap3D) {
+					const ModelVec3 forward = m_levelMap3D->viewForward();
+					request.projectionDirection = {-forward.x, -forward.y, -forward.z, true};
+				} else {
+					error = tr("The 3D camera is not available for texture projection.");
+				}
+			}
+			if (!error.isEmpty() || !queueLevelSurfaceEdit(request, &error, picked)) {
 				m_levelSurfaceTools->setStatus(error, levelSurfaceEditsPending()); statusBar()->showMessage(error, 6000);
 			}
 		};
@@ -152,6 +217,8 @@ void ApplicationShell::registerLevelSurfaceCommands()
 		m_commands->registerCommand(command);
 		m_commands->setEnabled(command.commandId, false);
 	}
+	registerLevelFaceFlagCommands();
+	registerLevelUvEditorCommands();
 	for (bool paste : {false, true}) {
 		StudioCommandRegistration command;
 		command.commandId = paste ? QStringLiteral("map.pasteSurface") : QStringLiteral("map.copySurface");
@@ -243,12 +310,16 @@ void ApplicationShell::refreshLevelSurfaceTools()
 	for (const auto& id : LevelSurfaceTools::commandIds()) { m_commands->setEnabled(id, editable); }
 	if (!editable && (m_levelMapDocument.format == LevelMapFormat::QuakeMap || m_levelMapDocument.format == LevelMapFormat::Quake3Map)
 		&& !levelSurfaceGeometryBusy()) {
-		// The resets act on picked faces whatever the Surfaces tab's target says.
+		// The resets and projections act on picked faces whatever the
+		// Surfaces tab's target says.
 		const qsizetype picked = levelPickedSurfaceFaces().size();
-		for (const char* id : {"map.surfaceReset", "map.surfaceRadiantReset"}) {
+		for (const char* id : {"map.surfaceReset", "map.surfaceRadiantReset", "map.surfaceProjectAxial", "map.surfaceProjectView",
+				 "map.surfaceProjectCamera"}) {
 			m_commands->setEnabled(QString::fromLatin1(id), picked > 0 && picked <= 16384);
 		}
 	}
+	// Projecting from the camera reads its view direction.
+	if (!m_levelMap3D) { m_commands->setEnabled(QStringLiteral("map.surfaceProjectCamera"), false); }
 	// Reset Textures can always reach the whole map.
 	m_commands->setEnabled(QStringLiteral("map.resetTextures"), (m_levelMapDocument.format == LevelMapFormat::QuakeMap
 		|| m_levelMapDocument.format == LevelMapFormat::Quake3Map) && !levelSurfaceEditsPending() && !levelSurfaceGeometryBusy());
@@ -259,6 +330,8 @@ void ApplicationShell::refreshLevelSurfaceTools()
 	const bool pasteEditable = m_levelSurfaceTools->singleFace() ? editable : !pasteTargets.isEmpty() && pasteTargets.size() <= 16384;
 	m_commands->setEnabled(QStringLiteral("map.pasteSurface"), pasteEditable && m_levelSurfaceClipboard.ready() && !levelSurfaceEditsPending() && !levelSurfaceGeometryBusy());
 	m_levelSurfaceTools->setClipboardSummary(m_levelSurfaceClipboard);
+	refreshLevelFaceFlags();
+	refreshLevelUvEditorCommand();
 	// Hide and Show All wait while surface edits are pending; a batch that
 	// changes nothing publishes no map, so they come back here.
 	refreshLevelVisibilityCommands();

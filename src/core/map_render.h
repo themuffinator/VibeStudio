@@ -46,6 +46,10 @@ struct MapRenderOptions {
 	// levelMapTargetLinks() finds them. Off by default so existing pictures
 	// stay byte-identical.
 	bool showTargetLinks = false;
+	// The compiler block grid from worldspawn _blocksize (core/level_block_grid.h),
+	// dashed, as the Levels views draw it with Show Block Grid. Quake-family
+	// maps only; off by default so existing pictures stay byte-identical.
+	bool showBlockGrid = false;
 };
 
 struct MapRenderReport {
@@ -61,6 +65,8 @@ struct MapRenderReport {
 	int drawnSectorCount = 0;
 	int drawnLeakPointCount = 0;
 	int drawnTargetLinkCount = 0;
+	// Block boundaries drawn with showBlockGrid, across both picture axes.
+	int drawnBlockLineCount = 0;
 	double unitsPerPixel = 0.0;
 	QStringList warnings;
 	QString error;

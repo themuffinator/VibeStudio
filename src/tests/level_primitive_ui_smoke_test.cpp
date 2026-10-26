@@ -15,6 +15,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSpinBox>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QTranslator>
@@ -26,7 +27,7 @@ namespace
 bool expect(bool value, const char *label, const QString &error = {})
 {
 	if (!value) {
-		std::cerr << label << ": " << error.toStdString() << '\n';
+		std::cerr << label << ": " << qPrintable(error) << '\n';
 	}
 	return value;
 }
@@ -98,6 +99,8 @@ int main(int argc, char **argv)
 		auto *apply = dialog.findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok);
 		auto *center = dialog.findChild<QDoubleSpinBox *>(QStringLiteral("primitiveCenter0"));
 		auto *shapes = dialog.findChild<QComboBox *>(QStringLiteral("primitiveShape"));
+		auto *sides = dialog.findChild<QSpinBox *>(QStringLiteral("primitiveSides"));
+		ok &= expect(sides && sides->maximum() == 64, "sphere side limit");
 		ok &= expect(preview && preview->hasMesh() && preview->hasSkin() && preview->reducedMotion(),
 					 "shared renderer and shader editor image");
 		ok &= expect(dialog.previewDocument().brushes.size() == count + 1 && dialog.previewDocument().brushes.last().faceCount == 32 &&
@@ -124,9 +127,11 @@ int main(int argc, char **argv)
 		latest.shape = QStringLiteral("cylinder");
 		latest.sides = 16;
 		dialog.setRequest(latest);
+		ok &= expect(sides->maximum() == 126 && sides->value() == 16, "cylinder side limit");
 		latest.shape = QStringLiteral("cone");
 		latest.sides = 5;
 		dialog.setRequest(latest);
+		ok &= expect(sides->maximum() == 127 && sides->value() == 5, "cone side limit");
 		ok &= expect(!apply->isEnabled() && until([&] { return dialog.isReady(); }) && dialog.previewValid() &&
 						 dialog.previewDocument().brushes.last().faceCount == 6,
 					 "latest queued draft wins");

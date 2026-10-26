@@ -199,8 +199,9 @@ int main(int argc, char **argv)
 			request.maxs.x = request.mins.x;
 		}
 		if (bad == 4) {
+			// 126 sides is the most a cylinder's 128 faces allow.
 			request.shape = QStringLiteral("cylinder");
-			request.sides = 65;
+			request.sides = 127;
 		}
 		if (bad == 5) {
 			request.shape = QStringLiteral("sphere");

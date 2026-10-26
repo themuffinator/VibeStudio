@@ -34,6 +34,8 @@ struct MapViewport::Palette {
 	QColor sectorBright;
 	QColor leak;
 	QColor link;
+	// The compiler block grid's dashed lines.
+	QColor block;
 };
 
 } // namespace vibestudio

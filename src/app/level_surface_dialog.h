@@ -60,6 +60,7 @@ class LevelSurfaceDialog final : public QDialog
 	QDoubleSpinBox *m_x = nullptr, *m_y = nullptr, *m_degrees = nullptr;
 	QLabel *m_xLabel = nullptr, *m_yLabel = nullptr;
 	QComboBox *m_alignU = nullptr, *m_alignV = nullptr;
+	QCheckBox *m_keepProportions = nullptr;
 	QCheckBox *m_override = nullptr;
 	QSpinBox *m_width = nullptr, *m_height = nullptr;
 	QLabel *m_status = nullptr, *m_materialStatus = nullptr;

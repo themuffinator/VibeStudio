@@ -568,10 +568,15 @@ vibestudio --cli package validate ./release.pk3 --json
 Render a map to an SVG picture, optionally with a compiler leak trail. The projection is `top`,
 `front` or `side`; without `--output` the SVG goes to standard output. `--grid` sets the grid spacing in map
 units, fractions such as `0.5` included; a grid too dense for the picture is left out with a warning.
+`--block-grid` adds the compiler block grid as dashed lines, from the worldspawn `_blocksize` key (1024 units
+when it is missing; 0 leaves an axis unsplit), as the Levels views draw it with **Show Block Grid**; Doom maps have
+none and say so in a warning. With `--json` the report's `blockGrid` gives the `size` per axis, the `key` and
+`value` it came from, how many numbers the compiler reads from it (`numbersRead`) and the `drawnLines`.
 
 ```sh
 vibestudio --cli map render ./maps/start.map --output ./start.svg
 vibestudio --cli map render ./maps/start.map --projection front --leak ./maps/start.pts --output ./start-leak.svg --overwrite
+vibestudio --cli map render ./maps/arena.map --block-grid --projection front --output ./arena-blocks.svg
 ```
 
 Index a game's own files once, then review and publish a map release with only your own files:
@@ -926,6 +931,118 @@ Reset Textures `scope` (`selection` or `map`), `targetFaces`, `targetPatches`,
 `renamed` and the `set` values. See
 [Reset textures](levels.md#reset-textures).
 
+## Fit and project textures
+
+**--fit U,V --keep-proportions**, with exactly one of U and V set to 0, fits
+the other axis and scales the 0 axis by the same factor, starting it at the
+face's edge, so the texture keeps its proportions, as the Levels **Fit Texture
+Width** and **Fit Texture Height** commands do. Without
+**--keep-proportions** a 0 axis is left as it is.
+
+**--project** lays the default texture flat over each selected face and patch,
+with no shift or rotation, at the map's default scale (0.5 for Quake III, 1
+otherwise) or **--project-scale U,V** map units per texel. **--project axial**
+projects each face along the world axis it looks down most and each patch
+along the axis nearest its facing. **--project x**, **y**, **z**, **-x**,
+**-y** or **-z** projects along that world axis, pointing out of the faces that
+show the texture the right way round, as a 2D view does from its side (Top
+`z`, Front `-y`, Side `x`). **--project camera** projects back towards a
+camera at **--camera-yaw** and **--camera-pitch**, and
+**--project-direction X,Y,Z** along any direction:
+
+```sh
+vibestudio --cli map align-textures room.map --face 12:3 --fit 2,0 --keep-proportions --package ./assets --output fitted.map
+vibestudio --cli map align-textures room.map --object brush:12 --project z --output projected.map --json
+vibestudio --cli map align-textures room.map --object brush:12 --project camera --camera-yaw 45 --camera-pitch -30 --output projected.map
+```
+
+Faces the direction runs along, and patches it flattens to a line, keep their
+mapping, as do classic faces whose format cannot hold the projection; a
+request that would change nothing else is refused. Brush-primitive faces and
+patches need **--package** or **--texture-size** for a projection, and every
+face but a brush-primitive one needs it for a fit. JSON reports
+`keepProportions` for a proportional fit, and for a projection `projection`,
+`scale`, the unit `direction`, `skippedEdgeOn` and `skippedClassic`. See
+[Fit and project textures](levels.md#fit-and-project-textures).
+
+## Read and set face flags
+
+`map face-flags` reads or changes the content flags, surface flags and value
+of Quake II and Quake III brush faces, as the **Flags** section of the Levels
+**Surfaces** tab does. Name faces with **--object brush:ID** or **entity:ID**
+and **--face brushId:faceNumber** (face numbers start at one); both repeat.
+
+Without a change, it reports each face's flags by name, and with no faces the
+names the map's game gives its flags:
+
+```sh
+vibestudio --cli map face-flags base.map --face 3:1 --json
+vibestudio --cli map face-flags base.map --json
+```
+
+To change them, give **--set-content**, **--clear-content**, **--set-surface**
+or **--clear-surface** with comma-separated flag names or numbers (decimal or
+**0x** hex), **--value N** for the surface value, or **--clear-all** to clear
+every flag but detail and set the value to 0, as NetRadiant Custom's **Unset**
+does. Bits you do not name stay as they are, so a change works on faces whose
+flags differ. A change needs **--output**:
+
+```sh
+vibestudio --cli map face-flags base.map --object brush:3 --set-content playerclip --clear-surface light --output base-clip.map
+vibestudio --cli map face-flags base.map --face 3:2 --set-surface light --value 300 --output base-light.map --json
+```
+
+The detail flag belongs to whole brushes, so use `map detail` for it. Quake
+maps, hidden faces, locked layers and faces outside the **--context** group are
+refused and nothing is written. A changed flag word is written as a signed
+32-bit number, so the top bit (`n64_scroll_flip`, `nodrop`) appears as a
+negative number that every compiler reads. The change is one undo step and supports
+**--dry-run** and **--overwrite**. JSON reports `game`, `changedFaces`,
+`brushes`, the bits set and cleared by name and the `value`. See
+[Set face flags](levels.md#set-face-flags).
+
+## List and edit texture coordinates
+
+`map edit-uv` works on one brush face's outline or one patch's control points
+in texture space, as the Levels **UV Editor** does. Name the surface with
+**--target face:brushId:faceNumber** (face numbers start at one) or
+**--target patch:id**. Coordinates are in texels, U to the right and V down
+the image.
+
+Without a change, it lists each point's number, world position and texel
+coordinates (and repeats, when the image size is known):
+
+```sh
+vibestudio --cli map edit-uv base.map --target face:3:1 --json
+```
+
+Give one change and **--output**:
+
+- **--move-point N --to U,V** moves a face's whole texture so point N reads
+  U,V, or sets patch control point N to U,V.
+- **--offset U,V** adds to every coordinate; on a patch, **--points 1,4,7**
+  chooses the points.
+- **--rotate DEG** turns clockwise as the **UV Editor** draws texture space
+  (negative turns anticlockwise), about **--anchor N** or else the centre of
+  the points that turn.
+
+```sh
+vibestudio --cli map edit-uv base.map --target face:3:1 --rotate 15 --anchor 1 --output base-turned.map
+vibestudio --cli map edit-uv curves.map --target patch:0 --move-point 5 --to 32,16 --texture-size 128,128 --output curves-uv.map --json
+```
+
+Brush-primitive faces and patches count repeats, so they need **--package**
+(with **--palette** where the game uses one) or **--texture-size W,H**. A
+classic face that cannot hold a turn exactly (its texture is scaled
+differently along U and V) takes the nearest classic mapping, keeping the
+anchor, unless **--allow-valve220** converts it to Valve 220. Hidden faces and
+patches, locked layers and targets outside the **--context** group are refused
+and nothing is written. The change is one undo step and supports **--dry-run**
+and **--overwrite**. JSON reports `format`, `material`, `imageSize`, `points`
+(after the change), `fit` (`exact`, `converted`, `approximated` or
+`unchanged`) and, for a turn, the `pivot`. See
+[Edit texture coordinates in the UV Editor](levels.md#edit-texture-coordinates-in-the-uv-editor).
+
 ## Round level geometry to the grid
 
 `map round-to-grid` rounds each brush vertex, patch control point and
@@ -1157,6 +1274,83 @@ value or material name the editor would refuse is a usage error (exit 2).
 **Status: Partial.** The CLI and the Levels editor share the same service.
 See [Make a room with caulk and openings](levels.md#make-a-room-with-caulk-and-openings).
 
+## Rebuild brushes as prisms, cones and spheres
+
+`map add-shape --in-place` is **Make Prism…**, **Make Cone…**, **Make
+Sphere…** and **Make 3-Sided Prism** to **Make 9-Sided Prism**: each
+`--object brush:N` is rebuilt in its own bounds as a `box`, `wedge`,
+`cylinder`, `cone` or `sphere`, keeping its number, its brush entity, layer or
+group, its place in the file and its face format. `--fit circle` builds the
+shape as NetRadiant Custom does, round on the larger extent with a face square
+to the first axis; `--fit box` (the default) stretches it to the bounds.
+`--axis x|y|z` is the depth axis, as the Top (`z`), Front (`y`) and Side (`x`)
+views give it.
+
+```sh
+vibestudio --cli map add-shape start.map --shape cylinder --sides 6 --axis z --fit circle --in-place --object brush:4 --object brush:7 --texture base/pillar --output pillars.map --json
+vibestudio --cli map add-shape start.map --shape sphere --sides 8 --bands 8 --fit circle --in-place --object brush:9 --texture base/orb --output orb.map --json
+```
+
+JSON reports `inPlace`, `fit`, the rebuilt `brushes` and `skipped`, the
+reasons any brush was left as it was (hidden, or too small for the sides).
+Cylinders take up to 126 sides and cones 127; a sphere's sides times bands is
+at most 128. `--in-place` with `--mins`/`--maxs`, or with a shape of several
+brushes or a patch, is a usage error (exit 2). `map add-brush` takes
+`--fit box|circle` too.
+
+**Status: Partial.** The CLI and the Levels editor share the same service.
+See [Rebuild brushes as prisms, cones and spheres](levels.md#rebuild-brushes-as-prisms-cones-and-spheres).
+
+## Create a brush from points and list brush corners
+
+`map add-brush --points` adds the convex brush that encloses four or more
+points, as **Create Brush from Points…** and TrenchBroom's Create Brush do. The
+points are `x,y,z` groups separated by spaces or semicolons, `x y z` points per
+line, or TrenchBroom's `(x y z) (x y z)`; repeated `--points` values are joined,
+and text after `//` is ignored, so `map brush-components` output and copied
+coordinates can be reused. `--texture` is required and goes on every face; the
+brush is added to worldspawn in the map's face format.
+
+`--extrude dx,dy,dz` adds a copy of every point moved by that offset before the
+brush is built, so a flat outline becomes a prism, as Shift-drag does in the
+**Assemble Brush Tool**.
+
+```sh
+vibestudio --cli map add-brush start.map --points "0,0,0 128,0,0 0,128,0 0,0,64" --texture base/metal --output start-wedge.map --json
+vibestudio --cli map add-brush start.map --points "(256 0 0) (384 0 0) (256 128 0)" --points "(256 0 64) (384 0 64) (256 128 64)" --texture base/metal --output start-ramp.map
+vibestudio --cli map add-brush start.map --points "0,0,0 128,0,0 128,64,0 0,64,0" --extrude 0,0,96 --texture base/metal --output start-block.map
+```
+
+JSON reports `shape` as `points` and a `points` object with `brushId`,
+`inputPoints`, `corners`, `unusedPoints` (inside the brush or on its faces),
+`faces` and `faceDialect`. Fewer than four or more than 4,096 points, points in
+one place, on one line or on one plane, a malformed point, or `--points` with
+`--shape`, `--axis`, `--sides`, `--bands`, `--fit`, `--mins` or `--maxs` is a
+usage error (exit 2), as is `--extrude` without `--points` or without three
+numbers. With `--extrude`, `inputPoints` counts the moved copies too. See
+[Assemble a brush from clicked points](levels.md#assemble-a-brush-from-clicked-points)
+for the tool it scripts.
+
+`map brush-components` lists several brushes when `--brush` is repeated or
+given IDs separated by commas, in the order given. Each face lists its corners'
+coordinates as well as their vertex IDs. Plain output writes coordinates at
+full precision, the shortest decimal that reads back exactly, and starts each
+brush with `brush N:` when there is more than one. JSON keeps `brush` for the
+first brush and adds `brushes` for all of them, each face with a `positions`
+array.
+
+```sh
+vibestudio --cli map brush-components start.map --brush 0,3 --brush 7
+vibestudio --cli map brush-components start.map --brush 0 --brush 3 --json
+```
+
+The editing commands (`map move-components` and the others) still take one
+brush.
+
+**Status: Partial.** The CLI and the Levels editor share the same services.
+See [Create a brush from typed points](levels.md#create-a-brush-from-typed-points)
+and [Copy vertex coordinates](levels.md#copy-vertex-coordinates).
+
 ## Hollow, shrink and expand as the CSG Tool does
 
 `map hollow` also builds the walls of the **CSG Tool**'s other hollows.
@@ -1247,6 +1441,17 @@ validation. Results also include the resulting `scene`; the source hash and
 `mapWritten: false` still refer to the unchanged source. These modes preview an
 operation in memory and do not persist an undo session.
 
+**--class light** (repeat it or use commas) adds an entity class filter, as
+**Toggle light Visible** does in the studio, with any mode. `classFilters` lists
+each class with its `count`, `objects` and `command`, `classFiltered` the
+entities the class filters hide, and `viewHidden` everything the views would
+hide: `effectiveHidden` and `classFiltered` together. Class filters leave the
+session's hidden and shown states as they are.
+
+```text
+vibestudio --cli map visibility start.map --mode inspect --class light --json
+```
+
 See [Temporary visibility](levels.md#temporary-visibility) for profile behaviour
 and remaining native parity limits.
 
@@ -1281,12 +1486,37 @@ water, playerclip, nodraw and the rest, skyParms), and textures the package does
 not hold keep the name rules. `shaders` reports the package, how many `scripts`
 and `shaders` were read and any `warnings`, and each kind says whether it
 `readsShaders`. Without **--package**, and on Quake and Quake II maps, which
-carry their own face flags, the kinds go by flags and texture names.
+carry their own face flags, the kinds go by flags and texture names. **Fog**
+reads the shaders too; **Skip**'s `faceCount` counts skip faces as **Caulk**'s
+counts caulk faces.
+
+**--tags tags.json** reads filter tags from a tag file or a TrenchBroom game
+configuration (its comments, bare names and trailing commas included, with
+`"\**"` keeping its backslash), and **--project mymod** from the project manifest's
+`levelFilterTags`, as the View tab does. `tags` lists each tag's `id`
+(`tag:water`), `name`, `match`, `patterns` or `flags` (with `flagBits` and any
+`unresolvedFlags` the map's game does not name), `source`, `description`,
+`count`, `faceCount`, `shown` and `command` (`map.filterTag.water`); with
+**--objects** also its `objects` and `faces`. `tagSources` and `tagWarnings` say
+where the tags came from and which entries were skipped. **--off** takes tag ids
+and **--invert** flips tags with the kinds.
+
+**--class light,info_null** switches off entity class filters (repeat it or use
+commas). `classes` lists the switched-off classes, or with **--classes** every
+class of the map and of **--definitions file** (else the game's built-in
+classes) with its `group`, `kind`, `count`, whether the definitions name it
+(`defined`), `shown` and `command` (`map.filterClass.light`); `classCount` counts
+them. Class ids (`class:light`) also work in **--off**. `filteredObjects` covers
+the kinds, tags and classes together, including a brush whose faces would all go
+one by one under several of them (caulk and skip sides, say); its faces then
+leave `filteredFaces`. A class whose name holds a comma has no filter.
 
 ```text
 vibestudio --cli map filters start.map --json
 vibestudio --cli map filters start.map --off world --invert --objects
 vibestudio --cli map filters q3dm1.map --package baseq3 --off translucent --objects
+vibestudio --cli map filters q3dm1.map --tags Quake3.cfg --package baseq3 --off tag:fog --json
+vibestudio --cli map filters start.map --class light,info_null --classes
 ```
 
 The query writes nothing: the map, `mapWritten: false`, and the saved filters
@@ -1331,3 +1561,26 @@ volume deletion. **--dry-run** validates that output without writing it.
 JSON distinguishes new matches from the resulting selection and reports whether
 a map was written. See [Select by brush volume](levels.md#select-by-brush-volume)
 for consuming semantics, modes, definitions and examples.
+
+### Apply configured smart tags
+
+**Partial.** `map smart-tag` reads the same tag definitions as the Levels
+filters and applies one atomic edit. Give **--tags FILE** or **--project FOLDER**
+and **--tag ID** (for example `tag:clip`). **--choices** lists matching material
+or brush-class names without changing anything. **--package PATH** supplies
+shader definitions for surfaceparm matching; **--definitions FILE** supplies
+brush classes.
+
+```sh
+vibestudio --cli map smart-tag ./maps/start.map --tags ./tags.json --tag clip --choices --json
+vibestudio --cli map smart-tag ./maps/start.map --tags ./tags.json --tag clip --object brush:0 --choice common/clip --output ./maps/clipped.map
+vibestudio --cli map smart-tag ./maps/start.map --tags ./tags.json --tag detail --object brush:0 --disable --output ./maps/structural.map
+```
+
+Use repeated **--object brush:ID|patch:ID|entity:ID**, or repeated
+**--face brushId:faceNumber** (one-based). **--choice NAME** chooses the material
+or classname; a single matching name is chosen automatically. **--disable**
+clears flag bits or moves matching brush entities to worldspawn. Texture and
+surfaceparm tags cannot be disabled. **--context GROUP** opens an editing
+context. Every change requires **--output**; **--dry-run** validates without
+writing, and **--overwrite** permits the existing safe-save replacement path.

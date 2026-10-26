@@ -53,6 +53,9 @@ struct LevelSurfaceResult {
 	int changedPatches = 0;
 	int convertedFaces = 0;
 	int edgeOnFaces = 0;
+	// Surfaces a projection left as they were (LevelSurfaceEditPlan).
+	int skippedEdgeOn = 0;
+	int skippedClassic = 0;
 	bool cancelled = false;
 	bool pasted = false;
 	bool reset = false;

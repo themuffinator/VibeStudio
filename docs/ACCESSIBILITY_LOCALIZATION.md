@@ -410,6 +410,19 @@ Unelided status and accessible descriptions remain available. Layout checks
 cover narrow panes, Arabic labels and font scales through 300%; native
 assistive-technology acceptance remains separate.
 
+**Show** > **Grid Coordinates** labels plan grid lines along the bottom edge and
+the leading edge (right in RTL). The numbers are always laid out left to right,
+so a sign never moves to the end. Labels are spaced at least a label's width
+apart and skip any place that would touch the status tags, another label or the
+pane edge, so enlarged text shows fewer numbers rather than overlapping ones.
+High-contrast labels use an opaque background and outline, and the pane's
+accessible description names the labelled range, following pan, zoom and grid
+changes. **Show** > **Block Grid** draws dashed lines, so block boundaries never
+depend on colour alone, and the description and a status tag give the block
+size. `level-grid-overlays-ui-smoke` covers both at 100% and at 200%
+high-contrast RTL with expanded text; native screen-reader acceptance remains
+open.
+
 Asset workbench authoring and selection actions are registered commands, available
 through Tools, command search and customizable shortcuts as well as header buttons.
 The palette identifies Textures, Models or Audio for otherwise similar commands.
@@ -901,7 +914,53 @@ cannot resize the camera during a gesture. Full text remains in its tooltip and
 accessible description; Surfaces retains the detailed wrapped status.
 The semantic stroke suite renders controls at 100% and 200%, including expanded
 translations and RTL; no operating-system input or screen capture is used.
+
+The Surfaces tab's **Flags** section uses a standard Qt check box per flag, named
+"Surface flag" or "Content flag" plus the game's flag name, with the flag's
+meaning and bit as its description. A flag set on only some targeted faces is a
+partly checked box, which screen readers announce as mixed; the detail box is
+shown disabled, with a tooltip and description naming Make Detail. Boxes reflow
+from three columns to one as text grows or the sidebar narrows, and labels that
+still do not fit end in an ellipsis while the accessible name keeps them whole.
+**Value** has a labelled buddy, accepts only whole numbers, reads left to right
+in RTL layouts and says **Mixed** when the faces differ. The section's summary
+and the tab's status announce the target count and each result. **Show
+Surfaces** is a checkable command, so its state reads as on or off. Strings use
+`LevelSurfaceTools`, `ApplicationShell`, `VibeStudioLevelFaceFlags` and
+`LevelFaceFlagsCli`; `level-face-flags-ui-smoke` covers 100%, 200%
+high-contrast RTL with expanded text, and NetRadiant Custom's <kbd>S</kbd>.
+Native screen-reader acceptance remains open.
 Native assistive-technology acceptance remains open.
+
+**Create Brush from Points…** uses a labelled plain-text **Points** field with a
+mnemonic, an accessible description of the accepted forms, and Tab moving focus
+on rather than typing a tab. Coordinates are laid out left to right in RTL
+layouts so signs and separators stay in place. The status line is plain,
+selectable text whose accessible description follows each check, so refusals
+(flat, malformed or too many points) are announced, not only shown by a disabled
+**Create Brush** button; the progress bar is still while reduced motion is on.
+**Copy Vertex Coordinates** reports its count in the status bar and Activity.
+Strings use `LevelBrushPointsDialog`, `ApplicationShell`, `LevelBrushPoints`
+and `VibeStudioSemantics`; the clipboard's `// brush:3` comment lines and
+coordinates are stable technical text and are not translated.
+`level-brush-points-ui-smoke` covers 100%, 200% high-contrast RTL with expanded
+text and all three profiles; native screen-reader acceptance remains open.
+
+The **Assemble Brush Tool** is a checkable named action with a focusable
+**Tools** tile, and **Create Assembled Brush** creates the brush without
+pressing Enter in a view. While the tool is on, every map view's accessible
+description and heads-up line name it with the point count, and the
+description follows each check: the corner and face counts, or why there is no
+brush yet (too few points, points on one line or plane, a locked layer), so a
+refusal is announced rather than only drawn. Points are squares and the
+checked hull a solid line against a dashed flat outline, never colour alone;
+high contrast thickens both and hatches the extrusion outline. Enter,
+Backspace, Delete and Escape work in every view, and points can be typed
+instead through **Create Brush from Points…**. Strings use `ModelViewport`,
+`MapViewport`, `ApplicationShell`, `LevelBrushAssemble` and
+`VibeStudioSemantics`. `level-brush-assemble-ui-smoke` covers 100%, 200%
+high-contrast RTL with expanded text and all three profiles; native
+screen-reader and pointer acceptance remain open.
 
 Component conversion, Grow, Shrink and Connected commands use standard named
 Qt actions and focusable Tools buttons. Selection counts update the viewport's
@@ -920,6 +979,22 @@ The `LevelSurface` and `LevelSurfaceDialog` strings enter normal catalogs.
 `level-surface-ui-smoke` verifies accessible roles/names, focusability, expanded
 labels and direct widget renders at 100% and 200% high-contrast RTL. Physical
 keyboard and native screen-reader acceptance still need manual verification.
+
+The UV Editor's texture-space view (`LevelUvView`) is a focusable graphic whose
+accessible description states the target, the current point and its texel
+coordinates, the anchor, the patch selection and whether and how the edit fits
+the face's format. Everything the mouse does has a keyboard route: arrow keys
+nudge, brackets turn, N and Shift+N step through points, A sets the anchor,
+Ctrl+Z and Ctrl+Shift+Z undo and redo, and the point table's U and V cells
+move a point to exact coordinates. Points are hollow, selected points filled and
+the anchor a ringed cross, and outlines are drawn dark under white, so state
+never rests on colour and stays visible over any image. Texture space and
+numbers stay left to right in RTL layouts; the controls column scrolls and
+widens to its translated content. Strings use the `LevelUvView`,
+`LevelUvEditorDialog`, `VibeStudioLevelUvEdit` and `LevelUvEditCli` contexts.
+`level-uv-editor-ui-smoke` checks names, roles, focus, fitted buttons and the
+keyboard routes at 100% and at 200% high contrast with expanded RTL text.
+Physical input and native screen-reader acceptance remain open.
 
 The level material status uses text counts, a named progress bar and explicit
 Cancel/Reload/Details controls. Textures is a named, focusable checkbox; missing
@@ -4077,3 +4152,9 @@ fast operations avoid flashing a progress window. Cancellation preserves picks
 as well as map history. Automated offscreen checks cover normal and 200% text,
 high contrast and expanded RTL strings; physical input and screen-reader
 acceptance remain separate production gates.
+
+Configured smart-tag edit commands have translated action labels and status
+tips, palette entries and assignable keys. Their matching-name chooser has
+an accessible name and description and supports keyboard selection/cancel.
+Offscreen smart-tag tests cover both familiar profiles at 100% and 200%,
+high contrast, expanded translations and RTL; physical input remains open.

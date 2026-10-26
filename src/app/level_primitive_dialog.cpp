@@ -13,6 +13,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QSplitter>
 #include <QThread>
@@ -72,7 +73,8 @@ LevelPrimitiveDialog::LevelPrimitiveDialog(const LevelMapDocument &source, const
 	form->addRow(tr("Axis"), m_axis);
 	m_sides = new QSpinBox(m_controls);
 	m_sides->setObjectName(QStringLiteral("primitiveSides"));
-	m_sides->setRange(3, 64);
+	// schedule() narrows this to the chosen shape's limit.
+	m_sides->setRange(3, levelBrushPrimitiveMaxSides(QStringLiteral("cone")));
 	m_sides->setAccessibleName(tr("Radial sides"));
 	m_sides->setLayoutDirection(Qt::LeftToRight);
 	form->addRow(tr("Sides"), m_sides);
@@ -192,6 +194,7 @@ void LevelPrimitiveDialog::setRequest(const LevelBrushPrimitiveRequest &value)
 	m_updating = true;
 	m_shape->setCurrentIndex(m_shape->findData(value.shape));
 	m_axis->setCurrentIndex(value.axis);
+	m_sides->setMaximum(levelBrushPrimitiveMaxSides(value.shape) > 0 ? levelBrushPrimitiveMaxSides(value.shape) : 127);
 	m_sides->setValue(value.sides);
 	m_bands->setValue(value.bands);
 	const std::array<double, 3> low{value.mins.x, value.mins.y, value.mins.z}, high{value.maxs.x, value.maxs.y, value.maxs.z};
@@ -232,6 +235,10 @@ void LevelPrimitiveDialog::schedule()
 	m_progress->show();
 	m_status->setText(tr("Building primitive preview…"));
 	const auto shape = request().shape;
+	{
+		const QSignalBlocker blocker(m_sides);
+		m_sides->setMaximum(levelBrushPrimitiveMaxSides(shape) > 0 ? levelBrushPrimitiveMaxSides(shape) : 127);
+	}
 	m_axis->setEnabled(shape != QStringLiteral("box"));
 	m_sides->setEnabled(shape == QStringLiteral("cylinder") || shape == QStringLiteral("cone") || shape == QStringLiteral("sphere"));
 	m_bands->setEnabled(shape == QStringLiteral("sphere"));

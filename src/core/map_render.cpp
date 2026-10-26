@@ -1,3 +1,4 @@
+#include "core/level_block_grid.h"
 #include "core/level_scene.h"
 #include "core/map_render.h"
 #include "core/level_visibility.h"
@@ -103,6 +104,7 @@ struct RenderPalette {
 	QString highlight;
 	QString leak;
 	QString link;
+	QString block;
 	quint32 sectorDim = 0x000000u;
 	quint32 sectorLit = 0xffffffu;
 };
@@ -127,6 +129,7 @@ RenderPalette paletteFor(bool darkBackground, bool highContrast)
 		palette.highlight = QStringLiteral("#ffff00");
 		palette.leak = QStringLiteral("#ff3030");
 		palette.link = QStringLiteral("#8cb4ff");
+		palette.block = QStringLiteral("#c39bff");
 		palette.sectorDim = 0x000000u;
 		palette.sectorLit = 0x8c8c8cu;
 		return palette;
@@ -148,6 +151,7 @@ RenderPalette paletteFor(bool darkBackground, bool highContrast)
 		palette.highlight = QStringLiteral("#ffd54a");
 		palette.leak = QStringLiteral("#ff5656");
 		palette.link = QStringLiteral("#d68ce0");
+		palette.block = QStringLiteral("#4a78c2");
 		palette.sectorDim = 0x161b22u;
 		palette.sectorLit = 0x59667au;
 		return palette;
@@ -169,6 +173,7 @@ RenderPalette paletteFor(bool darkBackground, bool highContrast)
 		palette.highlight = QStringLiteral("#c60000");
 		palette.leak = QStringLiteral("#e00000");
 		palette.link = QStringLiteral("#4b0082");
+		palette.block = QStringLiteral("#006d6d");
 		palette.sectorDim = 0x9a9a9au;
 		palette.sectorLit = 0xffffffu;
 		return palette;
@@ -189,6 +194,7 @@ RenderPalette paletteFor(bool darkBackground, bool highContrast)
 	palette.highlight = QStringLiteral("#d92b00");
 	palette.leak = QStringLiteral("#d61f1f");
 	palette.link = QStringLiteral("#8e3fa0");
+	palette.block = QStringLiteral("#7f9fd6");
 	palette.sectorDim = 0xd7dce4u;
 	palette.sectorLit = 0xffffffu;
 	return palette;
@@ -920,6 +926,38 @@ QString renderLevelMapSvg(const LevelMapDocument& document, const MapRenderOptio
 		}
 	}
 
+	// The compiler block grid, dashed so it never reads as the grid or an
+	// axis, as the Levels views draw it with Show Block Grid.
+	if (options.showBlockGrid) {
+		if (!levelMapHasBlockGrid(document)) {
+			local.warnings << QCoreApplication::translate("VibeStudioMapRender", "Doom maps have no compiler block grid; the block grid was skipped.");
+		} else {
+			const LevelMapBlockSize blocks = levelMapBlockSize(document);
+			const int horizontal = options.projection == MapRenderProjection::SideZY ? 1 : 0;
+			const int vertical = options.projection == MapRenderProjection::TopXY ? 1 : 2;
+			bool tooManyX = false;
+			bool tooManyY = false;
+			const QVector<double> xs = levelBlockBoundaries(worldLeft, worldRight, blocks.along(horizontal), kMaxGridLines, &tooManyX);
+			const QVector<double> ys = levelBlockBoundaries(worldBottom, worldTop, blocks.along(vertical), kMaxGridLines, &tooManyY);
+			if (tooManyX || tooManyY) {
+				local.warnings << QCoreApplication::translate("VibeStudioMapRender", "Block grid skipped along an axis: %1 world units per pixel would need too many lines.").arg(svgNumber(local.unitsPerPixel));
+			}
+			if (!xs.isEmpty() || !ys.isEmpty()) {
+				const QString attributes = QStringLiteral(" stroke-dasharray=\"8 4\"");
+				const double width = options.highContrast ? 2.0 : 1.4;
+				body += QStringLiteral("  <g id=\"vs-block-grid\">\n");
+				for (const double x : xs) {
+					appendLineElement(&body, view.toPixel(QPointF(x, worldTop)), view.toPixel(QPointF(x, worldBottom)), palette.block, width, attributes, QString());
+				}
+				for (const double y : ys) {
+					appendLineElement(&body, view.toPixel(QPointF(worldLeft, y)), view.toPixel(QPointF(worldRight, y)), palette.block, width, attributes, QString());
+				}
+				body += QStringLiteral("  </g>\n");
+				local.drawnBlockLineCount = static_cast<int>(xs.size() + ys.size());
+			}
+		}
+	}
+
 	// Doom sector fills.
 	if (!scene.sectors.isEmpty()) {
 		body += QStringLiteral("  <g id=\"vs-sectors\">\n");
@@ -1319,6 +1357,9 @@ QString mapRenderReportText(const MapRenderReport& report)
 	}
 	if (report.drawnLeakPointCount > 0) {
 		lines << QCoreApplication::translate("VibeStudioMapRender", "Leak trail points: %1").arg(svgInt(report.drawnLeakPointCount));
+	}
+	if (report.drawnBlockLineCount > 0) {
+		lines << QCoreApplication::translate("VibeStudioMapRender", "Block grid lines: %1").arg(svgInt(report.drawnBlockLineCount));
 	}
 	for (const QString& warning : report.warnings) {
 		lines << QCoreApplication::translate("VibeStudioMapRender", "Warning: %1").arg(warning);

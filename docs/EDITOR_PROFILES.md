@@ -431,6 +431,11 @@ The sweep tool additionally follows the pinned `v2026.2` controller reference:
 viewport. User command overrides replace those local keys. See the
 [sweep workflow](manual/levels.md#sweep-selected-faces) and
 [controller credits](CREDITS.md#brush-face-sweep).
+**B** turns the **Assemble Brush Tool** (TB's Brush Tool, `ActionManager` at
+`4c756be1`) on and off; Return ("Create brush") is the views' own Enter while
+the tool is on, so no window-wide Return shortcut is bound. Other profiles
+leave the tool unbound; it stays in menus, the Tools tab and command search. See
+[Assemble a brush from clicked points](manual/levels.md#assemble-a-brush-from-clicked-points).
 Reference: [TrenchBroom](https://trenchbroom.github.io/). The values follow its
 defaults as of `master` `90de03c`, September 2026 (see docs/CREDITS.md).
 
@@ -579,6 +584,13 @@ plans a VibeMap3 build.
     `radiant/select.cpp` at `449778b3`). NRC's Save Map As has no key, and
     the studio's **Save Map As** keeps Ctrl+Alt+S, so Ctrl+Shift+S is free in
     the Levels page. The NetRadiant baseline leaves both unbound.
+  - Sided prisms: Ctrl+3 to Ctrl+9 rebuild each selected brush as a 3- to
+    9-sided prism along the active 2D view's axis (**Make 3-Sided Prism** to
+    **Make 9-Sided Prism**; `"Brush3Sided"` to `"Brush9Sided"` in
+    `radiant/brushmanip.cpp` at `449778b3`). The 2D views and the camera claim
+    them only while a brush is selected, so the studio's Ctrl+3 to Ctrl+9 mode
+    keys keep working everywhere else. NRC's Prism…, Cone… and Sphere… have no
+    keys there either.
   - Selection: C deselects, and I inverts.
   - Hiding: H hides, and Shift+H shows all.
   - Tools: X is the clipper. Enter clips, Shift+Enter keeps both halves, and
@@ -1134,6 +1146,16 @@ Alignment** (`map.surfaceReset`) and **Natural Texture Mapping**
 (`map.surfaceNatural`). Both resets act on the picked faces first, then the
 Surfaces target (`LevelSurfaceOperation::Reset` and `RadiantReset`). Other
 profiles leave them without keys; NRC's Shift+R stays on **Rotate Precisely…**.
+
+### Surface inspector key
+
+NRC's "SurfaceInspector" in radiant/surfacedialog.cpp at `449778b3` toggles its
+Surface Inspector on S, as NetRadiant `b4b295d7` does. `netradiant-custom`
+binds S to **Show Surfaces** (`map.sidebar.surfaces`), which is checkable and
+hides the **Surface** tab again when it is showing, and `netradiant` inherits
+the key. S is also the camera's fly-back key there, but only in mouse look
+(`flyNeedsLook`), where the camera claims it first. The GtkRadiant 1.4/1.5 and
+Q3Radiant profiles keep S on the batch **Surface Alignment…** window.
 
 ### NRC entity connections
 

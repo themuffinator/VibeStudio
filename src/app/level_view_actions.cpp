@@ -93,7 +93,8 @@ QWidget* ApplicationShell::buildLevelAuthoringBar()
 		// re-add that action to the button and clear its default-action link.
 	};
 	group(QStringLiteral("levelCreateTools"), tr("Create"), QStringLiteral("add"), tr("Create geometry, entities and reusable prefabs."),
-		{QStringLiteral("map.drawBrush"), QStringLiteral("map.addBrush"), QStringLiteral("map.addEntity"), QStringLiteral("map.createEntity"), QStringLiteral("map.addPatch"),
+		{QStringLiteral("map.drawBrush"), QStringLiteral("map.addBrush"), QStringLiteral("map.createBrushFromPoints"), QStringLiteral("map.assembleBrushTool"),
+		 QStringLiteral("map.createAssembledBrush"), QStringLiteral("map.addEntity"), QStringLiteral("map.createEntity"), QStringLiteral("map.addPatch"),
 		 QStringLiteral("map.addThing"), QStringLiteral("map.placeAtCamera"), QStringLiteral("map.drawSector"), QStringLiteral("map.makeSectorMode"), QStringLiteral("map.addSector"), {},
 		 QStringLiteral("map.insertPrefab"), QStringLiteral("map.replaceWithPrefab"), QStringLiteral("map.exportPrefab"), QStringLiteral("map.stagePrefab"), {},
 		 QStringLiteral("map.tieToEntity"), QStringLiteral("map.moveToWorld"), QStringLiteral("map.movePrimitivesToEntity"),
@@ -131,8 +132,9 @@ QWidget* ApplicationShell::buildLevelAuthoringBar()
 		 QStringLiteral("map.vertexTool"), QStringLiteral("map.edgeTool"), QStringLiteral("map.faceTool"),
 		 QStringLiteral("map.componentMoveTool"), QStringLiteral("map.componentRotateTool"), QStringLiteral("map.componentScaleTool"), QStringLiteral("map.componentShearTool"), QStringLiteral("map.componentPivotTool"),
 		 QStringLiteral("map.componentResetPivot"), QStringLiteral("map.componentGizmoOptions"), QStringLiteral("map.transformComponents"), QStringLiteral("map.componentUvLock"), QStringLiteral("map.componentUvFit"), QStringLiteral("map.componentXray"), QStringLiteral("map.splitComponents"),
-		 QStringLiteral("map.extrudeFaces"), QStringLiteral("map.extrudeSplit"), QStringLiteral("map.extrudePrecisely"), QStringLiteral("map.removeComponents"), QStringLiteral("map.snapVertices"), {},
+		 QStringLiteral("map.extrudeFaces"), QStringLiteral("map.extrudeSplit"), QStringLiteral("map.extrudePrecisely"), QStringLiteral("map.removeComponents"), QStringLiteral("map.snapVertices"), QStringLiteral("map.copyVertexCoordinates"), {},
 		 QStringLiteral("map.makeDetail"), QStringLiteral("map.makeStructural"), {},
+		 QStringLiteral("map.makePrism"), QStringLiteral("map.makeCone"), QStringLiteral("map.makeSphere"), {},
 		 QStringLiteral("map.editPatch"), QStringLiteral("map.stitchPatches"), QStringLiteral("map.capPatch"), QStringLiteral("map.thickenPatch"),
 		 QStringLiteral("map.patchInvert"), QStringLiteral("map.patchTranspose"), {},
 		 QStringLiteral("map.splitLinedefs"), QStringLiteral("map.curveLinedefs"), QStringLiteral("map.flipLinedefs"), QStringLiteral("map.mergeVertices"),
@@ -143,8 +145,11 @@ QWidget* ApplicationShell::buildLevelAuthoringBar()
 		 QStringLiteral("map.alignWallTextures")});
 	group(QStringLiteral("levelSurfaceToolsMenu"), tr("Surfaces"), QStringLiteral("image"), tr("Paint, sample and align map materials."),
 		{QStringLiteral("map.paintMaterial"), QStringLiteral("map.sampleMaterial"), QStringLiteral("map.applyTexture"),
-		 QStringLiteral("map.alignSurfaces"), QStringLiteral("map.replaceTexture"), QStringLiteral("map.revealMaterial"), {},
-		 QStringLiteral("map.surfaceReset"), QStringLiteral("map.surfaceRadiantReset"), QStringLiteral("map.resetTextures")});
+		 QStringLiteral("map.alignSurfaces"), QStringLiteral("map.uvEditor"), QStringLiteral("map.replaceTexture"), QStringLiteral("map.revealMaterial"), {},
+		 QStringLiteral("map.surfaceReset"), QStringLiteral("map.surfaceRadiantReset"), QStringLiteral("map.resetTextures"), {},
+		 QStringLiteral("map.surfaceFitWidth"), QStringLiteral("map.surfaceFitHeight"), QStringLiteral("map.surfaceFitU"), QStringLiteral("map.surfaceFitV"),
+		 QStringLiteral("map.surfaceProjectAxial"), QStringLiteral("map.surfaceProjectView"), QStringLiteral("map.surfaceProjectCamera"), {},
+		 QStringLiteral("map.surfaceClearFlags")});
 	// The camera's texture moves and flips, and the fixed-step texture turns,
 	// submenus of Surfaces.
 	if (auto* surfaces = bar->findChild<QToolButton*>(QStringLiteral("levelSurfaceToolsMenu")); surfaces && surfaces->defaultAction()
@@ -206,6 +211,8 @@ QWidget* ApplicationShell::buildLevelAuthoringBar()
 				filters->addAction(action);
 			}
 		}
+		// The tags game or project data define join the kinds as the menu opens.
+		attachLevelFilterTagMenu(filters);
 		const QList<QAction*> entries = selectMenu->actions();
 		const qsizetype showAll = entries.indexOf(m_commands->action(QStringLiteral("map.showAll")));
 		selectMenu->insertMenu(showAll >= 0 && showAll + 1 < entries.size() ? entries.at(showAll + 1) : nullptr, filters);
@@ -339,6 +346,10 @@ MapViewport *ApplicationShell::createLevelPlanViewport(int index)
 
 QString ApplicationShell::currentLevelTool() const
 {
+	// The Assemble Brush tool has no button of its own on the bar.
+	if (levelBrushAssembleActive()) {
+		return QStringLiteral("assemble");
+	}
 	if (m_levelMapViewport && m_levelMapViewport->clipMode()) {
 		return QStringLiteral("clip");
 	}
@@ -367,6 +378,9 @@ void ApplicationShell::chooseLevelTool(const QString &toolId)
 		return;
 	}
 	// One tool at a time: leaving one ends its gesture first.
+	if (toolId != QLatin1String("assemble") && levelBrushAssembleActive()) {
+		setLevelBrushAssembleTool(false);
+	}
 	if (toolId != QLatin1String("clip") && m_levelMapViewport->clipMode()) {
 		setLevelMapClipMode(false);
 	}
@@ -526,6 +540,8 @@ void ApplicationShell::synchronizeLevelPlanViews(bool frame)
 		view->setShowSectorFill(m_levelMapViewport->showSectorFill());
 		view->setShowVertices(m_levelMapViewport->showVertices());
 		view->setShowLabels(m_levelMapViewport->showLabels());
+		view->setShowGridCoordinates(m_levelMapViewport->showGridCoordinates());
+		view->setShowBlockGrid(m_levelMapViewport->showBlockGrid());
 		view->setShowTargetLinks(m_levelMapViewport->showTargetLinks());
 		view->setShowLinkedGroups(m_levelMapViewport->showLinkedGroups());
 		view->setHighContrast(preferences.theme == StudioTheme::HighContrastDark || preferences.theme == StudioTheme::HighContrastLight);

@@ -12,6 +12,7 @@
 
 #include "app/application_shell.h"
 #include "app/studio_actions.h"
+#include "core/level_filter_tags.h"
 #include "core/level_view_filters.h"
 #include "core/package_staging.h"
 
@@ -94,18 +95,22 @@ void ApplicationShell::refreshLevelViewFilterCommands()
 	}
 	m_commands->setEnabled(QStringLiteral("map.invertFilters"), !offered.isEmpty());
 	m_commands->setEnabled(QStringLiteral("map.resetFilters"), !offered.isEmpty());
+	// The tag and class commands follow the same list.
+	refreshLevelDataFilterCommands();
 }
 
 void ApplicationShell::applyLevelViewFilterState(const QStringList& hiddenFilterIds)
 {
 	m_levelFiltersOff = levelViewFiltersFromSaved(levelViewFiltersSavedValue(hiddenFilterIds));
-	m_settings.setShellLayoutState(levelViewFiltersSettingsKey(), levelViewFiltersSavedValue(m_levelFiltersOff));
+	// Kinds and tags are remembered; class filters last for the map session.
+	m_settings.setShellLayoutState(levelViewFiltersSettingsKey(), levelViewFiltersSavedValue(levelViewFiltersWithoutClasses(m_levelFiltersOff)));
 	for (auto it = m_levelFilterBoxes.cbegin(); it != m_levelFilterBoxes.cend(); ++it) {
 		if (QCheckBox* box = it.value()) {
 			const QSignalBlocker blocker(box);
 			box->setChecked(!m_levelFiltersOff.contains(it.key()));
 		}
 	}
+	refreshLevelClassFilterPanel();
 	refreshLevelViewFilterCommands();
 	applyLevelViewFilters();
 	synchronizeLevelPlanViews();
@@ -122,12 +127,28 @@ void ApplicationShell::invertLevelViewFilters()
 		statusBar()->showMessage(tr("Open a map to invert its view filters."), 4000);
 		return;
 	}
-	applyLevelViewFilterState(levelViewFiltersInverted(m_levelMapDocument, m_levelFiltersOff));
+	// The tags game or project data define flip with the built-in kinds;
+	// class filters stay as they are.
+	const bool withTags = levelFilterTagsApply(m_levelMapDocument) && !currentLevelFilterTags().isEmpty();
+	QStringList inverted = levelViewFiltersInverted(m_levelMapDocument, m_levelFiltersOff);
+	if (withTags) {
+		inverted = levelFilterTagsInverted(currentLevelFilterTags(), inverted);
+	}
+	applyLevelViewFilterState(inverted);
 	int hidden = 0;
 	for (const LevelViewFilter& filter : offered) {
 		hidden += m_levelFiltersOff.contains(filter.id) ? 1 : 0;
 	}
-	statusBar()->showMessage(tr("Filters inverted: %n kind(s) now hidden from the views; the map is unchanged.", nullptr, hidden), 4000);
+	if (!withTags) {
+		statusBar()->showMessage(tr("Filters inverted: %n kind(s) now hidden from the views; the map is unchanged.", nullptr, hidden), 4000);
+		return;
+	}
+	int hiddenTags = 0;
+	for (const LevelFilterTag& tag : currentLevelFilterTags().tags) {
+		hiddenTags += m_levelFiltersOff.contains(tag.id) ? 1 : 0;
+	}
+	const QString tags = tr("%n tag(s)", nullptr, hiddenTags);
+	statusBar()->showMessage(tr("Filters inverted: %n kind(s) and %1 now hidden from the views; the map is unchanged.", nullptr, hidden).arg(tags), 4000);
 }
 
 void ApplicationShell::resetLevelViewFilters()

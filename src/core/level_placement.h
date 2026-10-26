@@ -14,10 +14,11 @@
 #include "core/level_visibility.h"
 #include "core/level_entity_connections.h"
 #include "core/level_entity_create.h"
+#include "core/level_smart_tags.h"
 #include <functional>
 
 namespace vibestudio {
-enum class LevelPlacementOperation { Snap, Duplicate, Paste, Mirror, SelectConnectedDoom, Move, Rotate, Resize, AddBrush, AddEntity, AddThing, TransformComponents, WrapMerge, Sweep, ExtractLinkedGroups, Repeat, Copy, Cut, SelectRegion, SelectObjects, Visibility, ConnectEntities, SelectTextured, DeleteObjects, RemoveComponents, RoundToGrid, CreateEntity, MoveToCamera, RepeatTransforms, Scale };
+enum class LevelPlacementOperation { Snap, Duplicate, Paste, Mirror, SelectConnectedDoom, Move, Rotate, Resize, AddBrush, AddEntity, AddThing, TransformComponents, WrapMerge, Sweep, ExtractLinkedGroups, Repeat, Copy, Cut, SelectRegion, SelectObjects, Visibility, ConnectEntities, SelectTextured, DeleteObjects, RemoveComponents, RoundToGrid, CreateEntity, MoveToCamera, RepeatTransforms, Scale, SmartTag };
 enum class LevelPlacementPhase { Preparing, Parsing, Transforming, Inserting, Finalizing, Complete, Building, Arraying, Extracting, Repeating, Copying, Cutting, Selecting, SelectingObjects, Visibility, Connecting, Deleting };
 
 struct LevelPlacementRequest {
@@ -58,6 +59,7 @@ struct LevelPlacementRequest {
 	LevelMapGridRoundRequest gridRound;
 	// CreateEntity: a generated Create <class> command (core/level_entity_create.h).
 	LevelEntityCreateRequest entityCreate;
+	LevelSmartTagRequest smartTag;
 	// RepeatTransforms: the pivot of NetRadiant Custom's Repeat Transforms; invalid
 	// for the centre of the copies (core/level_repeat.h). MoveToCamera uses `paste`.
 	LevelMapVec3 repeatPivot;

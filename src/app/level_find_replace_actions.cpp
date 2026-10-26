@@ -54,6 +54,7 @@ void ApplicationShell::levelMaterialPicks(QVector<LevelSurfaceFace>* faces, QVec
 void ApplicationShell::refreshLevelMaterialFindCommands()
 {
 	if (!m_commands) { return; }
+	refreshLevelSmartTagCommands();
 	LevelSelectionMaterial shared;
 	if (m_levelMapDocument.format != LevelMapFormat::Unknown) {
 		QVector<LevelSurfaceFace> faces;

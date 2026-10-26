@@ -334,6 +334,7 @@ for cap movement, rotation, scaling and cancellation.
 | Isolate Selection | <kbd>Ctrl</kbd>+<kbd>I</kbd> |
 | Hide Selection / Show All Hidden | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>I</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd> |
 | Clip Tool | <kbd>C</kbd> |
+| Assemble Brush Tool | <kbd>B</kbd>; <kbd>Enter</kbd> in a view creates the brush |
 | Smaller Grid / Larger Grid | <kbd>-</kbd>, <kbd>[</kbd> / <kbd>+</kbd>, <kbd>=</kbd>, <kbd>]</kbd> |
 | Snap to Grid | <kbd>Alt</kbd>+<kbd>0</kbd> |
 | Cycle Map View | <kbd>Space</kbd> |
@@ -414,6 +415,7 @@ ID `netradiant-custom`. 3D camera beside a 2D view, 16-unit grid. 3D camera: fir
 | Round Selection to Grid | <kbd>Ctrl</kbd>+<kbd>G</kbd> |
 | Repeat Transforms | <kbd>Ctrl</kbd>+<kbd>R</kbd> |
 | Rotate Selection… / Scale Selection… | <kbd>Shift</kbd>+<kbd>R</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> |
+| Make 3-Sided Prism to Make 9-Sided Prism (in a map view, with a brush selected; otherwise the mode keys) | <kbd>Ctrl</kbd>+<kbd>3</kbd> to <kbd>Ctrl</kbd>+<kbd>9</kbd> |
 | Move to Camera | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> |
 | Connect Entities | <kbd>Ctrl</kbd>+<kbd>K</kbd> |
 | KillConnect Entities (Quake, Nexuiz or Xonotic context) | <kbd>Shift</kbd>+<kbd>K</kbd> |
@@ -431,6 +433,7 @@ ID `netradiant-custom`. 3D camera beside a 2D view, 16-unit grid. 3D camera: fir
 | Rotate Texture + / Rotate Texture − (45° about the texture origin) | <kbd>Shift</kbd>+<kbd>Page Up</kbd> / <kbd>Shift</kbd>+<kbd>Page Down</kbd> |
 | Texture Scale V + / V − / U − / U + (Radiant scale step) | <kbd>Ctrl</kbd>+<kbd>Up</kbd> / <kbd>Ctrl</kbd>+<kbd>Down</kbd> / <kbd>Ctrl</kbd>+<kbd>Left</kbd> / <kbd>Ctrl</kbd>+<kbd>Right</kbd> |
 | Texture Lock | <kbd>Shift</kbd>+<kbd>T</kbd> |
+| Show Surfaces (shows the **Surface** tab, or hides it again; in mouse look <kbd>S</kbd> moves the camera back) | <kbd>S</kbd> |
 | Make Detail / Make Structural | <kbd>Alt</kbd>+<kbd>D</kbd> / <kbd>Alt</kbd>+<kbd>S</kbd> |
 | Move to Layer menu / Expand Selection to Layers | <kbd>Shift</kbd>+<kbd>Q</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Q</kbd> (NetRadiant Custom's <kbd>Ctrl</kbd>+<kbd>Q</kbd> stays **Quit**) |
 
@@ -489,6 +492,7 @@ ID `netradiant`, also `net-radiant`, `xonotic-netradiant`, `netradiant-classic`.
 | Show Grid | <kbd>0</kbd> |
 | Select All of This Class | <kbd>Shift</kbd>+<kbd>A</kbd> |
 | Zoom In / Zoom Out | <kbd>Delete</kbd> / <kbd>Insert</kbd> |
+| Show Surfaces (shows the **Surface** tab, or hides it again; in mouse look <kbd>S</kbd> moves the camera back) | <kbd>S</kbd> |
 | Grid 1 to 256 | <kbd>1</kbd> to <kbd>9</kbd> |
 
 **Select All** and **3D Wireframe** have no key. The NetRadiant Custom keys for vertex, edge and face editing, the

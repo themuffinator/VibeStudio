@@ -191,4 +191,139 @@ inline QByteArray viewFilterMaterialKindsFixture()
 	return text.toUtf8();
 }
 
+// A box brush with outward planes and the same content and surface flags on
+// every face, from x0 to x1 along X; textures as viewFilterBox. Shared by
+// level_filter_tags_smoke_test and its UI test.
+inline QString viewFilterFlaggedBox(int x0, int x1, const QStringList& textures, qint64 contents = 0, qint64 surface = 0)
+{
+	const auto point = [](int x, int y, int z) { return QStringLiteral("( %1 %2 %3 )").arg(x).arg(y).arg(z); };
+	int index = 0;
+	const auto face = [&](const QString& a, const QString& b, const QString& c) {
+		const QString line =
+			QStringLiteral("%1 %2 %3 %4 0 0 0 0.5 0.5 %5 %6 0\n").arg(a, b, c, textures.value(index, textures.value(0))).arg(contents).arg(surface);
+		++index;
+		return line;
+	};
+	QString text = QStringLiteral("{\n");
+	text += face(point(x0, 0, 0), point(x0 + 1, 0, 0), point(x0, 1, 0));
+	text += face(point(x0, 0, 64), point(x0, 1, 64), point(x0 + 1, 0, 64));
+	text += face(point(x0, 0, 0), point(x0, 0, 1), point(x0 + 1, 0, 0));
+	text += face(point(x0, 64, 0), point(x0 + 1, 64, 0), point(x0, 64, 1));
+	text += face(point(x0, 0, 0), point(x0, 1, 0), point(x0, 0, 1));
+	text += face(point(x1, 0, 0), point(x1, 0, 1), point(x1, 1, 0));
+	return text + QStringLiteral("}\n");
+}
+
+// A Quake III map for the tag and class filters:
+// worldspawn: 0 skip all over, 1 hint with skip sides, 2 sfx/fog_red,
+//   3 wall with the fog content bit, 4 water all over, 5 wall with one water
+//   face (its top), 6 wall with the detail bit; patch 0 water;
+// entity 1 trigger_multiple: brush 7; entity 2 trigger_hurt: brush 8;
+// entities 3 light and 4 LIGHT, 5 my_custom_thing; entity 6 func_door:
+//   brush 9.
+inline QByteArray viewFilterTagsFixture()
+{
+	const QString wall = QStringLiteral("base_wall/wall");
+	const QString water = QStringLiteral("liquids/water_calm");
+	const auto at = [](int index) { return index * 64; };
+	QString text = QStringLiteral("// Game: Quake 3\n{\n\"classname\" \"worldspawn\"\n");
+	text += viewFilterFlaggedBox(at(0), at(1), {QStringLiteral("common/skip")});
+	text += viewFilterFlaggedBox(at(1), at(2), {QStringLiteral("common/skip"), QStringLiteral("common/hint"), QStringLiteral("common/skip")});
+	text += viewFilterFlaggedBox(at(2), at(3), {QStringLiteral("sfx/fog_red")});
+	text += viewFilterFlaggedBox(at(3), at(4), {wall}, 0x40);
+	text += viewFilterFlaggedBox(at(4), at(5), {water});
+	text += viewFilterFlaggedBox(at(5), at(6), {wall, water, wall});
+	text += viewFilterFlaggedBox(at(6), at(7), {wall}, 0x8000000);
+	text += viewFilterPatch(0, 0, 128, water);
+	text += QStringLiteral("}\n{\n\"classname\" \"trigger_multiple\"\n");
+	text += viewFilterFlaggedBox(at(7), at(8), {QStringLiteral("common/trigger")});
+	text += QStringLiteral("}\n{\n\"classname\" \"trigger_hurt\"\n");
+	text += viewFilterFlaggedBox(at(8), at(9), {QStringLiteral("common/trigger")});
+	text += QStringLiteral("}\n"
+						   "{\n\"classname\" \"light\"\n\"origin\" \"32 32 96\"\n}\n"
+						   "{\n\"classname\" \"LIGHT\"\n\"origin\" \"96 32 96\"\n}\n"
+						   "{\n\"classname\" \"my_custom_thing\"\n\"origin\" \"160 32 96\"\n}\n"
+						   "{\n\"classname\" \"func_door\"\n");
+	text += viewFilterFlaggedBox(at(9), at(10), {QStringLiteral("base_door/door")});
+	text += QStringLiteral("}\n");
+	return text.toUtf8();
+}
+
+// Tags in TrenchBroom's layout for viewFilterTagsFixture(), with five
+// entries that cannot be used.
+inline QByteArray viewFilterTagLayout()
+{
+	return QByteArrayLiteral(R"({
+  "brush": [
+    { "name": "Triggers", "attribs": [ "transparent" ], "match": "classname", "pattern": "trigger_*", "texture": "common/trigger" }
+  ],
+  "brushface": [
+    { "name": "Water", "match": "material", "pattern": "*water*" },
+    { "name": "Fog Volume", "match": "surfaceparm", "pattern": "fog" },
+    { "name": "Detail", "match": "contentflag", "flags": [ "detail" ] },
+    { "name": "Mist", "match": "contentflag", "flags": [ 64 ] },
+    { "name": "Skip Faces", "match": "texture", "pattern": "common/skip" },
+    { "name": "Bad Match", "match": "colour", "pattern": "red" },
+    { "match": "texture", "pattern": "nameless" },
+    { "name": "No Pattern", "match": "texture" },
+    { "name": "Face Class", "match": "classname", "pattern": "func_*" },
+    { "name": "water", "match": "texture", "pattern": "again" }
+  ]
+})");
+}
+
+// A game configuration written the way TrenchBroom writes its own, which is
+// not strict JSON: '//' and '/* */' comments, bare names, a comma before a
+// closing bracket, an exponent, and "\**" (an escaped '*' and then any run,
+// so textures whose names start with '*'). Original test data in that
+// layout; tags Trigger, Liquid, Hint and Murk, murk being content bit 1.
+inline QByteArray viewFilterTrenchBroomConfig()
+{
+	return QByteArrayLiteral(R"({
+    "version": 8, // the layout version
+    "name": "Example",
+    /* the definitions and
+       the model scale expression */
+    "entities": { "definitions": [ "Example.fgd" ], "scale": [ modelscale, modelscale_vec ] },
+    "tags": {
+        "brush": [
+            {
+                "name": "Trigger",
+                "attribs": [ "transparent" ],
+                "match": "classname",
+                "pattern": "trigger*",
+                "texture": "trigger" // what Turn into Trigger would set
+            }
+        ],
+        "brushface": [
+            { "name": "Liquid", "match": "texture", "pattern": "\**" },
+            { "name": "Hint", "match": "texture", "pattern": "hint*" }, // a trailing comma follows
+            { "name": "Murk", "match": "contentflag", "flags": [ "murk" ] },
+        ]
+    },
+    "faceattribs": {
+        "surfaceflags": [],
+        "contentflags": [
+            { "unused": true }, // 1
+            { "name": "murk", "description": "Murky water" } // 2
+        ]
+    },
+    "ratio": 1.5e-1
+}
+)");
+}
+
+// A Quake map for the configuration above: brush 0 *water1 all over, brush 1
+// ground with a *lava1 top (face 1), brush 2 ground.
+inline QByteArray viewFilterQuakeLiquidFixture()
+{
+	QString text = QStringLiteral("{\n\"classname\" \"worldspawn\"\n\"wad\" \"gfx/base.wad\"\n");
+	text += viewFilterFlaggedBox(0, 64, {QStringLiteral("*water1")});
+	text += viewFilterFlaggedBox(64, 128, {QStringLiteral("ground1_6"), QStringLiteral("*lava1"), QStringLiteral("ground1_6")});
+	text += viewFilterFlaggedBox(128, 192, {QStringLiteral("ground1_6")});
+	text += QStringLiteral("}\n");
+	// Quake faces carry no flags.
+	return text.replace(QStringLiteral(" 0 0 0\n"), QStringLiteral("\n")).toUtf8();
+}
+
 } // namespace vibestudio::tests

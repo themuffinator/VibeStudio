@@ -309,6 +309,8 @@ static LevelEditorControls familiarLevelControlsWithoutNudges(const QString& id)
 		// the rest) stay as well: b4b295d7 filters.cpp ConstructFilters binds
 		// the same ones. So do End for Level Camera and Tab as the free-focus
 		// key: b4b295d7 camwindow.cpp binds CenterView and CameraFreeFocus too.
+		// S for Show Surfaces stays as well: b4b295d7 surfacedialog.cpp binds
+		// its SurfaceInspector toggle to S.
 		const QStringList nrcOnly{QStringLiteral("map.vertexTool"), QStringLiteral("map.edgeTool"), QStringLiteral("map.faceTool"),
 			QStringLiteral("map.patchInsertRows"), QStringLiteral("map.patchInsertColumns"), QStringLiteral("map.patchDeleteLastRows"),
 			QStringLiteral("map.patchDeleteLastColumns"), QStringLiteral("map.patchInvert"), QStringLiteral("map.patchTranspose"),

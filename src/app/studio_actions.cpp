@@ -5,6 +5,8 @@
 
 #include "core/editor_profiles.h"
 #include "core/level_entity_create.h"
+#include "core/level_filter_tags.h"
+#include "core/level_smart_tags.h"
 
 #include <QAbstractItemView>
 #include <QAbstractButton>
@@ -852,9 +854,11 @@ QHash<QString, QStringList> StudioCommandRegistry::userShortcuts() const
 		}
 	}
 	// A key given to Create light stays while a map whose definitions have
-	// no light is open, so saving other keys then does not lose it.
+	// no light is open, so saving other keys then does not lose it; so does a
+	// key for a class or tag filter whose class or tag is not loaded.
 	for (auto it = m_userShortcuts.cbegin(); it != m_userShortcuts.cend(); ++it) {
-		if (!registered.contains(it.key()) && levelEntityCreateClassForCommand(it.key())) {
+		if (!registered.contains(it.key())
+			&& (levelEntityCreateClassForCommand(it.key()) || levelFilterClassForCommand(it.key()) || levelFilterTagForCommand(it.key()) || levelSmartTagForCommand(it.key()))) {
 			shortcuts.insert(it.key(), it.value());
 		}
 	}

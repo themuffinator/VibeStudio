@@ -476,6 +476,7 @@ void ApplicationShell::setLevelComponentMode(int mode, bool convertSelection)
 		}
 		setLevelShearMode(false);
 		setLevelRegionDrawMode(false);
+		setLevelBrushAssembleTool(false);
 		if (m_levelMap3D) { m_levelMap3D->setSurfaceTool(ModelViewportSurfaceTool::None); }
 	}
 	for (MapViewport* view : std::as_const(m_levelPlanViews)) {
@@ -913,6 +914,7 @@ void ApplicationShell::setLevelRegionDrawMode(bool enabled)
 	}
 	if (enabled) {
 		setLevelComponentMode(0);
+		setLevelBrushAssembleTool(false);
 		if (!levelMap2DShowing()) {
 			setLevelMap3D(false);
 		}

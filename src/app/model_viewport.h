@@ -33,6 +33,7 @@
 #include "core/model_trackball.h"
 #include "app/model_vertex_overlay.h"
 #include "app/level_clip_state.h"
+#include "app/level_brush_assemble_state.h"
 #include "app/viewport_hud.h"
 #include "core/level_clip_drag.h"
 
@@ -459,6 +460,31 @@ public:
 	[[nodiscard]] bool brushDrawValid() const { return m_brushDrawValid; }
 	[[nodiscard]] ResizeBox brushDrawBox() const { return m_brushDrawBox; }
 
+	// The Assemble Brush tool (model_viewport_assemble.cpp): clicks put grid
+	// points on brush faces, or on the construction plane where no face is
+	// under the pointer; a drag from a face draws a grid rectangle on its
+	// plane; Shift-drag extrudes a flat outline; double-click adds a face's
+	// corners. The owner shares the points with the plan views, checks the
+	// hull and creates the brush through its undoable document service.
+	void setBrushAssembleTool(bool enabled);
+	[[nodiscard]] bool brushAssembleTool() const { return m_assembleTool; }
+	bool setBrushAssembleState(const LevelBrushAssembleState& state);
+	[[nodiscard]] const LevelBrushAssembleState& brushAssembleState() const { return m_assembleState; }
+	void setBrushAssemblePreview(const LevelBrushAssemblePreview& preview);
+	[[nodiscard]] const LevelBrushAssemblePreview& brushAssemblePreview() const { return m_assemblePreview; }
+	// Resolve a visible mesh triangle to its brush face's plane and corners.
+	void setBrushAssembleSurfaceResolver(std::function<bool(int,LevelBrushAssembleSurface*)> resolver) { m_assembleSurfaceResolver = std::move(resolver); }
+	bool beginBrushAssemble(const QPointF& point, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
+	bool updateBrushAssemble(const QPointF& point);
+	void finishBrushAssemble(bool commit);
+	[[nodiscard]] bool isAssemblingBrush() const { return m_assembleGesture != 0; }
+	bool addBrushAssembleFace(const QPointF& point);
+	void removeLastBrushAssemblePoint();
+	void clearBrushAssemblePoints();
+	void requestBrushAssemble();
+	[[nodiscard]] QPointF brushAssemblePointPosition(int index);
+	[[nodiscard]] QString brushAssembleSummary(bool full = true) const;
+
 	[[nodiscard]] QString hoverSummary() const;
 	[[nodiscard]] QStringList statusLines() const;
 	// One line for the readout under the viewport: frame, animation, playback,
@@ -580,6 +606,9 @@ Q_SIGNALS:
 	void clipStateChanged();
 	void clipModeChanged(bool enabled);
 	void clipRequested();
+	void brushAssembleToolChanged(bool enabled);
+	void brushAssembleStateChanged();
+	void brushAssembleRequested();
 
 protected:
 	void paintEvent(QPaintEvent* event) override;
@@ -596,6 +625,25 @@ protected:
 	void leaveEvent(QEvent* event) override;
 
 private:
+	void paintBrushAssemble(QPainter& painter);
+	bool brushAssembleSurfaceAt(const QPointF& point, LevelBrushAssembleSurface* surface, LevelMapVec3* hit);
+	void updateBrushAssembleHover(const QPointF& point, Qt::KeyboardModifiers modifiers);
+	void updateBrushAssembleReadout();
+	bool m_assembleTool = false;
+	// 0 none, 1 a click or face rectangle, 2 an outline extrusion.
+	int m_assembleGesture = 0;
+	bool m_assembleDragged = false;
+	bool m_assembleChanging = false;
+	bool m_assembleHoverOutline = false;
+	QPointF m_assemblePress;
+	LevelMapVec3 m_assembleAnchor;
+	LevelBrushAssembleSurface m_assembleSurface;
+	LevelBrushAssembleState m_assembleState, m_assembleBefore;
+	// The points' shape without the hull: the flat outline Shift-drag picks.
+	LevelBrushAssembleOutline m_assembleOutline;
+	LevelBrushAssemblePreview m_assemblePreview;
+	QString m_assembleMessage;
+	std::function<bool(int,LevelBrushAssembleSurface*)> m_assembleSurfaceResolver;
 	void paintClip(QPainter& painter);
 	[[nodiscard]] QString clipSummary() const;
 	bool chooseCameraClipAxis(LevelClipState* state,bool preserveAxis);

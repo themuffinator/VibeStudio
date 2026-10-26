@@ -1,6 +1,8 @@
 #include "core/studio_semantics.h"
 
 #include "core/level_entity_create.h"
+#include "core/level_filter_tags.h"
+#include "core/level_smart_tags.h"
 
 #include <QCoreApplication>
 #include <QHash>
@@ -1508,6 +1510,10 @@ QVector<CommandPaletteEntry> commandPaletteEntries()
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show or hide the grid lines in the 2D view.")},
 		{"map-toggle-snap", "map.toggle-snap", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Snap to Grid"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Turn grid snapping for drags, nudges, and drawn brushes on or off.")},
+		{"map-toggle-grid-coordinates", "map.toggle-grid-coordinates", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show Grid Coordinates"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Label the grid lines with their coordinates along the bottom and leading edges of the 2D views; the choice is kept.")},
+		{"map-toggle-block-grid", "map.toggle-block-grid", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show Block Grid"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Draw dashed lines in the 2D views where the compiler splits the world into blocks, from worldspawn _blocksize; the choice is kept.")},
 		{"map-grid-0.125", "map.grid0.125", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Grid 0.125"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Set the Levels grid to 0.125 units, the finest. Doom and Hexen maps stop at 1 unit.")},
 		{"map-grid-0.25", "map.grid0.25", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Grid 0.25"),
@@ -1596,6 +1602,40 @@ QVector<CommandPaletteEntry> commandPaletteEntries()
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Move only the selected brushes and patches to worldspawn; their entities keep the rest and their keys.")},
 		{"map-make-structural", "map.make-structural", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Make Structural"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Clear detail on the selected brushes. In the TrenchBroom profile they also leave brush entities for the world or current group.")},
+		// NetRadiant Custom's Brush > Prism, Cone and Sphere and its Make 3- to
+		// 9-Sided keys (app/level_prism_actions.cpp, core/level_shapes.h).
+		{"map-make-prism", "map.make-prism", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Make Prism…"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Rebuild each selected brush in place as a prism with the sides you choose, along the active view's depth axis, round on its larger extent, in the current material.")},
+		{"map-make-cone", "map.make-cone", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Make Cone…"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Rebuild each selected brush in place as a cone with the sides you choose, pointing up the active view's depth axis, in the current material.")},
+		{"map-make-sphere", "map.make-sphere", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Make Sphere…"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Rebuild each selected brush in place as a faceted sphere on its largest extent, poles on Z, in the current material.")},
+		{"map-make-3-sided-prism", "map.make3-sided-prism", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Make 3-Sided Prism"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Rebuild each selected brush in place as a three-sided prism along the active view's depth axis, in the current material.")},
+		{"map-make-4-sided-prism", "map.make4-sided-prism", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Make 4-Sided Prism"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Rebuild each selected brush in place as a square prism on its larger extent along the active view's depth axis, in the current material.")},
+		{"map-make-5-sided-prism", "map.make5-sided-prism", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Make 5-Sided Prism"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Rebuild each selected brush in place as a five-sided prism along the active view's depth axis, in the current material.")},
+		{"map-make-6-sided-prism", "map.make6-sided-prism", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Make 6-Sided Prism"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Rebuild each selected brush in place as a six-sided prism along the active view's depth axis, in the current material.")},
+		{"map-make-7-sided-prism", "map.make7-sided-prism", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Make 7-Sided Prism"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Rebuild each selected brush in place as a seven-sided prism along the active view's depth axis, in the current material.")},
+		{"map-make-8-sided-prism", "map.make8-sided-prism", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Make 8-Sided Prism"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Rebuild each selected brush in place as an eight-sided prism along the active view's depth axis, in the current material.")},
+		{"map-make-9-sided-prism", "map.make9-sided-prism", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Make 9-Sided Prism"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Rebuild each selected brush in place as a nine-sided prism along the active view's depth axis, in the current material.")},
+		// TrenchBroom's Create Brush and Print Vertices
+		// (app/level_brush_points_actions.cpp, core/level_brush_points.h).
+		{"map-create-brush-from-points", "map.create-brush-from-points", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Create Brush from Points…"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Type four or more points and add the convex brush that encloses them, in the current material, as one undo step.")},
+		// TrenchBroom's Brush Tool and its Create Brush (Return)
+		// (app/level_brush_assemble_actions.cpp, core/level_brush_assemble.h).
+		{"map-assemble-brush-tool", "map.assemble-brush-tool", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Assemble Brush Tool"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Click surfaces or the grid to collect points, drag faces, Shift-drag a flat outline to extrude it, and press Enter for their convex brush.")},
+		{"map-create-assembled-brush", "map.create-assembled-brush", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Create Assembled Brush"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Add the convex brush enclosing the Assemble Brush tool's points, in the current material, as one undo step.")},
+		{"map-copy-vertex-coordinates", "map.copy-vertex-coordinates", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Copy Vertex Coordinates"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Copy the corners of the picked faces, edges and vertices, or else of the selected brushes, at full precision.")},
 		{"map-explode-entity", "map.explode-entity", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Explode Entity"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Give every brush and patch of the selected brush entities its own entity with identical keys.")},
 		{"map-explode-entity-unique", "map.explode-entity-unique", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Explode Entity, Unique Names"),
@@ -1620,6 +1660,8 @@ QVector<CommandPaletteEntry> commandPaletteEntries()
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Preview a convex hull with up to three extra XYZ points and compare it with its source objects.")},
 		{"map-align-surfaces", "map.align-surfaces", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Surface Alignment"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Shift, scale, rotate, fit and align selected brush faces using package material dimensions.")},
+		{"map-uv-editor", "map.uv-editor", QT_TRANSLATE_NOOP("VibeStudioSemantics", "UV Editor"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Drag the picked face's or selected patch's points over its material image: move the texture, turn it about an anchor, zoom, pan and nudge, with a live preview, as one undo step.")},
 		{"map-copy-surface", "map.copySurface", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Copy Surface"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Copy one brush face's material, mapping and flags into the surface clipboard.")},
 		{"map-paste-surface", "map.pasteSurface", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Paste Surface"),
@@ -2013,10 +2055,25 @@ QVector<CommandPaletteEntry> commandPaletteEntries()
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Mirror the texture mapping of the targeted faces and patches along U.")},
 		{"map.surface-flip-v", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Flip Texture V"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Mirror the texture mapping of the targeted faces and patches along V.")},
-		{"map.surface-fit-u", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Fit Texture Width"),
-			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Fit one texture repeat across the width of each targeted face or patch.")},
-		{"map.surface-fit-v", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Fit Texture Height"),
-			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Fit one texture repeat across the height of each targeted face or patch.")},
+		{"map.surface-fit-u", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Fit Texture Width Only"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Fit one texture repeat across the width of each targeted face or patch, keeping its height.")},
+		{"map.surface-fit-v", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Fit Texture Height Only"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Fit one texture repeat across the height of each targeted face or patch, keeping its width.")},
+		// NetRadiant Custom's Fit Width and Fit Height, and its Project Axial,
+		// Ortho and Camera (core/level_surface.h).
+		{"map.surface-fit-width", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Fit Texture Width"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Fit one texture repeat across the width of each targeted face or patch and scale its height to match.")},
+		{"map.surface-fit-height", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Fit Texture Height"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Fit one texture repeat down the height of each targeted face or patch and scale its width to match.")},
+		{"map.surface-project-axial", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Project Texture Axially"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Project the default texture along the world axis each picked or targeted face looks down most, and patches along the axis nearest their facing.")},
+		{"map.surface-project-view", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Project Texture from 2D View"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Project the default texture onto the picked or targeted faces and patches straight from the active 2D view.")},
+		{"map.surface-project-camera", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Project Texture from Camera"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Project the default texture onto the picked or targeted faces and patches along the 3D camera's view.")},
+		// NetRadiant Custom's Surface Inspector Unset (core/level_face_flags.h).
+		{"map.surface-clear-flags", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Clear Face Flags"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Clear every content and surface flag and the value of the picked or targeted brush faces, keeping the detail flag.")},
 		{"map.surface-justify-left", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Justify Texture Left"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Line the texture up with the left edge of each targeted face or patch.")},
 		{"map.surface-justify-right", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Justify Texture Right"),
@@ -2207,8 +2264,10 @@ QVector<CommandPaletteEntry> commandPaletteEntries()
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show or hide weapclip, fullclip and other weapon clip brushes and patches in the Levels views.")},
 		{"map.filter-botclip", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Filter: Bot Clip"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show or hide Quake III botclip and donotenter brushes in the Levels views.")},
-		{"map.filter-hint", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Filter: Hint and Skip"),
-			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show or hide brushes with hint or skip faces in the Levels views.")},
+		{"map.filter-hint", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Filter: Hint"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show or hide brushes with a hint face in the Levels views.")},
+		{"map.filter-skip", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Filter: Skip"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show or hide brushes skipped on every face in the Levels views, and skip faces on other brushes, such as a hint brush's sides, in the camera.")},
 		{"map.filter-caulk", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Filter: Caulk"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show or hide brushes caulked on every face in the Levels views, and caulk faces on other brushes in the camera.")},
 		{"map.filter-nodraw", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Filter: Nodraw"),
@@ -2223,6 +2282,8 @@ QVector<CommandPaletteEntry> commandPaletteEntries()
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show or hide brushes with a sky face in the Levels views; Quake III shaders count when they declare skyParms.")},
 		{"map.filter-liquids", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Filter: Liquids"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show or hide water, slime and lava brushes in the Levels views, by Quake III surfaceparm, content flag or texture name.")},
+		{"map.filter-fog", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Filter: Fog"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show or hide Quake III fog volumes in the Levels views, by shader, the fog content flag or texture name.")},
 		{"map.filter-translucent", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Filter: Translucent"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show or hide glass, grates and other see-through brushes and patches: Quake II translucency flags, fence textures, or qer_trans, alphaFunc and fog shaders.")},
 		{"map.filter-decals", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Filter: Decals"),
@@ -2282,7 +2343,7 @@ QVector<CommandPaletteEntry> commandPaletteEntries()
 		{"map.sidebar.inspector", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show Inspector"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show the selection's keys, fields, position and definition, to edit in place.")},
 		{"map.sidebar.surfaces", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show Surfaces"),
-			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show texture alignment for the targeted faces: shift, scale, rotate, fit, copy and paste.")},
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show the Surfaces tab, or hide it again: texture alignment, projection and face flags for the targeted faces.")},
 		{"map.sidebar.map", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show Map"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show worldspawn keys, the pre-build checklist, statistics and the entity definitions in use.")},
 		{"map.sidebar.view", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Show View"),
@@ -2345,6 +2406,42 @@ bool commandPaletteEntryForCommandId(const QString& commandId, CommandPaletteEnt
 		}
 		return true;
 	}
+	// So are the Toggle <class> Visible commands, and the Toggle <tag> Visible
+	// commands of the tags game or project data define (core/level_filter_tags.h).
+	if (levelFilterClassForCommand(commandId, &className)) {
+		if (out) {
+			*out = paletteEntry(QString(requested).replace(QLatin1Char('.'), QLatin1Char('-')), commandId.trimmed(),
+				QCoreApplication::translate("VibeStudioSemantics", "Toggle %1 Visible").arg(className), QCoreApplication::translate("VibeStudioSemantics", "Levels"),
+				QCoreApplication::translate("VibeStudioSemantics",
+					"Show or hide every %1 entity in the Levels views, those added later included. The filter lasts for the map session and never changes the map.")
+					.arg(className));
+		}
+		return true;
+	}
+	QString tagId;
+	bool tagEnabled = false;
+	if (levelSmartTagForCommand(commandId, &tagId, &tagEnabled)) {
+		if (out) {
+			const QString tag = tagId.mid(4);
+			*out = paletteEntry(QString(requested).replace(QLatin1Char('.'), QLatin1Char('-')), commandId.trimmed(),
+				tagEnabled ? QCoreApplication::translate("VibeStudioSemantics", "Make %1").arg(tag)
+					: QCoreApplication::translate("VibeStudioSemantics", "Make non-%1").arg(tag),
+				QCoreApplication::translate("VibeStudioSemantics", "Levels"),
+				QCoreApplication::translate("VibeStudioSemantics", "Apply or remove a configured tag on the selection in one undo step."));
+		}
+		return true;
+	}
+	if (levelFilterTagForCommand(commandId, &tagId)) {
+		if (out) {
+			const QString tag = tagId.mid(4);
+			*out = paletteEntry(QString(requested).replace(QLatin1Char('.'), QLatin1Char('-')), commandId.trimmed(),
+				QCoreApplication::translate("VibeStudioSemantics", "Toggle %1 Visible").arg(tag), QCoreApplication::translate("VibeStudioSemantics", "Levels"),
+				QCoreApplication::translate("VibeStudioSemantics",
+					"Show or hide what the %1 tag of the game or project data names in the Levels views. The map is unchanged.")
+					.arg(tag));
+		}
+		return true;
+	}
 	return false;
 }
 
@@ -2379,8 +2476,10 @@ bool shellCommandIdExists(const QString& commandId)
 		}
 		return ids;
 	}();
-	// Create <class> commands exist for whatever classes the definitions name.
-	return registered.contains(requested) || levelEntityCreateClassForCommand(commandId);
+	// Create <class> commands exist for whatever classes the definitions name,
+	// and filter commands for whatever classes and tags data names.
+	return registered.contains(requested) || levelEntityCreateClassForCommand(commandId) || levelFilterClassForCommand(commandId)
+		|| levelFilterTagForCommand(commandId) || levelSmartTagForCommand(commandId);
 }
 
 QString statusChipSummaryText()

@@ -656,6 +656,15 @@ Unknown/duplicate options and extra positional arguments fail. JSON contains the
 bounds, material and output path. Geometry is validated in the destination map's
 current face dialect before one undoable insertion. See
 [Brush Primitives](LEVEL_EDITOR.md#brush-primitives) for detail limits and JSON fields.
+`map add-brush --points "x,y,z x,y,z ..."` instead adds the convex envelope of
+four or more typed points through `core/level_brush_points.h`, the service
+behind the GUI's **Create Brush from Points…** (TrenchBroom's Create Brush);
+it excludes the shape options, checks the points before loading the map, and
+reports a `points` object. `--extrude dx,dy,dz` (with `--points`) first adds a
+copy of every point moved by that offset (`levelBrushPointsExtruded` in
+`core/level_brush_assemble.h`), the scripted form of the **Assemble Brush
+Tool**'s Shift-drag extrusion; the tool's other gestures only collect points,
+so this route and repeated `--points` cover what it creates.
 
 - `package recoveries [--directory <store>]` lists bounded local checkpoint
   metadata and logical storage totals in `inventory`, with configured `limits`;
@@ -1514,6 +1523,31 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
   All faces retain their dialect and share one undo transaction. `map edit`
   also accepts `faceN.matrix00` through `faceN.matrix12`, or an atomic
   `faceN.matrix=a,b,c,d,e,f`. See [Surface Alignment](LEVEL_EDITOR.md#surface-alignment).
+- [x] `map face-flags <map>` reads or changes the content and surface flags and
+  value of Quake II and Quake III brush faces through `core/level_face_flags.h`,
+  the service behind the Levels **Surfaces** tab's **Flags** section. Name faces
+  with repeatable `--object brush:ID|entity:ID` and `--face brushId:faceNumber`
+  (one-based). Without changes it reports each face's flags by name, and with no
+  faces the game's flag names (`contentNames`, `surfaceNames`). `--set-content`,
+  `--clear-content`, `--set-surface` and `--clear-surface` take comma-separated
+  flag names or numbers (decimal or `0x` hex) and leave every other bit alone;
+  `--value N` sets the surface value; `--clear-all` clears every flag but detail
+  and sets the value to 0, NetRadiant Custom's Unset. The detail flag belongs to
+  `map detail`; hidden faces, locked layers and faces outside `--context` are
+  refused. One undo step; requires `--output`, with `--dry-run`, `--overwrite`
+  and `--json` (`changedFaces`, `brushes`, the bits by name, `value`).
+- [x] `map edit-uv <map> --target face:brushId:faceNumber|patch:id` lists or
+  edits one brush face's winding or one patch's control points in texture space
+  (texels, U right and V down) through `core/level_uv_edit.h`, the service
+  behind the Levels **UV Editor** (NetRadiant Custom's TexTool). Without a change
+  it lists each point's world position and texel coordinates. One change:
+  `--move-point N --to U,V` (a face's whole texture follows; a patch point moves
+  alone), `--offset U,V` (a patch's `--points` list) or `--rotate DEG` about
+  `--anchor N` or the centre. Classic faces that cannot hold a turn exactly take
+  the nearest classic mapping unless `--allow-valve220`. Brush-primitive faces and
+  patches need `--package` or `--texture-size W,H`. Hidden, locked and
+  out-of-`--context` targets are refused. One undo step; requires `--output`,
+  with `--dry-run`, `--overwrite` and `--json` (`format`, `points`, `fit`).
 - [x] `map copy-surface <map> --target face:brushId:faceNumber --output surface.json`
   copies one face's material, mapping and flags to a versioned JSON clipboard.
   Face numbers are one-based. `map paste-surface <map> --clipboard surface.json`
@@ -1600,6 +1634,10 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
 - [x] `map brush-components <map> --brush <id>` reports solved zero-based vertex,
   edge and face IDs, positions and face materials. JSON includes a `brush`
   object with `vertices`, `edges` and `faces` arrays. Re-query IDs after editing.
+  Repeated `--brush` options or comma-separated IDs list several brushes in
+  order (JSON `brushes`, with `brush` kept for the first); each face carries
+  its corners' `positions`, and plain text prints coordinates at full
+  precision, as TrenchBroom's Print Vertices logs them.
 - [x] `map extrude-faces <map> --face <brush:face> [--face <brush:face> ...]
   --distance <units> --output <map>` moves selected planes along the first
   face's normal, preserving every original face. One face per brush and
@@ -1760,6 +1798,15 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
   `--start`, `--steps` and `--rise auto|+x|-x|+y|-y`; any other is a usage
   error. Arches, rings, stairs and rooms are several brushes, one undo step in
   the editor. JSON reports `shape`, the new `brushes` and the `replaced` ones.
+  `--fit box|circle` (cylinders, cones and spheres; `map add-brush` takes it
+  too) chooses between filling the box and NetRadiant Custom's fit, round on
+  the larger extent with a face on the first axis. `--in-place` rebuilds each
+  `--object` brush within its own bounds as a box, wedge, cylinder, cone or
+  sphere, as NetRadiant Custom's Brush > Prism, Cone and Sphere do: world and
+  brush-entity brushes keep their ids, owners, layers or groups, file order and
+  face format, in one undo step. JSON then reports `inPlace`, `fit`, the
+  rebuilt `brushes` and the `skipped` reasons (hidden or too small brushes).
+  Cylinders take up to 126 sides and cones 127.
 - [x] `map align <map> --object brush:3 --object brush:4 --axis x|y|z --edge
   min|centre|max --output <path>` lines the objects up on the minimum, centre or
   maximum of their combined bounds, as Hammer's Align Objects does: entities
@@ -1872,8 +1919,14 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
   at a time (`faceCount`, `filteredFaces`). `--package` reads a Quake III map's
   shader scripts through the material library for the material kinds
   (Translucent, Liquids, Sky, Clip and its parts, Bot Clip, Nodraw) and reports
-  them as `shaders`. Nothing is written. See the
-  [view filters CLI manual](manual/cli.md#query-view-filters).
+  them as `shaders`. `--tags file` (a tag file or a TrenchBroom game
+  configuration) and `--project folder` (the manifest's `levelFilterTags`) add
+  the filter tags game or project data define, through `core/level_filter_tags`,
+  reported as `tags` with counts and `map.filterTag.<name>` commands; `--off`
+  takes `tag:<name>` ids and `--invert` flips them. `--class name,...` switches
+  off entity class filters, and `--classes` lists every class of the map and of
+  `--definitions file` (else the game's built-in classes) as `classes`. Nothing is
+  written. See the [view filters CLI manual](manual/cli.md#query-view-filters).
 - [x] `map camera-focus <map> [--object selector...] [--level]` reports where
   **Level Camera** and **Focus Camera on Selection** would put the 3D camera,
   through `core/level_camera_focus`: `--camera-yaw`, `--camera-pitch`, `--fov`,
@@ -1884,7 +1937,9 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
 - [x] `map visibility <map> --mode hide|show-all|isolate` queries temporary
   visibility using repeated `--object` and `--hidden` selectors and optional
   `--context`. JSON reports explicit/effective hidden selectors, selection and
-  source hash; no map or undo session is written. See the
+  source hash; repeated `--class name` adds entity class filters and reports
+  `classFilters`, `classFiltered` and `viewHidden` through
+  `core/level_filter_tags`. No map or undo session is written. See the
   [visibility CLI manual](manual/cli.md#query-temporary-level-visibility).
 - [x] `map select-type <map> --object brush:12` queries all selected owner
   classes. `--material` supplies the material fallback or face query source;
@@ -2067,7 +2122,9 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
 - [x] `map compile-plan` for profile-backed compiler command review.
 - [x] `map render` for deterministic SVG pictures of Doom and Quake-family maps,
   usable from CI and documentation without a display; `--leak` adds a compiler
-  leak trail and `--links` adds entity target links. Both are opt-in, so a
+  leak trail, `--links` adds entity target links and `--block-grid` adds the
+  compiler block grid from worldspawn `_blocksize` (`core/level_block_grid.h`,
+  shared with the Levels views' **Show Block Grid**). All are opt-in, so a
   picture made without them stays byte-identical.
 - [x] `map textures` to check every texture a map references against the
   textures a package or folder actually provides, separating genuinely missing
@@ -3352,3 +3409,16 @@ boundaries and complete-result validation with the forthcoming GUI action.
 No map or package is written. The GUI command, independent-face state and NRC
 shortcut are not yet wired; this route remains Partial. See the
 [CLI manual](manual/cli.md#query-textured-level-surfaces).
+
+### Smart-tag authoring
+
+- `map smart-tag <map> --tags <file>|--project <folder> --tag <id> --choices`
+  lists matching material/class names through the shared tag matcher.
+- `map smart-tag <map> --tags <file>|--project <folder> --tag <id>
+  --object <selector>|--face <brush:face> [--choice <name>|--disable]
+  --output <path> [--package <path>] [--definitions <file>] [--context <group>]
+  [--engine <id>] [--map-name <name>] [--dry-run] [--overwrite]` applies the
+  tag through `applyLevelSmartTag`. Targets are validated atomically, flags
+  preserve unrelated bits, classname tags honour their configured texture,
+  and one undo transaction contains the change and linked updates. JSON
+  reports the tag, choices, enable/disable state and safe-save result.

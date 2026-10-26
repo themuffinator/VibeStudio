@@ -189,6 +189,7 @@ void ApplicationShell::chooseLevelPaintMaterial(const QString& material)
 	m_levelPaintMaterial = material;
 	if (m_commands) { refreshLevelObjectSelectionCommands(); }
 	if (m_levelClipRefresh) { m_levelClipRefresh(); }
+	if (m_levelBrushAssembleRefresh) { m_levelBrushAssembleRefresh(); }
 	if (m_levelMaterialPicker && m_levelMaterialPicker->currentText() != material) {
 		const QSignalBlocker blocker(m_levelMaterialPicker);
 		m_levelMaterialPicker->setEditText(material);
@@ -208,6 +209,7 @@ void ApplicationShell::setLevelMaterialTool(int tool)
 {
 	if (!m_levelMap3D || tool < 0 || tool > 3) { return; }
 	if (tool != 0 && m_levelMap3D->clipMode()) { setLevelMapClipMode(false); }
+	if (tool != 0 && levelBrushAssembleActive()) { setLevelBrushAssembleTool(false); }
 	if (tool == 3 && m_levelMapDocument.format != LevelMapFormat::QuakeMap && m_levelMapDocument.format != LevelMapFormat::Quake3Map) { return; }
 	if (tool != 0 && !levelMap3DShowing()) { setLevelMap3D(true); }
 	if (tool == 3) {

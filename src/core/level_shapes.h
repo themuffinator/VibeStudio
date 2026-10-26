@@ -2,6 +2,7 @@
 
 #include "core/level_map.h"
 #include "core/level_patch.h"
+#include "core/level_primitive.h"
 
 #include <QString>
 #include <QStringList>
@@ -38,6 +39,9 @@ struct LevelShapeRequest {
 	int steps = 8;
 	QString rise = QStringLiteral("auto");
 	QString texture = QStringLiteral("common/caulk");
+	// How a cylinder, cone or sphere sits in the box (core/level_primitive.h):
+	// filling it, or round on its larger extent as NetRadiant Custom builds them.
+	LevelBrushPrimitiveFit fit = LevelBrushPrimitiveFit::Box;
 };
 
 [[nodiscard]] QStringList levelShapeIds();
@@ -54,8 +58,8 @@ struct LevelShapeRequest {
 [[nodiscard]] bool levelShapeIsPatch(const QString& shape);
 // The patch a patch shape makes filling the request's box.
 bool levelShapePatchRequest(const LevelShapeRequest& request, LevelPatchCreateRequest* patch, QString* error = nullptr);
-// The settings a shape reads: any of "axis", "sides", "bands", "thickness",
-// "arc", "start", "steps" and "rise".
+// The settings a shape reads: any of "axis", "sides", "bands", "fit",
+// "thickness", "arc", "start", "steps" and "rise".
 [[nodiscard]] QStringList levelShapeParameters(const QString& shape);
 [[nodiscard]] QStringList levelShapeRiseIds();
 
@@ -78,5 +82,33 @@ bool levelMapBrushesBounds(const LevelMapDocument& document, const QVector<int>&
 // that selects the new brushes. The request's own bounds are ignored.
 bool replaceLevelMapBrushesWithShape(LevelMapDocument* document, const QVector<int>& brushIds, const LevelShapeRequest& request,
 	QVector<int>* newBrushIds = nullptr, QString* error = nullptr);
+
+// The Make 3- to 9-Sided Prism commands, NetRadiant Custom's Brush3Sided to
+// Brush9Sided: "map.make3SidedPrism" to "map.make9SidedPrism", or an empty
+// id for other side counts.
+[[nodiscard]] QString levelSidedPrismCommandId(int sides);
+// The sides such a command makes, or 0 for any other command.
+[[nodiscard]] int levelSidedPrismSides(const QString& commandId);
+
+// True for the shapes one brush can be rebuilt as: box, wedge, cylinder,
+// cone and sphere.
+[[nodiscard]] bool levelShapeRebuildsBrushes(const QString& shape);
+struct LevelShapeRebuildReport {
+	// The brushes rebuilt, in map order; they keep their ids.
+	QVector<int> brushIds;
+	// Why any other brush was left as it was.
+	QStringList skipped;
+};
+// Rebuilds each brush in place as a one-brush shape in that brush's own
+// bounds, as NetRadiant Custom's Brush > Prism, Cone and Sphere and its Make
+// 3- to 9-Sided commands rebuild the selected brush: world and brush-entity
+// brushes alike keep their ids, owners, layers or groups, places in the file
+// and face formats, and the selection stays. Faces take request.texture
+// with a fresh default mapping. One undo step. Hidden brushes, brushes that
+// are not closed and brushes too small for the shape are skipped, with the
+// reason in the report; a scene lock refuses the edit. The request's own
+// bounds are ignored.
+bool rebuildLevelMapBrushesAsShape(LevelMapDocument* document, const QVector<int>& brushIds, const LevelShapeRequest& request,
+	LevelShapeRebuildReport* report = nullptr, QString* error = nullptr);
 
 } // namespace vibestudio

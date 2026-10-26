@@ -6,6 +6,8 @@
 #include <QCoreApplication>
 #include <QSet>
 
+#include <algorithm>
+
 namespace vibestudio {
 
 namespace {
@@ -19,6 +21,8 @@ namespace {
 constexpr qint64 kContentsLava = 0x8;
 constexpr qint64 kContentsSlime = 0x10;
 constexpr qint64 kContentsWater = 0x20;
+// CONTENTS_FOG in Quake III; Quake II spends the bit on CONTENTS_MIST.
+constexpr qint64 kContentsFog = 0x40;
 constexpr qint64 kContentsAreaPortal = 0x8000;
 constexpr qint64 kContentsPlayerClip = 0x10000;
 constexpr qint64 kContentsMonsterClip = 0x20000;
@@ -76,8 +80,10 @@ constexpr FilterEntry kQuakeFilters[] = {
 		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Brushes and patches made wholly of weapon clip, such as Quake III's weapclip and fullclip, which stop shots as well as players.")},
 	{"botclip", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Bot Clip"),
 		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Quake III brushes made wholly of botclip or donotenter, which only bots see."), FilterFormats::Quake3},
-	{"hint", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Hint and Skip"),
-		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Brushes with hint or skip faces, which guide visibility. On Quake maps skip counts as caulk instead.")},
+	{"hint", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Hint"),
+		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Brushes with a hint face or the hint surface flag, which guide the visibility split.")},
+	{"skip", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Skip"),
+		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Brushes skipped on every face, and skip faces on other brushes, such as a hint brush's sides, in the camera. On Quake maps skip counts as caulk and only hintskip counts here.")},
 	{"caulk", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Caulk"),
 		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Brushes caulked on every face, and caulk faces on other brushes in the camera. On Quake maps skip counts as caulk.")},
 	{"nodraw", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Nodraw"),
@@ -92,6 +98,8 @@ constexpr FilterEntry kQuakeFilters[] = {
 		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Brushes with a sky face: a Quake III shader with skyParms or surfaceparm sky, or else a sky texture or the sky surface flag.")},
 	{"liquids", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Liquids"),
 		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Water, slime and lava brushes: a Quake III shader with surfaceparm water, slime or lava, or else a liquid texture or content flag.")},
+	{"fog", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Fog"),
+		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Quake III fog volumes: a brush with a shader that declares surfaceparm fog or fogParms, the fog content flag, or else a texture in a fog or fogs folder or named fog, such as sfx/fog_red."), FilterFormats::Quake3},
 	{"translucent", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Translucent"),
 		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Brushes and patches with a see-through face: Quake II's 33% and 66% translucent flags, Quake's { fence textures, or a Quake III shader with qer_trans, alphaFunc or fog.")},
 	{"decals", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Decals"),
@@ -177,6 +185,17 @@ QString texturePath(const QString& texture)
 	return path.startsWith(QLatin1String("textures/")) ? path.mid(9) : path;
 }
 
+// A fog texture by name, for faces no shader resolves: a part of its path
+// that is fog or fogs, or starts with the word fog, so fogs/mist, fog/murk
+// and sfx/fog_red count and base_wall/fogged_glass does not.
+bool isFogTexturePath(const QString& path)
+{
+	const QStringList parts = path.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+	return std::any_of(parts.cbegin(), parts.cend(), [](const QString& part) {
+		return part.startsWith(QLatin1String("fog")) && (part.size() == 3 || part == QLatin1String("fogs") || !part.at(3).isLetter());
+	});
+}
+
 bool isBotClipTexture(const QString& texture)
 {
 	const QString base = textureBase(texture);
@@ -189,11 +208,6 @@ bool isCaulkTexture(const QString& texture, const FilterGame& game)
 {
 	const QString base = textureBase(texture);
 	return base.contains(QLatin1String("caulk")) || (game.quake && base == QLatin1String("skip"));
-}
-
-bool isCaulkFace(const LevelMapBrushFace& face, const FilterGame& game)
-{
-	return isCaulkTexture(face.textureName, game);
 }
 
 // One surface as the rules see it: a brush face, or a patch, which has a
@@ -271,8 +285,23 @@ bool surfaceMatches(const FilterSurface& surface, const QString& filterId, const
 		return (surface.surfaceFlags & kSurfaceNoDraw) != 0 || (shader && shader->nodraw) || base.contains(QLatin1String("nodraw"));
 	}
 	if (filterId == QLatin1String("hint")) {
-		const bool skip = base == QLatin1String("skip") && !game.quake;
-		return base.contains(QLatin1String("hint")) || skip || (surface.surfaceFlags & (kSurfaceHint | kSurfaceSkip)) != 0;
+		// Hint on its own, as NRC's Hints filter takes a hint face: a hint
+		// brush's skip sides belong to Skip.
+		return (base.contains(QLatin1String("hint")) && base != QLatin1String("hintskip")) || (surface.surfaceFlags & kSurfaceHint) != 0;
+	}
+	if (filterId == QLatin1String("skip")) {
+		// Quake's skip is caulk; ericw-tools' hintskip is the skip side of a
+		// Quake hint brush.
+		return base == QLatin1String("hintskip") || (!game.quake && (base == QLatin1String("skip") || (surface.surfaceFlags & kSurfaceSkip) != 0));
+	}
+	if (filterId == QLatin1String("fog")) {
+		// The fog content bit counts either way; otherwise a Quake III shader
+		// decides when the package defines it, and the name when it does not.
+		const bool contentBit = game.quake3 && (surface.contentFlags & kContentsFog) != 0;
+		if (shader) {
+			return shader->fog || contentBit;
+		}
+		return contentBit || isFogTexturePath(texturePath(surface.texture));
 	}
 	if (filterId == QLatin1String("sky")) {
 		// A Quake III shader decides, so sky-named walls stay and skies under
@@ -329,16 +358,25 @@ bool faceMatches(const LevelMapBrushFace& face, const QString& filterId, const F
 // filter_brush_all_faces does; the other face kinds take any one face.
 bool needsEveryFace(const QString& filterId)
 {
-	return filterId == QLatin1String("caulk") || filterId == QLatin1String("clip") || filterId == QLatin1String("player-clip")
-		|| filterId == QLatin1String("monster-clip") || filterId == QLatin1String("weapon-clip") || filterId == QLatin1String("botclip")
-		|| filterId == QLatin1String("nodraw") || filterId == QLatin1String("clusterportals") || filterId == QLatin1String("lightgrid");
+	return filterId == QLatin1String("caulk") || filterId == QLatin1String("skip") || filterId == QLatin1String("clip")
+		|| filterId == QLatin1String("player-clip") || filterId == QLatin1String("monster-clip") || filterId == QLatin1String("weapon-clip")
+		|| filterId == QLatin1String("botclip") || filterId == QLatin1String("nodraw") || filterId == QLatin1String("clusterportals")
+		|| filterId == QLatin1String("lightgrid");
 }
 
 bool isFaceKind(const QString& filterId)
 {
 	return needsEveryFace(filterId) || filterId == QLatin1String("hint") || filterId == QLatin1String("sky") || filterId == QLatin1String("liquids")
-		|| filterId == QLatin1String("translucent") || filterId == QLatin1String("detail") || filterId == QLatin1String("areaportals")
-		|| filterId == QLatin1String("decals");
+		|| filterId == QLatin1String("fog") || filterId == QLatin1String("translucent") || filterId == QLatin1String("detail")
+		|| filterId == QLatin1String("areaportals") || filterId == QLatin1String("decals");
+}
+
+// Kinds that also hide their faces one at a time on brushes they do not name
+// whole: Radiant's caulk face filter, and skip, whose faces line hint brushes
+// as TrenchBroom's Skip tag hides them.
+bool hidesFacesOneByOne(const QString& filterId)
+{
+	return filterId == QLatin1String("caulk") || filterId == QLatin1String("skip");
 }
 
 // Kinds that also take patches by their shader, as NRC's PatchFilters_construct
@@ -640,9 +678,10 @@ QVector<LevelMapSelectionRef> matchesFor(const LevelMapDocument& document, const
 QVector<LevelSurfaceFace> faceMatchesFor(const LevelMapDocument& document, const QString& filterId, const FilterGame& game)
 {
 	QVector<LevelSurfaceFace> faces;
-	// Caulk is the one kind Radiant also filters face by face.
+	// Caulk is the one kind Radiant also filters face by face; Skip does as
+	// TrenchBroom's Skip tag does.
 	const FilterEntry* entry = entryForId(filterId);
-	if (filterId != QLatin1String("caulk") || !entry || !offeredFor(*entry, document)) {
+	if (!hidesFacesOneByOne(filterId) || !entry || !offeredFor(*entry, document)) {
 		return faces;
 	}
 	for (const LevelMapBrush& brush : document.brushes) {
@@ -651,7 +690,7 @@ QVector<LevelSurfaceFace> faceMatchesFor(const LevelMapDocument& document, const
 			continue;
 		}
 		for (int index = 0; index < brush.faces.size(); ++index) {
-			if (isCaulkFace(brush.faces.at(index), game)) {
+			if (faceMatches(brush.faces.at(index), filterId, game)) {
 				faces.push_back({brush.id, index});
 			}
 		}
@@ -768,7 +807,8 @@ QVector<LevelSurfaceFace> levelViewFilteredFaces(const LevelMapDocument& documen
 	const LevelViewFilterMaterials& materials)
 {
 	QVector<LevelSurfaceFace> faces;
-	if (!hiddenFilterIds.contains(QStringLiteral("caulk")) || !isQuakeFamily(document)) {
+	const bool oneByOne = std::any_of(hiddenFilterIds.cbegin(), hiddenFilterIds.cend(), [](const QString& id) { return hidesFacesOneByOne(id); });
+	if (!oneByOne || !isQuakeFamily(document)) {
 		return faces;
 	}
 	const FilterGame game = filterGame(document, materials);
@@ -789,9 +829,16 @@ QVector<LevelSurfaceFace> levelViewFilteredFaces(const LevelMapDocument& documen
 	for (const LevelMapBrush& brush : document.brushes) {
 		ownerOf.insert(brush.id, brush.entityId);
 	}
-	for (const LevelSurfaceFace& face : faceMatchesFor(document, QStringLiteral("caulk"), game)) {
-		if (!hiddenBrushes.contains(face.brushId) && !hiddenEntities.contains(ownerOf.value(face.brushId, -1))) {
-			faces.push_back(face);
+	QSet<QPair<int, int>> seen;
+	for (const QString& id : hiddenFilterIds) {
+		if (!hidesFacesOneByOne(id)) {
+			continue;
+		}
+		for (const LevelSurfaceFace& face : faceMatchesFor(document, id, game)) {
+			if (!hiddenBrushes.contains(face.brushId) && !hiddenEntities.contains(ownerOf.value(face.brushId, -1)) && !seen.contains({face.brushId, face.faceIndex})) {
+				seen.insert({face.brushId, face.faceIndex});
+				faces.push_back(face);
+			}
 		}
 	}
 	return faces;
@@ -883,6 +930,13 @@ LevelViewFilterShader levelViewFilterShader(const MaterialDefinition& definition
 	shader.botClip = parm("botclip") || parm("donotenter");
 	shader.sky = definition.isSky();
 	shader.nodraw = parm("nodraw");
+	shader.fog = definition.isFog();
+	for (const QString& name : definition.surfaceParms) {
+		const QString lowered = name.trimmed().toLower();
+		if (!lowered.isEmpty() && !shader.surfaceParms.contains(lowered)) {
+			shader.surfaceParms << lowered;
+		}
+	}
 	return shader;
 }
 
@@ -931,7 +985,7 @@ bool levelViewFilterReadsMaterials(const QString& filterId)
 {
 	return filterId == QLatin1String("translucent") || filterId == QLatin1String("liquids") || filterId == QLatin1String("clip")
 		|| filterId == QLatin1String("player-clip") || filterId == QLatin1String("monster-clip") || filterId == QLatin1String("botclip")
-		|| filterId == QLatin1String("sky") || filterId == QLatin1String("nodraw");
+		|| filterId == QLatin1String("sky") || filterId == QLatin1String("nodraw") || filterId == QLatin1String("fog");
 }
 
 } // namespace vibestudio

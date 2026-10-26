@@ -158,6 +158,9 @@ void ModelViewport::requestClip()
 }
 void ModelViewport::mouseDoubleClickEvent(QMouseEvent* event)
 {
+	if (m_assembleTool && event->button() == Qt::LeftButton && event->modifiers() == Qt::NoModifier && !m_looking) {
+		addBrushAssembleFace(event->position()); event->accept(); return;
+	}
 	if (m_clipMode && event->button() == Qt::LeftButton) {
 		if (event->modifiers() == Qt::AltModifier || (event->modifiers() == Qt::NoModifier && m_clipPreferences.doubleClick == LevelClipDoubleClick::None)) { matchClipFace(event->position()); }
 		else if (event->modifiers() == Qt::NoModifier) { activateClipDoubleClick(); }

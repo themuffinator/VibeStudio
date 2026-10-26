@@ -56,8 +56,8 @@ QStringList kindIds()
 	return {QStringLiteral("world"), QStringLiteral("entities"), QStringLiteral("brushes"), QStringLiteral("brush-entities"),
 		QStringLiteral("func-groups"), QStringLiteral("patches"), QStringLiteral("detail"), QStringLiteral("structural"), QStringLiteral("clip"),
 		QStringLiteral("player-clip"), QStringLiteral("monster-clip"), QStringLiteral("weapon-clip"), QStringLiteral("botclip"), QStringLiteral("hint"),
-		QStringLiteral("caulk"), QStringLiteral("nodraw"), QStringLiteral("areaportals"), QStringLiteral("clusterportals"), QStringLiteral("lightgrid"),
-		QStringLiteral("sky"), QStringLiteral("liquids"), QStringLiteral("translucent"), QStringLiteral("decals"), QStringLiteral("point-entities"),
+		QStringLiteral("skip"), QStringLiteral("caulk"), QStringLiteral("nodraw"), QStringLiteral("areaportals"), QStringLiteral("clusterportals"), QStringLiteral("lightgrid"),
+		QStringLiteral("sky"), QStringLiteral("liquids"), QStringLiteral("fog"), QStringLiteral("translucent"), QStringLiteral("decals"), QStringLiteral("point-entities"),
 		QStringLiteral("lights"), QStringLiteral("triggers"), QStringLiteral("monsters"), QStringLiteral("items"), QStringLiteral("starts"),
 		QStringLiteral("paths"), QStringLiteral("models")};
 }
@@ -84,6 +84,8 @@ QHash<QString, QStringList> expectedMatches()
 		{QStringLiteral("lightgrid"), {}},
 		{QStringLiteral("decals"), {}},
 		{QStringLiteral("hint"), {"brush:3"}},
+		{QStringLiteral("skip"), {}},
+		{QStringLiteral("fog"), {}},
 		{QStringLiteral("caulk"), {"brush:0"}},
 		{QStringLiteral("nodraw"), {}},
 		{QStringLiteral("sky"), {"brush:1"}},
@@ -180,7 +182,7 @@ void quake3()
 		quakeIds << filter.id;
 	}
 	QStringList withoutQuake3 = kindIds();
-	for (const char* id : {"patches", "botclip", "clusterportals", "lightgrid", "decals"}) {
+	for (const char* id : {"patches", "botclip", "clusterportals", "lightgrid", "fog", "decals"}) {
 		withoutQuake3.removeAll(QString::fromLatin1(id));
 	}
 	expect(quakeIds == withoutQuake3, "Quake maps offer every kind but the Quake III ones", quakeIds.join(QLatin1Char(',')));

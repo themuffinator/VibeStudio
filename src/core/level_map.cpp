@@ -20,6 +20,7 @@
 #include "core/level_document.h"
 #include "core/level_texture_mapping.h"
 #include "core/level_surface.h"
+#include "core/level_face_flags.h"
 #include "core/level_material_paint.h"
 #include "core/level_primitive.h"
 #include "core/level_merge.h"
@@ -8099,7 +8100,10 @@ bool addLevelMapBrushPrimitive(LevelMapDocument* document, const LevelBrushPrimi
 	const auto close = [](const LevelMapVec3& a, const LevelMapVec3& b) {
 		return std::max({std::abs(a.x-b.x), std::abs(a.y-b.y), std::abs(a.z-b.z)}) < 0.02;
 	};
-	if (!close(brush.mins, mins) || !close(brush.maxs, maxs)) {
+	// A circle-fit cylinder, cone or sphere may overhang the requested box, so
+	// the saved brush is checked against the bounds of the solid it drafted.
+	if (!close(brush.mins, request.shape == QStringLiteral("box") ? mins : geometryDraft.mins)
+		|| !close(brush.maxs, request.shape == QStringLiteral("box") ? maxs : geometryDraft.maxs)) {
 		return fail(QCoreApplication::translate("VibeStudioLevelMap", "The primitive's bounds cannot be saved accurately in this face dialect. Reduce detail or move it closer to the origin."));
 	}
 	brush.entityId = worldspawnId;
@@ -10136,10 +10140,14 @@ bool commitLevelSurfaceEdit(LevelMapDocument* document, const LevelSurfaceEditPl
 	const int surfaces = plan.m_faceCount + plan.patchCount();
 	command.description = plan.m_paste ? QCoreApplication::translate("LevelSurface", "Paste %n surface(s)", nullptr, surfaces)
 		: plan.m_reset ? QCoreApplication::translate("LevelSurface", "Reset textures on %n surface(s)", nullptr, surfaces)
+		: plan.m_flags ? QCoreApplication::translate("LevelSurface", "Set flags on %n brush face(s)", nullptr, plan.m_faceCount)
+		: plan.m_uv ? QCoreApplication::translate("LevelSurface", "Edit texture coordinates on %n surface(s)", nullptr, surfaces)
 		: plan.patchCount() > 0 ? QCoreApplication::translate("LevelSurface", "Align %n surface(s)", nullptr, surfaces)
 		: QCoreApplication::translate("LevelSurface", "Align %n brush face(s)", nullptr, plan.m_faceCount);
 	command.undoDescription = plan.m_paste ? QCoreApplication::translate("LevelSurface", "Restore pasted surfaces")
 		: plan.m_reset ? QCoreApplication::translate("LevelSurface", "Restore reset textures")
+		: plan.m_flags ? QCoreApplication::translate("LevelSurface", "Restore face flags")
+		: plan.m_uv ? QCoreApplication::translate("LevelSurface", "Restore texture coordinates")
 		: QCoreApplication::translate("LevelSurface", "Restore surface alignment");
 	if (!applyLevelMapCommand(document, command, true)) {
 		return fail(QCoreApplication::translate("LevelSurface", "The surface edit could not be applied."));
@@ -12174,6 +12182,107 @@ bool wrapLevelMapSelection(LevelMapDocument* document, const QVector<LevelMapVec
 	command.undoDescription = QCoreApplication::translate("LevelClipper","Restore wrapped brushes");
 	if (!commitBrushReplacement(document,&command,false)) { return failWrap(QT_TRANSLATE_NOOP("LevelClipper","The wrap/merge could not be applied.")); }
 	staged.changed = int(ids.size()); staged.wrapped = true; if (report) { *report = staged; } return true;
+}
+
+// Workflow reference: NetRadiant Custom radiant/brushmanip.cpp
+// Scene_BrushConstructPrefab, which clears the selected brush and refills it
+// with prefab planes, at 449778b3 (GPL-2.0-or-later). Original implementation
+// on VibeStudio's hull builder and brush replacement; see docs/CREDITS.md.
+bool rebuildLevelMapBrushHulls(LevelMapDocument* document, const QVector<LevelBrushHullRebuild>& rebuilds, const QString& texture,
+	const QString& description, const QString& undoDescription, QString* error)
+{
+	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
+		return rebuildLevelMapBrushHulls(candidate, rebuilds, texture, description, undoDescription, error);
+	}); guarded.has_value()) {
+		return *guarded;
+	}
+	if (error) { error->clear(); }
+	const auto failRebuild = [error](const QString& message) {
+		if (error) { *error = message; }
+		return false;
+	};
+	if (!document || !isTextMapFormat(document->format)) {
+		return failRebuild(QCoreApplication::translate("VibeStudioLevelMap", "Brushes can be rebuilt in Quake-family .map files only."));
+	}
+	if (rebuilds.isEmpty() || rebuilds.size() > 256) {
+		return failRebuild(QCoreApplication::translate("VibeStudioLevelMap", "Rebuild between one and 256 brushes at a time."));
+	}
+	if (!validLevelClipTexture(texture)) {
+		return failRebuild(QCoreApplication::translate("VibeStudioLevelMap", "Choose a valid single material name for the rebuilt brushes."));
+	}
+	const QString name = texture.trimmed();
+	LevelMapUndoCommand command;
+	command.commandKind = QStringLiteral("replace-objects");
+	command.objectKind = QStringLiteral("brush");
+	QSet<int> seen;
+	for (const LevelBrushHullRebuild& rebuild : rebuilds) {
+		detail::placementCancellationCheckpoint();
+		const int index = indexOfObjectId(document->brushes, rebuild.brushId);
+		if (index < 0 || seen.contains(rebuild.brushId)) {
+			return failRebuild(QCoreApplication::translate("VibeStudioLevelMap", "Brush %1 is not in the map, or is named twice.").arg(rebuild.brushId));
+		}
+		seen.insert(rebuild.brushId);
+		const LevelMapBrush& brush = document->brushes.at(index);
+		BrushPieceText text;
+		const BrushPieceProblem problem = brushPieceText(document, brush, &text);
+		if (problem == BrushPieceProblem::SharedLines) {
+			return failRebuild(QCoreApplication::translate("VibeStudioLevelMap", "Brush %1 writes its faces on lines shared with other text, so it cannot be rebuilt.").arg(brush.id));
+		}
+		if (problem == BrushPieceProblem::EntityShared) {
+			return failRebuild(QCoreApplication::translate("VibeStudioLevelMap", "Entity %1 closes on a line shared with other map text, so brush %2 cannot be rebuilt.")
+					.arg(brush.entityId).arg(brush.id));
+		}
+		LevelMapBrush draft;
+		if (!createLevelBrushHull(rebuild.vertices, name, &draft, error)) {
+			return false;
+		}
+		// The brush's comments stay with it once, its "// brush N" marker
+		// included, as wrap/merge keeps them.
+		QStringList comments;
+		if (brush.startLine > 0 && deletionFirstLine(*document, brush.startLine) < brush.startLine) {
+			comments << document->textLines[brush.startLine - 2];
+		}
+		tokenizeMapText(text.lines.join(QLatin1Char('\n')), &comments);
+		const bool definition = text.style == QStringLiteral("brushDef") || text.style == QStringLiteral("brushDef3");
+		const LevelMapBrushFace& like = mostUsedFace(brush);
+		QStringList lines{QStringLiteral("{")};
+		lines += comments;
+		if (definition) { lines << text.style << QStringLiteral("{"); }
+		for (const LevelMapBrushFace& face : draft.faces) {
+			const MapPlane plane = planeFromPoints(face.p0, face.p1, face.p2);
+			lines << brushFaceLine(text.style, {face.p0, face.p1, face.p2, {plane.normalX, plane.normalY, plane.normalZ, true}, name, like.contentFlags, 0, 0});
+		}
+		if (definition) { lines << QStringLiteral("}"); }
+		lines << QStringLiteral("}");
+		std::optional<LevelMapBrush> result = parsedNewBrush(*document, lines);
+		LevelBrushTopology topology;
+		if (!result || result->faces.size() != draft.faces.size() || !levelBrushTopology(*result, &topology, error)) {
+			return failRebuild(QCoreApplication::translate("VibeStudioLevelMap", "Brush %1 could not be rebuilt as a closed brush in its face format.").arg(brush.id));
+		}
+		const auto same = [](const LevelMapVec3& a, const LevelMapVec3& b) {
+			return std::max({std::abs(a.x - b.x), std::abs(a.y - b.y), std::abs(a.z - b.z)}) < 0.02;
+		};
+		const bool kept = std::all_of(rebuild.vertices.cbegin(), rebuild.vertices.cend(), [&](const LevelMapVec3& p) {
+			return std::any_of(topology.vertices.cbegin(), topology.vertices.cend(), [&](const LevelMapVec3& v) { return same(p, v); });
+		}) && std::all_of(topology.vertices.cbegin(), topology.vertices.cend(), [&](const LevelMapVec3& v) {
+			return std::any_of(rebuild.vertices.cbegin(), rebuild.vertices.cend(), [&](const LevelMapVec3& p) { return same(p, v); });
+		});
+		if (!kept) {
+			return failRebuild(QCoreApplication::translate("VibeStudioLevelMap", "Brush %1 cannot keep every corner of its new shape in this face format. Reduce detail or make it larger.").arg(brush.id));
+		}
+		result->id = brush.id;
+		result->entityId = brush.entityId;
+		replaceBrushInCommand(*document, &command, brush, index, {*result});
+	}
+	command.objectId = rebuilds.first().brushId;
+	command.selectionSnapshot = document->selection;
+	command.selectionResult = document->selection;
+	command.description = description;
+	command.undoDescription = undoDescription;
+	if (!commitBrushReplacement(document, &command, false)) {
+		return failRebuild(QCoreApplication::translate("VibeStudioLevelMap", "The brushes to rebuild are no longer in the map."));
+	}
+	return true;
 }
 
 bool clipLevelMapPoints(LevelMapDocument* document, const QVector<LevelMapVec3>& points, int axis, int direction,
@@ -17853,7 +17962,7 @@ bool setLevelMapSelectionDetail(LevelMapDocument* document, bool detail, int* ch
 	if (brushIds.isEmpty()) {
 		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Select brushes to make them detail or structural."));
 	}
-	if (!levelMapUsesFaceFlags(*document)) {
+	if (levelFaceFlagGame(*document) == LevelFaceFlagGame::None) {
 		// Quake's compilers read detail from func_detail entities.
 		QVector<LevelMapSelectionRef> pick;
 		for (const LevelMapBrush& brush : document->brushes) {

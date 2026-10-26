@@ -13,6 +13,7 @@
 #include "core/level_nudge.h"
 #include "core/level_camera_texture.h"
 #include "core/level_quick_transform.h"
+#include "core/level_shapes.h"
 #include "core/level_build_workspace.h"
 #include "core/level_build_deployment.h"
 #include "app/level_scene_panel.h"
@@ -2813,13 +2814,19 @@ QWidget* ApplicationShell::buildLevelsPage()
 	m_levelMapShowThings = addShowToggle(QStringLiteral("levelMapShowThings"), tr("Things"), tr("Draw Doom things."), true);
 	m_levelMapShowSectors = addShowToggle(QStringLiteral("levelMapShowSectors"), tr("Sector Fill"), tr("Shade Doom sectors by light level."), true);
 	m_levelMapShowGrid = addShowToggle(QStringLiteral("levelMapShowGrid"), tr("Grid"), tr("Draw grid lines at the grid spacing."), true);
+	// Grid overlays as NetRadiant Custom's Show Coordinates and Show Blocks
+	// draw them (level_grid_overlay_actions.cpp, map_viewport_grid_overlays.cpp).
+	m_levelMapShowCoordinates = addShowToggle(QStringLiteral("levelMapShowCoordinates"), tr("Grid Coordinates"),
+		tr("Label the grid lines with their coordinates along the bottom and leading edges, clear of the status tags."), false);
+	m_levelMapShowBlockGrid = addShowToggle(QStringLiteral("levelMapShowBlockGrid"), tr("Block Grid"),
+		tr("Draw dashed lines where the compiler splits the world into blocks, from worldspawn _blocksize (1024 units by default)."), false);
 	m_levelMapShowVertices = addShowToggle(QStringLiteral("levelMapShowVertices"), tr("Vertices"), tr("Mark every vertex and brush corner."), false);
 	m_levelMapShowLabels = addShowToggle(QStringLiteral("levelMapShowLabels"), tr("Labels"), tr("Name entities and things beside their markers."), false);
 	m_levelMapShowLinks = addShowToggle(QStringLiteral("levelMapShowLinks"), tr("Target Links"),
 		tr("Draw arrows from each entity's target and killtarget keys to the entities they name. The selection's links are drawn either way."), true);
 	m_levelMapShowLinkedGroups = addShowToggle(QStringLiteral("levelMapShowLinkedGroups"), tr("Linked Groups"),
 		tr("Draw a box around every linked group. The link sets of the selected or open groups are drawn either way, with arrows."), false);
-	auto* showButton = createToolButton(QStringLiteral("eye"), tr("Show"), tr("Choose what the map view draws: markers, sector fill, grid, vertices, labels, target links and linked groups."), true);
+	auto* showButton = createToolButton(QStringLiteral("eye"), tr("Show"), tr("Choose what the map view draws: markers, sector fill, grid, grid coordinates, block grid, vertices, labels, target links and linked groups."), true);
 	showButton->setObjectName(QStringLiteral("levelMapShowButton"));
 	showButton->setAccessibleName(tr("Map display options"));
 	showButton->setMenu(showMenu);
@@ -2971,6 +2978,7 @@ QWidget* ApplicationShell::buildLevelsPage()
 	connectLevelCameraComponents();
 	connectLevelClipper();
 	connectLevelCameraBrush();
+	connectLevelBrushAssemble();
 	// The 2D view draws where the camera stands and looks.
 	connect(m_levelMap3D, &ModelViewport::viewChanged, this, &ApplicationShell::refreshLevelCameraMarker);
 	connect(m_levelMap3D, &ModelViewport::viewChanged, this, [this] { followLevelCamera(); });
@@ -3314,20 +3322,25 @@ QWidget* ApplicationShell::buildLevelsPage()
 	connect(m_levelMapSnap, &QCheckBox::toggled, this, [this]() {
 		refreshLevelMapViewport();
 	});
-	for (QAction* toggle : {m_levelMapShowGrid, m_levelMapShowVertices, m_levelMapShowLabels, m_levelMapShowLinks, m_levelMapShowLinkedGroups}) {
+	for (QAction* toggle : {m_levelMapShowGrid, m_levelMapShowCoordinates, m_levelMapShowBlockGrid, m_levelMapShowVertices, m_levelMapShowLabels,
+			 m_levelMapShowLinks, m_levelMapShowLinkedGroups}) {
 		connect(toggle, &QAction::toggled, this, [this]() {
 			refreshLevelMapViewport();
 		});
 	}
+	for (QAction* toggle : {m_levelMapShowCoordinates, m_levelMapShowBlockGrid}) {
+		connect(toggle, &QAction::toggled, this, [this]() { refreshLevelGridOverlayCommands(); });
+	}
 	restoreLevelMapViewState();
+	refreshLevelGridOverlayCommands();
 	const auto saveViewState = [this]() {
 		saveLevelMapViewState();
 	};
 	connect(m_levelMapProjection, &QComboBox::currentIndexChanged, this, saveViewState);
 	connect(m_levelMapGrid, &QComboBox::currentIndexChanged, this, saveViewState);
 	connect(m_levelMapSnap, &QCheckBox::toggled, this, saveViewState);
-	for (QAction* toggle : {m_levelMapShowThings, m_levelMapShowSectors, m_levelMapShowGrid, m_levelMapShowVertices, m_levelMapShowLabels, m_levelMapShowLinks,
-			 m_levelMapShowLinkedGroups}) {
+	for (QAction* toggle : {m_levelMapShowThings, m_levelMapShowSectors, m_levelMapShowGrid, m_levelMapShowCoordinates, m_levelMapShowBlockGrid,
+			 m_levelMapShowVertices, m_levelMapShowLabels, m_levelMapShowLinks, m_levelMapShowLinkedGroups}) {
 		connect(toggle, &QAction::toggled, this, saveViewState);
 	}
 	return assembleStudioPage(header, toolBar, stack);
@@ -3353,8 +3366,10 @@ void ApplicationShell::restoreLevelMapViewState()
 	const QByteArray shown = m_settings.shellLayoutState(QStringLiteral("levelMapShow"));
 	if (!shown.isEmpty()) {
 		const QList<QByteArray> on = shown.split(',');
-		for (QAction* toggle : {m_levelMapShowThings, m_levelMapShowSectors, m_levelMapShowGrid, m_levelMapShowVertices, m_levelMapShowLabels, m_levelMapShowLinks,
-				 m_levelMapShowLinkedGroups}) {
+		// Grid Coordinates and Block Grid are off by default, so a list saved
+		// before they existed leaves them off.
+		for (QAction* toggle : {m_levelMapShowThings, m_levelMapShowSectors, m_levelMapShowGrid, m_levelMapShowCoordinates, m_levelMapShowBlockGrid,
+				 m_levelMapShowVertices, m_levelMapShowLabels, m_levelMapShowLinks, m_levelMapShowLinkedGroups}) {
 			toggle->setChecked(on.contains(toggle->objectName().toUtf8()));
 		}
 	}
@@ -3366,8 +3381,8 @@ void ApplicationShell::saveLevelMapViewState()
 	m_settings.setShellLayoutState(QStringLiteral("levelMapSnap"), m_levelMapSnap->isChecked() ? QByteArrayLiteral("on") : QByteArrayLiteral("off"));
 	m_settings.setShellLayoutState(QStringLiteral("levelMapProjection"), QByteArray::number(m_levelMapProjection->currentIndex()));
 	QList<QByteArray> on;
-	for (QAction* toggle : {m_levelMapShowThings, m_levelMapShowSectors, m_levelMapShowGrid, m_levelMapShowVertices, m_levelMapShowLabels, m_levelMapShowLinks,
-			 m_levelMapShowLinkedGroups}) {
+	for (QAction* toggle : {m_levelMapShowThings, m_levelMapShowSectors, m_levelMapShowGrid, m_levelMapShowCoordinates, m_levelMapShowBlockGrid,
+			 m_levelMapShowVertices, m_levelMapShowLabels, m_levelMapShowLinks, m_levelMapShowLinkedGroups}) {
 		if (toggle->isChecked()) {
 			on << toggle->objectName().toUtf8();
 		}
@@ -7945,6 +7960,7 @@ void ApplicationShell::refreshLevelMapWorkbench()
 	setLevelMapSelection(&m_levelMapDocument,pickLevelSceneObjects(levelSceneSelectionContext(m_levelMapDocument),{},m_levelMapDocument.selection,LevelScenePick::Replace));
 	if (m_levelComponentsRefresh) { m_levelComponentsRefresh(); }
 	if (m_levelClipRefresh) { m_levelClipRefresh(); }
+	if (m_levelBrushAssembleRefresh) { m_levelBrushAssembleRefresh(); }
 	refreshBuiltinEntityDefinitions();
 	// These values belong only to this refresh; edits, undo, reloads and
 	// package updates always reach the controls through the current document.
@@ -9852,6 +9868,7 @@ void ApplicationShell::setLevelMapClipMode(bool enabled)
 		return;
 	}
 	if (enabled) {
+		setLevelBrushAssembleTool(false);
 		setLevelComponentMode(0); setLevelMaterialTool(0);
 		for (auto* view : std::as_const(m_levelPlanViews)) { view->setDrawMode(false); view->setShapeDrawMode(false); }
 	}
@@ -14956,6 +14973,9 @@ void ApplicationShell::buildCommands()
 		tr("Mirror the selection top to bottom as the view shows it."), QStringLiteral("compare"), false, false, false,
 		[this]() { flipLevelMapSelectionFromUi(false); });
 	registerLevelAxisTransformCommands();
+	registerLevelPrismCommands();
+	registerLevelBrushPointsCommands();
+	registerLevelBrushAssembleCommands();
 	registerLevelNudgeCommands();
 	add(QStringLiteral("map.resizeSelection"), StudioCommandGroup::Edit, tr("Resi&ze Selection…"),
 		tr("Fit the selection to a new size. Texture Scale Lock stretches brush textures with it; otherwise their source parameters stay fixed. Viewport handles use the same setting."),
@@ -15253,6 +15273,7 @@ void ApplicationShell::buildCommands()
 				statusBar()->showMessage(m_levelMapSnap->isChecked() ? tr("Snap to grid on.") : tr("Snap to grid off."), 2000);
 			}
 		});
+	registerLevelGridOverlayCommands();
 	// Checked while it is the working grid, as TrenchBroom's Set Grid Size
 	// items and NetRadiant Custom's Grid menu radio items are; choosing the
 	// checked one again keeps it checked and still runs the command.
@@ -17072,6 +17093,10 @@ void ApplicationShell::setMode(StudioMode mode)
 	m_settings.setSelectedMode(index);
 	refreshModeAvailability();
 	refreshCommandEnablement();
+	if (changed) {
+		// Show Surfaces is checked only while Levels shows the tab.
+		refreshLevelSurfacesToggle();
+	}
 	if (changed && !m_buildingUi) {
 		focusPagePrimaryWidget(mode);
 	}
@@ -17268,8 +17293,10 @@ void ApplicationShell::installShortcutScopes()
 			// The nudge keys and the view-relative turn and flip keys act in the
 			// views, which claim them ahead of window-wide keys such as Go Back's
 			// Alt+Left and Find's Ctrl+F (app/level_nudge_actions.cpp).
+			// NRC's Make 3- to 9-Sided Prism keys, Ctrl+3 to Ctrl+9, act there
+			// too, ahead of the window-wide mode keys (app/level_prism_actions.cpp).
 			const bool nudge = levelNudgeCommandForId(registration.commandId) || levelViewTransformForCommand(registration.commandId)
-				|| levelDuplicateMoveCommandForId(registration.commandId);
+				|| levelDuplicateMoveCommandForId(registration.commandId) || levelSidedPrismSides(registration.commandId) > 0;
 			if (levelCameraTextureCommandForId(registration.commandId)) {
 				// TrenchBroom's texture moves and flips act in the camera, on the
 				// nudge and flip keys, in a claim layer of their own: the camera
@@ -19142,6 +19169,9 @@ void ApplicationShell::refreshCommandEnablement()
 	m_commands->setEnabled(QStringLiteral("map.flipHorizontal"), hasMap && hasSelection);
 	m_commands->setEnabled(QStringLiteral("map.flipVertical"), hasMap && hasSelection);
 	refreshLevelAxisTransformCommands();
+	refreshLevelPrismCommands();
+	refreshLevelBrushPointsCommands();
+	refreshLevelBrushAssembleCommands();
 	refreshLevelArbitraryTransformDialogs();
 	refreshLevelNudgeCommands();
 	refreshLevelCameraFocusCommands();
@@ -19176,6 +19206,7 @@ void ApplicationShell::refreshCommandEnablement()
 	// 3D Wireframe and the other camera display commands, enabled while the
 	// camera is showing, and their check marks from the saved choices.
 	refreshLevelCameraRenderCommands();
+	refreshLevelGridOverlayCommands();
 	if (m_levelMap3DButton) {
 		m_levelMap3DButton->setEnabled(hasMap);
 	}
@@ -19490,6 +19521,9 @@ bool ApplicationShell::eventFilter(QObject* watched, QEvent* event)
 		return true;
 	}
 	if (handleLevelNudgeKey(watched, event)) {
+		return true;
+	}
+	if (handleLevelPrismKey(watched, event)) {
 		return true;
 	}
 	if (event->type() == QEvent::FocusIn || event->type() == QEvent::MouseButtonPress) {
@@ -23198,6 +23232,10 @@ void ApplicationShell::refreshLevelMapViewport()
 	if (m_levelMapShowLinkedGroups) {
 		m_levelMapShowLinkedGroups->setVisible(!doomMap);
 	}
+	// So does the compiler block grid.
+	if (m_levelMapShowBlockGrid) {
+		m_levelMapShowBlockGrid->setVisible(!doomMap);
+	}
 	if (m_levelMapShowThings) {
 		m_levelMapShowThings->setText(doomMap ? tr("Things") : tr("Entities"));
 		m_levelMapShowThings->setToolTip(doomMap ? tr("Draw Doom things.") : tr("Draw point entities such as lights and spawn points."));
@@ -23237,6 +23275,12 @@ void ApplicationShell::refreshLevelMapViewport()
 	}
 	if (m_levelMapShowLabels) {
 		m_levelMapViewport->setShowLabels(m_levelMapShowLabels->isChecked());
+	}
+	if (m_levelMapShowCoordinates) {
+		m_levelMapViewport->setShowGridCoordinates(m_levelMapShowCoordinates->isChecked());
+	}
+	if (m_levelMapShowBlockGrid) {
+		m_levelMapViewport->setShowBlockGrid(m_levelMapShowBlockGrid->isChecked());
 	}
 	if (m_levelMapShowLinks) {
 		m_levelMapViewport->setShowTargetLinks(m_levelMapShowLinks->isChecked());
@@ -23301,6 +23345,8 @@ void ApplicationShell::refreshLevelMapViewport()
 	// the camera and the shared draft in step instead of leaving a camera-only
 	// clip session which no longer propagates its points.
 	if (m_levelMap3D && m_levelMap3D->clipMode() != m_levelMapViewport->clipMode()) { setLevelMapClipMode(false); }
+	// Likewise the Assemble Brush tool's shared points.
+	if (m_levelMap3D && m_levelMap3D->brushAssembleTool() != m_levelMapViewport->brushAssembleTool()) { setLevelBrushAssembleTool(false); }
 	refreshLevelCameraBrush();
 }
 
@@ -24543,6 +24589,7 @@ void ApplicationShell::showLevelMapContextMenu(const QPoint& globalPosition, boo
 	QAction* addPatch = nullptr;
 	QAction* editBrushComponents = nullptr;
 	if (auto* align = m_commands->action(QStringLiteral("map.alignSurfaces")); align && align->isEnabled()) { menu.addAction(align); }
+	if (auto* uvEditor = m_commands->action(QStringLiteral("map.uvEditor")); uvEditor && uvEditor->isEnabled()) { menu.addAction(uvEditor); }
 	if (m_levelMapDocument.selectionKind == LevelMapSelectionKind::QuakeBrush) {
 		editBrushComponents = menu.addAction(studioIcon(QStringLiteral("edit")), tr("Edit Brush Components…"));
 	}
@@ -25048,6 +25095,7 @@ void ApplicationShell::exportLevelMapImage()
 	options.highlightKind = m_levelMapDocument.selectionKind;
 	options.highlightObjectId = m_levelMapDocument.selectedObjectId;
 	options.showTargetLinks = m_levelMapShowLinks && m_levelMapShowLinks->isChecked();
+	options.showBlockGrid = m_levelMapShowBlockGrid && m_levelMapShowBlockGrid->isChecked() && levelMapHasBlockGrid(m_levelMapDocument);
 	if (!m_leakTrailPath.isEmpty()) {
 		const LeakPointFile leak = loadLeakPointFile(m_leakTrailPath);
 		for (qsizetype index = 0; leak.valid && index + 2 < leak.pointsXyz.size(); index += 3) {

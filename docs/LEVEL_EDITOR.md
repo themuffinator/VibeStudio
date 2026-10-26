@@ -574,9 +574,9 @@ the refusals.
 
 `src/core/level_view_filters.*` sorts a map's objects into kinds (world
 brushes, entities, brushes, brush entities, func groups, patches, detail,
-structural, clip, player clip, monster clip, weapon clip, bot clip, hint and
+structural, clip, player clip, monster clip, weapon clip, bot clip, hint,
 skip, caulk, nodraw, area portals, cluster portals, light grid, sky, liquids,
-translucent, decals, point entities, lights, triggers, monsters, items, player
+fog, translucent, decals, point entities, lights, triggers, monsters, items, player
 starts, paths and models; Doom thing categories) with counts. The
 View tab's Filters section hides kinds in the 2D views and the camera through
 `MapViewport::setFilteredObjects`, a set separate from objects hidden by hand,
@@ -669,6 +669,69 @@ service, and `--saved` reads the View tab's list. Tests:
 `level_view_filters_smoke_test.cpp` (every kind, Doom, invert, saved list, CLI)
 and `level_view_filters_ui_smoke_test.cpp` (commands, keys, check boxes, invert,
 reset, persistence, Quake-only enablement).
+
+Hint takes a brush with a hint face (NRC's `g_filter_brush_hint`, SURF_HINT
+0x100), never hintskip; Skip takes a brush skipped on every face and, like
+Caulk, names the skip faces of other brushes one by one (`hidesFacesOneByOne`),
+so hiding it leaves a hint brush's hint face in the camera. On Quake maps skip
+stays caulk and only ericw-tools' hintskip is Skip; Quake II and III also read
+SURF_SKIP (0x200). Fog (Quake III only) takes any face whose shader declares
+surfaceparm fog or fogParms (`LevelViewFilterShader::fog`), CONTENTS_FOG (0x40),
+or, for faces no shader resolves, a texture path with a part that is `fog` or
+`fogs` or starts with the word fog (`isFogTexturePath`: `fogs/mist`,
+`sfx/fog_red`, `sfx/fog2`, never `base_wall/fogged_glass`).
+
+`src/core/level_filter_tags.*` adds filters that data defines. Tags read
+TrenchBroom's game configuration layout (`"brush"` and `"brushface"` lists with
+`name`, `match`, `pattern` and `flags`, plus `"faceattribs"` flag names in bit
+order), a whole configuration, or a plain list; `parseLevelFilterTags` skips
+unusable entries with warnings and keeps at most 64 tags, the first of each id.
+Tag files go through `parseLevelFilterTagText`, which first turns TrenchBroom's
+expression-language text into strict JSON with the same line breaks: `//` and
+`/* */` comments drop out, bare names (`[ modelscale, modelscale_vec ]`) become
+strings, a comma before `]` or `}` drops, numbers keep their exponents, and a
+backslash JSON does not define stays as written, as TrenchBroom keeps it, so the
+stock Quake configuration's Liquid pattern `"\**"` is an escaped `*` and then
+any run (textures starting with `*`) rather than `**`. Strict JSON passes
+through unchanged, and errors name their line. The stock configurations of an
+installed TrenchBroom (Quake, Quake 2, Quake 3, Half-Life, Kingpin, Daikatana
+and the rest) were checked to read this way; one without a `"tags"` object
+(Hexen 2) is refused as holding no tags.
+Texture tags glob the texture's own name, or its path below `textures/` when
+the pattern has a `/` (`*`, `?`, `\` escapes, case ignored); surfaceparm tags
+read `LevelViewFilterShader::surfaceParms` from the package scan; flag tags
+resolve names through the data's own list, then `levelFaceFlagNames` for the
+map's game, and accept numbers; class tags take brush entities. A face tag hides
+a brush whose every face matches and returns the matching faces of others from
+`levelFilterTagFaceMatches`, TrenchBroom's per-face tag hiding. Class filters
+(`levelFilterClasses`, `levelFilterClassMatches`) list the definitions' point
+and brush classes and the map's own, grouped by the prefix before the first
+`_`, and hide every entity of a class whatever its case. Ids are `tag:<slug>`
+and `class:<name>`; a class whose name holds a `,` gets neither, since `,`
+separates the saved list and the CLI's lists. `levelViewFilterHidden` resolves a
+switched-off list of kinds, tags and classes into objects and the faces left on
+brushes still drawn, which the shell uses for the plan views and the camera's
+`hiddenFaces`. A brush whose faces would all go one by one, under several kinds
+or tags together (Caulk and Skip sides, or two face tags), joins the objects, as
+TrenchBroom's `EditorContext` hides a brush whose faces all carry a hidden tag
+(`BrushNode::allFacesHaveAnyTagInMask`).
+
+The shell (`src/app/level_filter_tag_actions.cpp`) reads tags from the project
+manifest's `levelFilterTags` (inline, or a path relative to the project) and the
+tag file chosen on the View tab (`levelView/filterTagFile`), keyed by file
+stamps so edits outside the studio are picked up. Each tag and each class gets
+a checkable `map.filterTag.<slug>` or `map.filterClass.<class>` command,
+registered again in one batch when the tags or classes change and scoped to the
+Levels page; `studio_semantics` resolves the generated ids for the palette and
+`StudioCommandRegistry::userShortcuts` keeps a user's key for one that is not
+loaded. Tag ids are saved with the kinds; class ids are stripped from the saved
+list and dropped when another map opens (`syncLevelClassFilterSession`).
+Invert Filters flips tags (`levelFilterTagsInverted`) but not classes. Tests:
+`level_filter_tags_smoke_test.cpp` (Hint, Skip and Fog, parsing, TrenchBroom
+configuration text, matching, combined face hiding, classes, ids, palette
+entries, project data, CLI) and `level_filter_tags_ui_smoke_test.cpp` (tag and
+class commands, boxes, tree, keys, Invert Filters' tag count, session, a light
+created while lights are hidden, persistence).
 
 ## Camera surface placement
 
@@ -1399,6 +1462,18 @@ are scoped debug measurements, not release latency guarantees. Overlapping
 geometry redraw, source adoption, ordinary fallbacks, real projects and native
 platform acceptance remain open. Repository-wide documentation/translation validation is separately recorded
 in the evidence report and must not be inferred from these passing editor suites.
+
+The grid overlays (2026-10-26) keep this split. The compiler block grid is part of
+the grid image: `MapGridView` carries the block size along the two drawn axes, its
+colour and width, the region bounds and whether the grid lines themselves are
+drawn, so the synchronous path, the overlay worker and the oversized-image
+fallback all draw the same dashed lines, and any change to them is a new image
+key. Block sizes come from `core/level_block_grid.h`, read once per scene
+revision. Grid coordinate labels are text and stay on the GUI thread: they are
+laid out from the plan view and the status-tag rectangles each paint
+(`mapGridCoordinateLabels`) and painted over the geometry, under the markers,
+handles and tools. `level-grid-overlays-ui-smoke` covers the helpers, the worker
+image, the widget's pixels and the shell commands.
 
 The child-pane follow-up reproduced shifted brush edges and synchronous overlay
 fallback at fractional display scales. `level-pane-phase-ui-smoke` renders a
@@ -2292,8 +2367,9 @@ No game was launched; in-game and other compiler acceptance remain open.
 **Edit → Add Brush…**, the command palette and the existing context-menu
 entry now open a primitive builder. Choose **Box**, **Wedge**, **Cylinder**,
 **Cone** or **Sphere**, then set its centre, XYZ size, axis and material.
-Radial shapes expose 3–64 sides; spheres also expose 2–16 latitude bands,
-including the two pole fans. Sides × bands must not exceed 128 sphere faces.
+Cylinders take 3–126 sides and cones 3–127, as far as the component editor's
+128 faces allow; spheres take 3–64 sides and 2–16 latitude bands, including the
+two pole fans. Sides × bands must not exceed 128 sphere faces.
 All primitives are closed convex solids, bounded to 128 faces and 256 vertices.
 Flat, non-finite, out-of-world or numerically unstable results are refused.
 Every dimension is at least one map unit and every vertex is within ±32768.
@@ -2334,6 +2410,155 @@ The existing required bounds, material and output path are unchanged. `--bands`
 applies to spheres; `--sides` applies to radial shapes. `--dry-run` writes no
 file, and replacing an output requires `--overwrite`. JSON adds `shape`,
 `faceCount` and `faceDialect` to the ordinary map-save report.
+
+### Circle fit and in-place rebuilds
+
+`LevelBrushPrimitiveRequest::fit` (and `LevelShapeRequest::fit`) chooses how a
+cylinder, cone or sphere sits in its box. `Box`, the default above, stretches
+the corners to the box with a corner on the first axis across the depth axis.
+`Circle` follows NetRadiant Custom's `Brush_ConstructPrism`, `Brush_ConstructCone`
+and `Brush_ConstructSphere` (449778b3, behaviour only): side planes tangent to a
+circle centred in the box whose radius is the larger half-extent across the
+depth axis, face 0 normal to the first axis ((axis + 1) mod 3), so the corners
+lie at (2i + 1)·180°/sides on a circle of radius r / cos(180°/sides); a cone's
+apex is over the centre of the high end; a sphere's corners lie on a sphere of
+the largest half-extent, a corner on the first axis of every latitude ring and
+the poles on the depth axis. The corners are computed directly and the shared
+hull builder writes the planes, so the result is the same solid NetRadiant
+Custom writes as plane points. Circle shapes may overhang the box, so
+`addLevelMapBrushPrimitive` checks the saved bounds against the drafted solid.
+
+`rebuildLevelMapBrushesAsShape` (`core/level_shapes.h`) rebuilds each brush in
+its own bounds through `rebuildLevelMapBrushHulls` (`core/level_primitive.h`,
+implemented in `core/level_map.cpp`). That writes the hull in the brush's own
+face style (`brushPieceText`), keeps the brush id and owner entity, moves its
+comments and `// brush N` marker inside it as wrap/merge does, keeps the most
+used face's content flags (surface flags and values reset, as a new face's),
+and records one `replace-objects` step whose result inherits the brush's file
+position and scene membership (`commitBrushReplacement`). The selection is the
+command's snapshot and result, so it never changes. Both entry points run
+inside `guardLevelSceneEdit`, so locks and the open group refuse as for any
+edit; hidden or unsolved brushes and brushes the requested detail cannot hold
+are skipped with reasons. The shell's **Make Prism…**, **Make Cone…**,
+**Make Sphere…** and **Make N-Sided Prism** commands
+(`app/level_prism_actions.cpp`) use the circle fit, the active plan view's
+depth axis (Z for spheres, as upstream) and the current material; sphere bands
+equal its sides, so the prompt stops at 11. The NetRadiant Custom profile's
+Ctrl+3 to Ctrl+9 are scoped, claiming commands (`setShortcutScopeClaims`) on the
+map views: `handleLevelPrismKey` accepts the ShortcutOverride only while the
+command is enabled, so the window-wide mode keys keep the same chords
+everywhere else.
+
+`level-prism-smoke` covers the circle fit's bounds and face orientation on all
+three axes, raised limits, in-place rebuilds of world and brush-entity brushes
+(ids, owners, layers, file order, markers, selection, exact undo/redo, four
+face dialects), hidden, locked, open-group and too-small brushes, and the CLI's
+`--in-place` and `--fit`. `level-prism-ui-smoke` drives the shell in three
+profiles at 100% and 200% high-contrast RTL with expanded text: registration,
+the prompt, view axes, brush entities, the Ctrl+digit claim and the Shapes
+tab's **Fit**.
+
+### Brushes from points and vertex listings
+
+TrenchBroom's debug **Create Brush** and **Print Vertices**
+(`MapWindow::debugCreateBrush` and `debugPrintVertices` at 4c756be1) are
+ordinary commands here, through `core/level_brush_points.h`:
+
+- `parseLevelBrushPoints` reads `x,y,z` groups, `x y z` points and TB's
+  `(x y z)` form, one form per line, ignoring `//` comments, up to 4,096 points.
+  It uses `QString::toDouble`, so the decimal mark is always a full stop.
+- `levelBrushPointsHull` names a degenerate input (one place, one line or one
+  plane, at the hull solver's 0.02-unit tolerance) before calling
+  `createLevelBrushEnvelope`, which absorbs duplicate, interior, edge and face
+  points within the 128-face / 256-vertex component limits.
+- `addLevelMapBrushFromPoints` passes the envelope's corners to
+  `addLevelMapBrushHulls` with no destination, so the brush goes to worldspawn,
+  the active creation node (an open group or layer) and the map's first-brush
+  face dialect, selected, as one guarded undo step that linked groups
+  propagate. The report counts input points, corners, unused points and faces.
+- `levelMapVertexListings` lists whole brushes (corners in vertex ID order),
+  picked faces (winding), edges (two ends), picked vertices and patch control
+  points; `levelVertexListingText` writes `// brush:3 face:2 base/metal`
+  comment lines and `(x y z)` points with `levelMapCoordinateText`, the
+  shortest round-trip decimal (`QLocale::FloatingPointShortest`, -0 as 0), so
+  the text reads back bit for bit. TB logs 17 significant digits instead.
+
+The shell (`app/level_brush_points_actions.cpp`) registers
+`map.createBrushFromPoints` and `map.copyVertexCoordinates`, with no default
+keys in any profile. The dialog (`app/level_brush_points_dialog.cpp`) parses on
+the GUI thread, runs `addLevelMapBrushFromPoints` on a copy of the map on a
+worker after a 150 ms pause, previews the new brush with package materials,
+and publishes that exact candidate through `levelPlacementCommitter`, so a
+changed map, selection or destination refuses the apply. **Copy Vertex
+Coordinates** uses `levelComponentTransformSets` (component picks plus
+independent face picks) and otherwise `levelCsgReachedBrushIds` minus brushes
+the active view hides or filters, writing the clipboard and Activity.
+`map add-brush --points` and multi-brush `map brush-components` (face
+`positions`, full-precision plain text) share the services.
+
+`level-brush-points-smoke` covers every point form and malformed input, the
+envelope's corners and refusals, worldspawn insertion with exact undo/redo,
+valve220/brushDef/brushDef3 dialects, an open group, a locked destination, a
+linked copy, listings of each kind that parse back exactly, and both CLI
+routes against the core result. `level-brush-points-ui-smoke` drives the shell
+in three profiles at 100% and 200% high-contrast RTL with expanded text.
+
+### Assemble Brush tool
+
+TrenchBroom's **Brush Tool** (`AssembleBrushTool` and
+`AssembleBrushToolController3D` at 4c756be1, B; Return creates) is the
+checkable **Assemble Brush Tool** (`map.assembleBrushTool`, B in the TrenchBroom
+profile only) with **Create Assembled Brush** (`map.createAssembledBrush`). The
+geometry lives in `core/level_brush_assemble.h`:
+
+- `levelBrushAssembleOutline` names what up to 4,096 points make with
+  `levelBrushPointsHull`'s 0.02-unit spread: nothing, a point, a segment's two
+  ends, a flat outline (monotone-chain corners in order, with a Newell plane)
+  or a volume, whose hull is solved only when asked.
+- `levelBrushAssembleSurfacePoint` is TB's `Grid::snap(point, plane)`: the two
+  coordinates across the face's dominant axis round to the grid and the third
+  follows the plane; a rounded point off the face keeps the hit instead.
+- `levelBrushAssembleRectangle` is TB's `DrawFaceDragDelegate`: low corner
+  down, high corner up to the grid, each corner lifted onto the plane.
+- `levelBrushAssembleExtrusionDistance` is TB's `DuplicateFaceDragDelegate`
+  with its relative line snapper: the nearest point of the normal line to the
+  pointer ray, by grid steps. `levelBrushPointsExtruded` adds the moved copies.
+
+Each view keeps a copy of the shared points (`app/level_brush_assemble_state.h`,
+as the clip tool's views do) and draws them as squares with the flat outline
+dashed or the checked hull solid. The camera (`app/model_viewport_assemble.cpp`)
+follows TB's controller: click, drag from a face, double-click for a face's
+corners and Shift-drag on the outline. A brush face comes from the shell's
+resolver (rendered triangle to brush face plane and winding through
+`MapBrushGeometryCache`); where nothing is rendered under the pointer, the
+point lands on the **Draw Brush** construction plane, so an empty map can be
+started from the camera. The plan views (`app/map_viewport_assemble.cpp`) go
+further than TB, whose 2D views have no Brush Tool: clicks and empty drags add
+grid points at the last point's depth or the work zone's floor, a drag on a
+point moves it and the points drawn on top of it, and Shift-drag extrudes a
+flat outline whose normal the view shows side-on.
+
+The shell (`app/level_brush_assemble_actions.cpp`) propagates every change and
+runs `addLevelMapBrushFromPoints` on a copy of the map on a worker, newest
+request only and cancellable; the preview carries the hull's edges and counts
+or the reason there is no brush. Enter publishes the checked copy through
+`levelPlacementCommitter`; a changed map, selection, creation node or material
+rechecks first and creates when the check finishes. The points then clear, as
+TB's `doBrushesWereCreated` does. The tool is exclusive with the clip tool,
+component modes, shear, region drawing and the camera's Draw Brush, Paint and
+Sample, and leaves the tool bar showing no tool. Escape cancels a drag, then
+clears the points, then leaves; Backspace and Delete remove the last point.
+`map add-brush --points --extrude dx,dy,dz` scripts the extruded result.
+
+`level-brush-assemble-smoke` covers the shapes, bad input, grid points on
+faces and slopes, rectangles, rays, extrusion, appending without duplicates,
+the TB workflow as one exact undo step, and `--extrude` against the core.
+`level-brush-assemble-ui-smoke` drives the shell in three profiles at 100% and
+200% high-contrast RTL with expanded text: registration and B, mouse events in
+the Top and Front views, the worker check and Enter, point editing and Escape,
+a superseded check, a locked layer, the clip tool's exclusivity, and in the
+camera face points, rectangles, extrusion, a face's corners, the construction
+plane and a hidden brush. Native input and macOS/Linux acceptance remain open.
 
 `level-primitive-smoke` covers shape topology and analytic volumes, all three
 axes and four face dialects, low/odd/maximum detail, pending dialect conversion,
@@ -2503,6 +2728,165 @@ map's texture list) when names change. The GUI runs it on the surface worker
 (app/level_texture_reset_dialog.*); the CLI is `map align-textures` with
 `--set-*`, `--rename`, `--only-texture` and `--whole-map`. Limits: 262,144
 faces and 65,536 patches.
+
+#### Proportional fits and texture projections
+
+`LevelSurfaceRequest::keepProportions` turns a `Fit` with exactly one repeat
+count 0 into NetRadiant Custom's Fit Width or Fit Height (`Texdef_FitTexture`
+without `only_dimension`, at `449778b3`): the 0 axis takes the fitted axis's
+factor (`fitFactors()`, the same factor on texels, repeats or patch
+coordinates) and starts at its minimum. Without it the 0 axis is kept, which is
+that editor's Width Only and Height Only. `map.surfaceFitWidth` and
+`map.surfaceFitHeight` (Fit Texture Width and Height) are the proportional
+quick commands; `map.surfaceFitU` and `map.surfaceFitV` were relabelled Fit
+Texture Width Only and Height Only to match. Patches keep their proportions
+rather than being re-tiled to one repeat of the other axis
+(`Patch::SetTextureRepeat`). The Surface Alignment window's **Keep
+proportions** box sets the flag for any count; CLI `--fit U,V
+--keep-proportions`.
+
+`LevelSurfaceOperation::ProjectAxial` and `ProjectDirection` are
+`SurfaceInspector_ProjectTexture` for Axial, Ortho and Cam: the default
+texture, no shift or rotation, at x,y map units per texel. `ProjectAxial` gives
+faces `Natural`'s projection (`TextureAxisFromPlane`, as
+`Normal_GetTransform`'s `projectionaxis_for_normal` chooses) and patches
+`axialLevelPatchTexture()` along the axis nearest `levelPatchAverageNormal()`.
+`ProjectDirection` takes `projectionDirection` and the `ComputeAxisBase`
+basis (S, T) for it: Valve 220 faces take S and T as unit axes with the scale
+apart; brush-primitive faces and classic faces take the same world function
+through `setLevelTextureProjection()`; patches take
+`projectedLevelPatchTexture()`. Radiant writes brush-primitive offsets within
+one repeat (`BPTexdef_fromST011`), so both operations reduce them modulo 1. A
+face with |n·d| < 1e-6 and a patch whose coordinates collapse onto a line
+(`collapsedCoordinates()`) are skipped as edge-on; a classic face is skipped
+when `fitClassic` cannot hold the projection (its axes are not orthogonal in
+the face's axial plane). `skippedEdgeOnCount()` and `skippedClassicCount()`
+count them, and a batch that skips every target and changes nothing is
+refused with the reason. Deliberate differences from NetRadiant Custom: it
+skips every classic face; its direction projection gives brush-primitive faces
+and patches V = −T·p (a mirror of its Valve 220 result, V = T·p), where every
+format here takes V = T·p; and its Ortho uses +Y for the XZ view, where the
+Levels command uses the axis towards the viewer of the active plan view
+(`levelPlanNudgeAxis(..., DepthUp)`: Top +Z, Front −Y, Side +X). The camera
+command uses −`viewForward()`. `map.surfaceProjectAxial`, `...View` and
+`...Camera` act on picked faces first (`cameraTargets = true`); none has a
+default key (NetRadiant Custom has none). CLI: `map align-textures --project
+axial|x|y|z|-x|-y|-z|camera` (camera from `--camera-yaw`/`--camera-pitch`),
+`--project-direction X,Y,Z` and optional `--project-scale U,V`; JSON reports
+`skippedEdgeOn` and `skippedClassic`.
+
+### Face flags
+
+`core/level_face_flags.h` reads and edits the three numbers a Quake II or
+Quake III face writes after its texture (`contentFlags`, `surfaceFlags`,
+`surfaceValue`). `levelFaceFlagGame()` is Quake III for `Quake3Map` and
+Quake II for a `QuakeMap` where `levelMapUsesFaceFlags()` holds or
+`builtinEntityGameForMap()` finds Quake II evidence in its header or Quake
+II-only classes, because the three numbers are optional on a Quake II line.
+For flag edits, the catalogue's texture-folder hint is excluded: modern Quake
+maps also use folders. Quake maps carry no flags and are refused.
+`levelFaceFlagNames()` returns `MaterialFlagDescriptor` lists: Quake
+II's from the Materials module (`quake2SurfaceFlagDescriptors()`,
+`quake2ContentFlagDescriptors()`, re-release bits included), Quake III's from
+`surfaceflags.h`. `LevelFaceFlagsSummary` gives the bits set on every face
+(`contentAll`, `surfaceAll`), on any (`contentAny`, `surfaceAny`) and a value
+or `valueMixed`. `LevelFaceFlagsEdit` carries set and clear masks per word and
+an optional value, so one box changes one bit across faces that differ;
+`clearAll()` is NetRadiant Custom's Unset. The detail bit (0x8000000) is
+refused, as NetRadiant Custom keeps it through every flag edit
+(`ContentsFlagsValue_assignMasked`): Make Detail and Make Structural own it.
+`prepareLevelFaceFlagsEdit()` builds a `LevelSurfaceEditPlan` (marked
+`m_flags`, so the undo step reads "Set flags on N brush faces") and
+`commitLevelSurfaceEdit()` applies it, rewriting only the three numbers on each
+changed face's line, or appending them before a trailing comment where the
+line had none (`flagsWritten`). A changed word is always written as a signed
+32-bit number, as NetRadiant Custom and TrenchBroom write it, so bit 31 (Quake
+II's N64 scroll flip, Quake III's No drop) reads -2147483648: VibeMap2
+(derived from ericw-tools) parses the numbers with `std::stoi`, which throws
+on 2147483648,
+and q3map2's `atoi` saturates it to 0x7fffffff on Windows. An unchanged word
+keeps its text. Hidden brushes, brushes outside the open group and locked
+layers or groups are refused before the plan; a no-op is refused without an
+undo step. Patches carry no face flags here, although `patchDef2` headers hold
+three numbers of their own.
+
+The **Surfaces** tab's **Flags** section (`LevelSurfaceTools::setFaceFlags`)
+targets the picked faces, else the Surfaces target's brush faces
+(`levelSurfaceQueueTargets(true, ...)`), shows a tri-state box per named bit
+(`surfaceFlag-<id>`, `contentFlag-<id>`; partly checked is exposed to
+accessibility as mixed), a **Value** field and **Clear Flags**
+(`map.surfaceClearFlags`). Boxes are laid out in one to three columns by the
+widest label and elided to fit; unnamed bits are reported and kept. Edits run
+synchronously through `ApplicationShell::applyLevelFaceFlags` and refuse while
+surface edits are pending or a geometry tool is active. **Show Surfaces**
+(`map.sidebar.surfaces`) is checkable and toggles: shown and current in Levels
+mode, it returns its sidebar to the tab it replaced (`m_levelSurfacesReturnTab`)
+or folds it. It is checked only while Levels is the current mode
+(`refreshLevelSurfacesToggle()` runs on mode changes); from another mode it
+switches to Levels and keeps the remembered tab; invoked from a map or camera view it leaves focus there, so the
+NetRadiant Custom and NetRadiant profiles' <kbd>S</kbd> hides the tab again.
+CLI: `map face-flags` reads by name or applies `--set-content`,
+`--clear-content`, `--set-surface`, `--clear-surface`, `--value` and
+`--clear-all` through the same service.
+
+### UV Editor
+
+`core/level_uv_edit.h` is NetRadiant Custom's TexTool for every face format and
+for patches. `readLevelUvLayout()` reads one `LevelMaterialTarget` (a brush face
+or a patch) as world points and texel coordinates: the face's winding from
+`solveBrushGeometry()` through `levelTextureProjection()` (repeats times the
+image size for brush primitives), or the patch's control grid row by row
+(`controlU`/`controlV` times the image size). Brush primitives and patches
+need a valid image size; classic and Valve 220 faces count texels and do not.
+`LevelUvTransform` is an affine map of texture space (s right, t down), so a
+positive `rotation()` reads clockwise in the view; quarter and half turns use
+`rotateLevelVector()` and stay exact. `LevelUvEdit` holds a face's whole-texture
+transform, or a patch's full list of texel coordinates, plus the anchor and the
+Valve 220 permission. `applyLevelUvEdit()` writes it back in the face's own
+format: a translation adds to the offsets only (`shiftX/Y`, `uOffset/vOffset`
+or matrix columns 2 and 5 in repeats); other transforms are applied to the
+projection in texels and written through `setLevelTextureProjection()` (brush
+primitives, and classic faces whose format holds the result), with a Valve 220
+face keeping its `scaleX/Y` and taking the turned axes times its scales. A
+classic face that cannot hold the result converts to Valve 220 when allowed
+(`LevelUvFit::Converted`) or takes `nearestClassicLevelTextureProjection()`
+anchored on the anchor point, or on every point without one
+(`LevelUvFit::Approximated`). Patch points whose coordinates did not change keep
+their stored doubles bit for bit. `levelUvFaceDrag()` is TexTool's drag (no
+anchor or the anchor itself: a translation landing the point on the target;
+another point: a turn about the anchor, optionally stepped), and
+`levelUvPatchDrag()`/`levelUvPatchTransformed()` move or transform a patch
+selection. `prepareLevelUvEdit()` refuses `levelUvTargetProblem()` (hidden,
+locked, outside the open group, no area, not a Quake-family map) and a target
+whose face record, face winding or patch definition changed since the layout was read, then
+builds a `LevelSurfaceEditPlan` marked `m_uv` ("Edit texture coordinates on N
+surfaces"), committed by `commitLevelSurfaceEdit()` with the scene-lock guard.
+
+`app/level_uv_view.*` is the texture-space view: a synchronous `QPainter` view
+(a face has at most a few dozen points and a patch at most 961), the material
+image tiled through a `QBrush` transform from image pixels to texels to the
+screen (a 2 × 2 checker scaled to the repeat when there is no image), repeat
+edges and the snap grid when they are far enough apart, the starting outline
+dashed, the current one dark under white, hollow points, filled selected
+points and a ringed-cross anchor so state never rests on colour alone. Every
+change runs `applyLevelUvEdit()`, so the view shows what the map will read; it
+keeps its own undo history of edits. It is laid out left to right in every
+direction, re-frames on resize until the user zooms or pans, and accepts its
+keys in `ShortcutOverride`. `ModelUvView` was not reused: it renders large
+model UV sets asynchronously and moves selections with a centre handle,
+whereas TexTool's per-point drags and anchor turns need direct point hits.
+`app/level_uv_editor_dialog.*` adds the preview (`buildLevelMapPreviewMesh()` of
+the face's brush or the patch with the edited face, rebuilt on a 15 ms timer,
+the edited face highlighted), snap and turn steps (the turn step starts at the
+profile's `surfaceRotationStep`), the Valve 220 choice for classic faces, the
+explicit image size (forced on for repeat-counting surfaces without a package
+image, and locked once points move), buttons and an editable point table. The
+image comes from the Levels preview's resolved materials, or is resolved from
+the open package on a worker. `map.uvEditor` (`app/level_uv_editor_actions.cpp`)
+targets `levelSurfaceFaceTargets()` when it holds exactly one face, otherwise a
+single selected patch; it is refreshed with the Surfaces tools, refuses while a
+geometry tool is active, and the Apply handler rejects a map, package or
+palette that changed while the dialog was open. CLI: `map edit-uv`.
 
 ### Surface clipboard
 
@@ -4503,3 +4887,21 @@ The target-link graph also uses exact native property keys. Custom `TARGET` or
 `TARGETNAME` keys cannot masquerade as `target`/`targetname`; the GUI link display,
 source/target navigation and CLI map report share this graph. NRC fresh names
 read the exact `classname` property rather than the permissive inspector label.
+
+### Configured smart-tag authoring
+
+`core/level_smart_tags.*` shares `LevelFilterTag` and its name/shader matching
+with the view filters. Dynamic `map.makeTag.<slug>` and
+`map.makeNonTag.<slug>` commands register with the palette and shortcut
+registry; only flag and classname tags offer disable. Texture/surfaceparm
+choices use map/package materials, class choices use entity definitions, and
+classname tags retain their optional configured texture. GUI edits prepare
+on the existing placement worker and publish through its stale-result guard.
+
+The service edits a candidate, uses existing surface/flag/entity services,
+folds follow-up operations into one undo step, and refuses hidden, locked,
+filtered or out-of-context targets. Face edits inside closed groups require
+opening them; detail requires complete brushes. `map smart-tag` uses the same
+service and safe save path. Tests cover core refusal/undo/cancellation and
+offscreen commands at 100% and 200%, high contrast, expanded translation and
+RTL. Physical input and other operating systems remain unverified.
