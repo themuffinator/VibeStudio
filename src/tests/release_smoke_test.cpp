@@ -1,7 +1,8 @@
 // Releases end to end in core: planning what ships for each scope and game
-// against a generated game asset register, the changelog and release notes,
-// release records and their diffs, and publishing packages, readmes, notes
-// and distribution archives through the atomic publisher.
+// against a generated game asset register, the files game code and scripts
+// load by name, the changelog and release notes, release records and their
+// diffs, and publishing packages, readmes, notes and distribution archives
+// through the atomic publisher.
 
 #include "core/deflate.h"
 #include "core/game_asset_register.h"
@@ -9,12 +10,14 @@
 #include "core/release_notes.h"
 #include "core/release_plan.h"
 #include "core/release_publish.h"
+#include "core/release_script_refs.h"
 #include "core/studio_settings.h"
 #include "tests/release_test_fixtures.h"
 
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
 #include <QSet>
 #include <QTemporaryDir>
 #include <QThread>
@@ -604,6 +607,324 @@ bool runPublishDoomAndZip(const QString& base)
 	return ok;
 }
 
+// --- Game code and scripts -----------------------------------------------------
+
+// "kind reference" for each reference the scan found, or for the given ones.
+QStringList scanned(const ScriptReferenceScan& scan, const QVector<int>& only = {}, bool useOnly = false)
+{
+	QStringList rows;
+	for (qsizetype i = 0; i < scan.references.size(); ++i) {
+		if (!useOnly || only.contains(int(i))) {
+			rows << scan.references[i].kind + QLatin1Char(' ') + scan.references[i].reference;
+		}
+	}
+	return rows;
+}
+
+const ScriptAssetReference* scannedReference(const ScriptReferenceScan& scan, const QString& reference)
+{
+	for (const ScriptAssetReference& row : scan.references) {
+		if (row.reference.compare(reference, Qt::CaseInsensitive) == 0) {
+			return &row;
+		}
+	}
+	return nullptr;
+}
+
+const ReleaseScriptReference* scriptRow(const ReleasePlan& plan, const QString& reference)
+{
+	for (const ReleaseScriptReference& row : plan.scriptReferences) {
+		if (row.reference.compare(reference, Qt::CaseInsensitive) == 0) {
+			return &row;
+		}
+	}
+	return nullptr;
+}
+
+QString rowStatus(const ReleasePlan& plan, const QString& reference)
+{
+	const ReleaseScriptReference* row = scriptRow(plan, reference);
+	return row ? row->status : QStringLiteral("<none>");
+}
+
+bool requiredBy(const ReleasePlan& plan, const QString& path, const QString& script)
+{
+	const ReleaseEntry* entry = plan.entry(path);
+	return entry && entry->requiredBy.contains(script);
+}
+
+const ReleaseReference* stockReference(const ReleasePlan& plan, const QString& path)
+{
+	for (const ReleaseReference& reference : plan.stock) {
+		if (reference.path.compare(path, Qt::CaseInsensitive) == 0) {
+			return &reference;
+		}
+	}
+	return nullptr;
+}
+
+// Each script language on its own, as text.
+bool runScriptScanner(const QString& base)
+{
+	bool ok = true;
+	ScriptReferenceScanOptions quake;
+	quake.gameKey = QStringLiteral("quake");
+
+	ScriptReferenceScan qc;
+	scanScriptText(QStringLiteral("quakec"), QString::fromUtf8(fixtures::fiendQuakeC()), QStringLiteral("qc/fiend.qc"), quake, &qc);
+	const QStringList found = scanned(qc);
+	for (const QString& row : {QStringLiteral("model progs/fiend.mdl"), QStringLiteral("sound fiend/roar.wav"), QStringLiteral("sound fiend/idle.wav"),
+			 QStringLiteral("sound ambience/drone6.wav"), QStringLiteral("sound fiend/gone.wav"), QStringLiteral("model progs/rune.mdl")}) {
+		ok &= expect(found.contains(row), "QuakeC precaches, sounds and models are found", row + QStringLiteral(" in ") + found.join(QStringLiteral(", ")));
+	}
+	ok &= expect(found.filter(QStringLiteral("comment")).isEmpty() && !found.contains(QStringLiteral("model *1")) && found.filter(QStringLiteral("noise")).isEmpty(),
+		"comments, inline brush models and non-literal arguments are not references", found.join(QStringLiteral(", ")));
+	const ScriptAssetReference* fiend = scannedReference(qc, QStringLiteral("progs/fiend.mdl"));
+	ok &= expect(fiend && fiend->line == 23 && fiend->owner == QStringLiteral("monster_fiend") && fiend->via == QStringLiteral("precache_model")
+			&& fiend->candidates == QStringList {QStringLiteral("progs/fiend.mdl")},
+		"a precache keeps its line, function and call", fiend ? QStringLiteral("%1 %2 %3").arg(fiend->line).arg(fiend->owner, fiend->via) : QString());
+	const ScriptAssetReference* idle = scannedReference(qc, QStringLiteral("fiend/idle.wav"));
+	ok &= expect(idle && idle->candidates.first() == QStringLiteral("sound/fiend/idle.wav"), "QuakeC sounds are found under sound/",
+		idle ? idle->candidates.join(QLatin1Char(' ')) : QString());
+	ok &= expect(qc.unit(QStringLiteral("function"), QStringLiteral("monster_fiend")) && qc.unit(QStringLiteral("function"), QStringLiteral("fiend_stand1"))
+			&& qc.unit(QStringLiteral("function"), QStringLiteral("item_rune")), "old- and new-style QuakeC functions are units");
+	const ScriptReachable spawned = scriptReferencesForEntityClasses(qc, {QStringLiteral("worldspawn"), QStringLiteral("monster_fiend")});
+	const QStringList reached = scanned(qc, spawned.references, true);
+	ok &= expect(reached.contains(QStringLiteral("sound fiend/roar.wav")) && !reached.contains(QStringLiteral("model progs/rune.mdl"))
+			&& spawned.units == QStringList {QStringLiteral("monster_fiend"), QStringLiteral("fiend_sounds")} && spawned.scripts == QStringList {QStringLiteral("qc/fiend.qc")},
+		"a class reaches the functions it calls, not those it only names", reached.join(QStringLiteral(", ")) + QStringLiteral(" / ") + spawned.units.join(QLatin1Char(' ')));
+
+	ScriptReferenceScanOptions quake3;
+	quake3.gameKey = QStringLiteral("quake3");
+	ScriptReferenceScan menu;
+	scanScriptText(QStringLiteral("menu"), QString::fromUtf8(fixtures::quake3MenuText()), QStringLiteral("ui/mymain.menu"), quake3, &menu);
+	const QStringList menuRows = scanned(menu);
+	for (const QString& row : {QStringLiteral("script ui/menudef.h"), QStringLiteral("image ui/assets/mycursor"), QStringLiteral("sound sound/misc/missing.wav"),
+			 QStringLiteral("image ui/assets/mybg.tga"), QStringLiteral("model models/mapobjects/barrel.md3"), QStringLiteral("image textures/skies/stocksky"),
+			 QStringLiteral("sound sound/mymod/click.wav"), QStringLiteral("script mymod.cfg")}) {
+		ok &= expect(menuRows.contains(row), "menu art, models, sounds, includes and exec'd configs are found", row + QStringLiteral(" in ") + menuRows.join(QStringLiteral(", ")));
+	}
+	ok &= expect(!menuRows.contains(QStringLiteral("image main")) && !menuRows.contains(QStringLiteral("image barrel")), "names are not files");
+	const ScriptAssetReference* cursor = scannedReference(menu, QStringLiteral("ui/assets/mycursor"));
+	ok &= expect(cursor && cursor->candidates.first() == QStringLiteral("ui/assets/mycursor.tga") && cursor->shaderName == QStringLiteral("ui/assets/mycursor"),
+		"a menu image without an extension tries image files, then a shader", cursor ? cursor->candidates.join(QLatin1Char(' ')) : QString());
+	const ScriptAssetReference* background = scannedReference(menu, QStringLiteral("ui/assets/mybg.tga"));
+	ok &= expect(background && background->line == 11 && background->via == QStringLiteral("background"), "a menu keyword keeps its line");
+
+	ScriptReferenceScan config;
+	scanScriptText(QStringLiteral("config"), QString::fromUtf8(fixtures::quake3ConfigText()), QStringLiteral("mymod.cfg"), quake3, &config);
+	const ScriptAssetReference* exec = scannedReference(config, QStringLiteral("other"));
+	const ScriptAssetReference* bound = scannedReference(config, QStringLiteral("sound/world/hum.wav"));
+	ok &= expect(exec && exec->candidates.contains(QStringLiteral("other.cfg")) && bound && bound->candidates.first() == QStringLiteral("sound/world/hum.wav")
+			&& config.references.size() == 2, "configs follow exec and the commands a bind runs, not comments", scanned(config).join(QStringLiteral(", ")));
+	ScriptReferenceScan quakeConfig;
+	scanScriptText(QStringLiteral("config"), QStringLiteral("play misc/talk.wav; alias go \"exec go.cfg\"\nmap start"), QStringLiteral("autoexec.cfg"), quake, &quakeConfig);
+	const ScriptAssetReference* talk = scannedReference(quakeConfig, QStringLiteral("misc/talk.wav"));
+	ok &= expect(talk && talk->candidates.first() == QStringLiteral("sound/misc/talk.wav") && scannedReference(quakeConfig, QStringLiteral("go.cfg"))
+			&& scannedReference(quakeConfig, QStringLiteral("start")) && scannedReference(quakeConfig, QStringLiteral("start"))->candidates.first() == QStringLiteral("maps/start.bsp"),
+		"Quake configs play from sound/, follow aliases and name maps", scanned(quakeConfig).join(QStringLiteral(", ")));
+
+	ScriptReferenceScanOptions doomOptions;
+	doomOptions.gameKey = QStringLiteral("doom");
+	ScriptReferenceScan doom;
+	QStringList includes;
+	scanScriptText(QStringLiteral("decorate"), QString::fromUtf8(fixtures::fireImpDecorate()), QStringLiteral("monsters.wad:DECORATE"), doomOptions, &doom, &includes);
+	scanScriptText(QStringLiteral("decorate"), QString::fromUtf8(fixtures::fireBallDecorate()), QStringLiteral("monsters.wad:IMPBALL"), doomOptions, &doom);
+	scanScriptText(QStringLiteral("sndinfo"), QStringLiteral("; Fire imps\nfireimp/sight dsfisit\nfireimp/boom \"sounds/fireimp/boom.ogg\"\n$random fireimp/pain { fireimp/sight fireimp/boom }\n$limit fireimp/sight 2\n"),
+		QStringLiteral("monsters.wad:SNDINFO"), doomOptions, &doom);
+	scanScriptText(QStringLiteral("mapinfo"), QStringLiteral("map MAP01 \"Fire\"\n{\n  music = \"D_FIRE\"\n  sky1 = \"FENCE\", 0\n  next = \"MAP02\"\n}\nDoomEdNums\n{\n  30003 = Spark, 1\n}\n"),
+		QStringLiteral("monsters.wad:MAPINFO"), doomOptions, &doom);
+	scanScriptText(QStringLiteral("mapinfo"), QStringLiteral("; Hexen style\nmap 1 \"Winnowing Hall\"\ncluster 1\nsky1 SKY2 0\nmusic hub1\n"), QStringLiteral("hexen:MAPINFO"),
+		doomOptions, &doom);
+	scanScriptText(QStringLiteral("zscript"),
+		QStringLiteral("version \"4.10\"\nclass HotImp : DoomImp replaces DoomImp\n{\n\tDefault\n\t{\n\t\tSeeSound \"hotimp/sight\";\n\t\tInventory.Icon \"HIMPICON\";\n\t}\n"
+					   "\tStates\n\t{\n\tSpawn:\n\t\tHIMP AB 10 A_Look;\n\t\tLoop;\n\tMissile:\n\t\tHIMP C 8 { A_SpawnProjectile(\"FireBall\"); }\n\t\tGoto See;\n\t}\n"
+					   "\toverride void Tick() { super.Tick(); A_StartSound(\"hotimp/hiss\", CHAN_BODY); }\n}\n"),
+		QStringLiteral("zscript.zs"), doomOptions, &doom);
+	ok &= expect(includes == QStringList {QStringLiteral("IMPBALL")}, "DECORATE includes are reported", includes.join(QLatin1Char(' ')));
+	const ScriptCodeUnit* imp = doom.unit(QStringLiteral("class"), QStringLiteral("fireimp"));
+	ok &= expect(imp && imp->parent == QStringLiteral("DoomImp") && imp->editorNumber == 30001 && imp->uses.contains(QStringLiteral("FireBall")),
+		"an actor's parent, editor number and the classes it fires are read", imp ? imp->uses.join(QLatin1Char(' ')) : QString());
+	const QStringList doomRows = scanned(doom);
+	ok &= expect(doomRows.contains(QStringLiteral("sprite FIMP")) && doomRows.contains(QStringLiteral("sprite UNUS")) && doomRows.contains(QStringLiteral("sprite HIMP"))
+			&& doomRows.filter(QStringLiteral("TNT1")).isEmpty() && doomRows.filter(QStringLiteral("sprite FIMP")).size() == 1,
+		"states give each sprite once, and TNT1 is no sprite", doomRows.join(QStringLiteral(", ")));
+	const ScriptAssetReference* sight = scannedReference(doom, QStringLiteral("fireimp/sight"));
+	const ScriptAssetReference* hiss = scannedReference(doom, QStringLiteral("hotimp/hiss"));
+	const ScriptAssetReference* icon = scannedReference(doom, QStringLiteral("HIMPICON"));
+	ok &= expect(sight && sight->soundName == QStringLiteral("fireimp/sight") && sight->via == QStringLiteral("SeeSound") && hiss && hiss->owner == QStringLiteral("HotImp")
+			&& icon && icon->lumpName == QStringLiteral("HIMPICON"),
+		"sound properties, sound calls and icons are read in DECORATE and ZScript");
+	ok &= expect(doom.soundDefinition(QStringLiteral("fireimp/sight")) && doom.soundDefinition(QStringLiteral("fireimp/sight"))->target == QStringLiteral("dsfisit")
+			&& scannedReference(doom, QStringLiteral("sounds/fireimp/boom.ogg")) && !doom.soundDefinition(QStringLiteral("$limit")),
+		"SNDINFO maps logical names to lumps and files, and skips its commands");
+	QStringList soundScripts;
+	const QVector<int> pain = scriptSoundTargets(doom, QStringLiteral("fireimp/pain"), &soundScripts);
+	ok &= expect(scanned(doom, pain, true) == QStringList {QStringLiteral("sound dsfisit"), QStringLiteral("sound sounds/fireimp/boom.ogg")}
+			&& soundScripts == QStringList {QStringLiteral("monsters.wad:SNDINFO")},
+		"a $random plays each member's lump or file", scanned(doom, pain, true).join(QStringLiteral(", ")));
+	ok &= expect(doom.classForEditorNumber(30003) == QStringLiteral("Spark") && doom.classForEditorNumber(30001) == QStringLiteral("FireImp")
+			&& doom.classForEditorNumber(3001) == QStringLiteral("DoomImp"), "editor numbers come from MAPINFO, DECORATE and the standard classes");
+	const ScriptCodeUnit* hexen = doom.unit(QStringLiteral("map"), QStringLiteral("MAP01"));
+	ok &= expect(hexen && scanned(doom, hexen->references, true).contains(QStringLiteral("texture SKY2")) && scanned(doom, hexen->references, true).contains(QStringLiteral("music hub1"))
+			&& scanned(doom, hexen->references, true).contains(QStringLiteral("music D_FIRE")),
+		"MAPINFO keys belong to their map, also in the old format where a map names its cluster", hexen ? scanned(doom, hexen->references, true).join(QStringLiteral(", ")) : QString());
+	const ScriptReachable things = scriptReferencesForDoomThings(doom, {1, 30001, 3001}, {QStringLiteral("MAP01")});
+	const QStringList thingRows = scanned(doom, things.references, true);
+	ok &= expect(things.units.contains(QStringLiteral("FireImp")) && things.units.contains(QStringLiteral("FireBall")) && things.units.contains(QStringLiteral("HotImp"))
+			&& !things.units.contains(QStringLiteral("Unused")) && thingRows.contains(QStringLiteral("sprite FBAL")) && thingRows.contains(QStringLiteral("sprite HIMP"))
+			&& !thingRows.contains(QStringLiteral("sprite UNUS")),
+		"a map's things reach their classes, the classes those fire, and replacements of stock classes", things.units.join(QLatin1Char(' ')) + QStringLiteral(" / ") + thingRows.join(QStringLiteral(", ")));
+	for (const QString& script : {QStringLiteral("monsters.wad:DECORATE"), QStringLiteral("monsters.wad:IMPBALL"), QStringLiteral("monsters.wad:SNDINFO"),
+			 QStringLiteral("monsters.wad:MAPINFO"), QStringLiteral("zscript.zs")}) {
+		ok &= expect(things.scripts.contains(script), "the scripts that define what a map uses are needed", script + QStringLiteral(" in ") + things.scripts.join(QLatin1Char(' ')));
+	}
+
+	// Bounds and cancellation.
+	ScriptReferenceScanOptions small = quake;
+	small.maximumReferences = 3;
+	ScriptReferenceScan bounded;
+	scanScriptText(QStringLiteral("quakec"), QString::fromUtf8(fixtures::fiendQuakeC()), QStringLiteral("qc/fiend.qc"), small, &bounded);
+	ok &= expect(bounded.references.size() == 3 && !bounded.complete && bounded.warnings.size() == 1, "the reference limit stops the scan and says so");
+	ProjectContentReader project;
+	ScriptReferenceScanOptions cancel;
+	cancel.isCancelled = []() { return true; };
+	const QString folder = QDir(base).filePath(QStringLiteral("scanned"));
+	fixtures::writeFile(QDir(folder).filePath(QStringLiteral("qc/fiend.qc")), fixtures::fiendQuakeC());
+	ProjectContentRoot root;
+	root.path = folder;
+	root.layerId = QStringLiteral("project");
+	ok &= expect(project.load({root}), "the scanned folder is read");
+	const ScriptReferenceScan cancelled = scanScriptReferences(project, {}, cancel);
+	ok &= expect(cancelled.cancelled && !cancelled.complete && cancelled.references.isEmpty(), "a cancelled scan stops before reading");
+	const ScriptReferenceScan full = scanScriptReferences(project);
+	ok &= expect(full.complete && full.scripts.size() == 1 && full.references.size() == qc.references.size(), "a project's scripts are found by name and read");
+	return ok;
+}
+
+// A Quake map that places a monster from the project's QuakeC.
+bool runQuakeScripts(const QString& base)
+{
+	bool ok = true;
+	const QString game = QDir(base).filePath(QStringLiteral("quake"));
+	ok &= expect(fixtures::makeQuakeInstallation(game), "the fake Quake installation is written");
+	auto stock = baseRegister(fixtures::profile(QStringLiteral("quake"), QStringLiteral("quake"), game));
+	const QString root = QDir(base).filePath(QStringLiteral("qcmod"));
+	ok &= expect(fixtures::makeQuakeCProject(root), "the QuakeC project is written");
+	ReleasePlan plan = planRelease(request(root, ReleaseScope::Maps, {QStringLiteral("maps/fiend.map")}, stock));
+	ok &= expect(entryPaths(plan) == QStringList {QStringLiteral("maps/fiend.bsp"), QStringLiteral("progs/fiend.mdl"), QStringLiteral("sound/fiend/idle.wav"), QStringLiteral("sound/fiend/roar.wav")},
+		"a map ships what its monster's spawn function and helpers precache, and nothing an unused class needs", entryPaths(plan).join(QLatin1Char(' ')));
+	ok &= expect(requiredBy(plan, QStringLiteral("progs/fiend.mdl"), QStringLiteral("qc/fiend.qc")) && requiredBy(plan, QStringLiteral("sound/fiend/roar.wav"), QStringLiteral("qc/fiend.qc")),
+		"each file the code loads names the script");
+	const ReleaseReference* drone = stockReference(plan, QStringLiteral("sound/ambience/drone6.wav"));
+	ok &= expect(drone && drone->requiredBy.contains(QStringLiteral("qc/fiend.qc")), "a stock sound the code precaches is the game's");
+	ok &= expect(plan.canPublish() && hasProblem(plan, QStringLiteral("unresolved"), false) && !hasProblem(plan, QStringLiteral("unresolved"), true),
+		"a precache nothing provides is an advisory, not a blocker", problemKinds(plan));
+	ok &= expect(!plan.warnings.filter(QStringLiteral("compiled game code")).isEmpty(), "the review says the mod's compiled code is not in a map release");
+	const ReleaseScriptReference* model = scriptRow(plan, QStringLiteral("progs/fiend.mdl"));
+	ok &= expect(model && model->status == QStringLiteral("included") && model->line == 23 && model->owner == QStringLiteral("monster_fiend") && model->occurrences == 2
+			&& model->requiredBy == QStringList {QStringLiteral("fiend")} && model->language == QStringLiteral("quakec"),
+		"the plan records where the code names each file", model ? QStringLiteral("%1 %2 %3 %4").arg(model->status).arg(model->line).arg(model->owner).arg(model->occurrences) : QString());
+	ok &= expect(rowStatus(plan, QStringLiteral("fiend/gone.wav")) == QStringLiteral("missing") && rowStatus(plan, QStringLiteral("ambience/drone6.wav")) == QStringLiteral("stock")
+			&& !scriptRow(plan, QStringLiteral("progs/rune.mdl")) && plan.scriptsRead == 1,
+		"missing and stock names are told apart, and an unused class is not followed");
+	const QJsonArray json = releasePlanJson(plan).value(QStringLiteral("scriptReferences")).toArray();
+	bool jsonRow = false;
+	for (const QJsonValue& value : json) {
+		const QJsonObject row = value.toObject();
+		jsonRow = jsonRow || (row.value(QStringLiteral("reference")).toString() == QStringLiteral("progs/fiend.mdl") && row.value(QStringLiteral("status")).toString() == QStringLiteral("included")
+			&& row.value(QStringLiteral("script")).toString() == QStringLiteral("qc/fiend.qc") && row.value(QStringLiteral("line")).toInt() == 23
+			&& row.value(QStringLiteral("owner")).toString() == QStringLiteral("monster_fiend"));
+	}
+	ok &= expect(jsonRow && releasePlanText(plan).contains(QStringLiteral("Names in game code and scripts")), "the plan's JSON and text report the script references");
+
+	// Without the game's index, unknown names are unverified.
+	plan = planRelease(request(root, ReleaseScope::Maps, {QStringLiteral("maps/fiend.map")}, nullptr));
+	ok &= expect(plan.canPublish() && hasProblem(plan, QStringLiteral("unverified"), false) && rowStatus(plan, QStringLiteral("fiend/gone.wav")) == QStringLiteral("unverified"),
+		"without an index the code's unknown names are unverified", problemKinds(plan));
+
+	// The whole project checks every name, and the QuakeC source stays out.
+	plan = planRelease(request(root, ReleaseScope::Project, {}, stock));
+	ok &= expect(requiredBy(plan, QStringLiteral("progs/rune.mdl"), QStringLiteral("qc/fiend.qc")) && requiredBy(plan, QStringLiteral("progs/rune.mdl"), QStringLiteral("project"))
+			&& !entryPaths(plan).contains(QStringLiteral("qc/fiend.qc")) && hasProblem(plan, QStringLiteral("unresolved"), false) && plan.canPublish(),
+		"a whole project names the scripts behind its files", entryPaths(plan).join(QLatin1Char(' ')) + QStringLiteral(" / ") + problemKinds(plan));
+
+	// Reading the scripts can be cancelled.
+	ReleaseRequest cancelled = request(root, ReleaseScope::Maps, {QStringLiteral("maps/fiend.map")}, stock);
+	cancelled.progress = [](const QString& phase, int, int) { return !phase.contains(QStringLiteral("game code")); };
+	plan = planRelease(cancelled);
+	ok &= expect(plan.cancelled && !plan.complete, "cancelling while the scripts are read cancels the plan");
+	return ok;
+}
+
+// Quake III menus and configs in a whole-project release.
+bool runQuake3Menus(const QString& base)
+{
+	bool ok = true;
+	const QString game = QDir(base).filePath(QStringLiteral("q3"));
+	ok &= expect(fixtures::makeQuake3Installation(game), "the fake Quake III installation is written");
+	auto stock = baseRegister(fixtures::profile(QStringLiteral("q3"), QStringLiteral("quake3"), game));
+	const QString root = QDir(base).filePath(QStringLiteral("menumod"));
+	ok &= expect(fixtures::writeManifest(root, QStringLiteral("quake3"), QJsonObject {{QStringLiteral("packageName"), QStringLiteral("menumod")}})
+			&& fixtures::addQuake3MenuScripts(root), "the menu project is written");
+	const ReleasePlan plan = planRelease(request(root, ReleaseScope::Project, {}, stock));
+	ok &= expect(plan.canPublish(), "the menu project can publish", problemKinds(plan));
+	const QString menu = QStringLiteral("ui/mymain.menu");
+	ok &= expect(requiredBy(plan, QStringLiteral("ui/assets/mybg.tga"), menu) && requiredBy(plan, QStringLiteral("ui/assets/mycursor.tga"), menu)
+			&& requiredBy(plan, QStringLiteral("ui/menudef.h"), menu) && requiredBy(plan, QStringLiteral("sound/mymod/click.wav"), menu)
+			&& requiredBy(plan, QStringLiteral("mymod.cfg"), menu) && requiredBy(plan, menu, QStringLiteral("ui/menus.txt"))
+			&& requiredBy(plan, QStringLiteral("other.cfg"), QStringLiteral("mymod.cfg")),
+		"menus and configs name the files they load, other menus and configs included");
+	ok &= expect(plan.entry(QStringLiteral("ui/assets/mybg.tga")) && plan.entry(QStringLiteral("ui/assets/mybg.tga"))->role == QStringLiteral("texture"), "menu art counts as a texture");
+	const ReleaseReference* barrel = stockReference(plan, QStringLiteral("models/mapobjects/barrel.md3"));
+	const ReleaseReference* hum = stockReference(plan, QStringLiteral("sound/world/hum.wav"));
+	const ReleaseReference* sky = stockReference(plan, QStringLiteral("scripts/base_wall.shader"));
+	ok &= expect(barrel && barrel->requiredBy.contains(menu) && hum && hum->requiredBy.contains(QStringLiteral("mymod.cfg")) && sky && sky->requiredBy.contains(menu),
+		"stock models, sounds and shaders named by menus and configs are the game's");
+	ok &= expect(rowStatus(plan, QStringLiteral("sound/misc/missing.wav")) == QStringLiteral("missing") && hasProblem(plan, QStringLiteral("unresolved"), false),
+		"a menu sound nothing provides is an advisory", problemKinds(plan));
+	const ReleaseScriptReference* background = scriptRow(plan, QStringLiteral("ui/assets/mybg.tga"));
+	ok &= expect(background && background->line == 11 && background->via == QStringLiteral("background") && background->language == QStringLiteral("menu")
+			&& plan.scriptSourceIndex().value(QStringLiteral("ui/assets/mybg.tga")).size() == 1,
+		"the plan indexes the menu line behind each file");
+	return ok;
+}
+
+// A Doom map that places a DECORATE monster from a resource WAD.
+bool runDoomScripts(const QString& base)
+{
+	bool ok = true;
+	const QString game = QDir(base).filePath(QStringLiteral("doom"));
+	ok &= fixtures::writeFile(QDir(game).filePath(QStringLiteral("doom2.wad")), fixtures::doom2Iwad());
+	auto stock = baseRegister(fixtures::profile(QStringLiteral("doom"), QStringLiteral("doom"), game));
+	const QString root = QDir(base).filePath(QStringLiteral("decomod"));
+	ok &= expect(fixtures::makeDecorateProject(root), "the DECORATE project is written");
+	ReleasePlan plan = planRelease(request(root, ReleaseScope::Maps, {QStringLiteral("maps/fireimps.wad")}, stock));
+	const QStringList names = entryPaths(plan);
+	for (const QString& lump : {QStringLiteral("DECORATE"), QStringLiteral("IMPBALL"), QStringLiteral("SNDINFO"), QStringLiteral("MAPINFO"), QStringLiteral("FIMPA1"),
+			 QStringLiteral("FBALA0"), QStringLiteral("DSFISIT"), QStringLiteral("D_FIRE"), QStringLiteral("MAP01")}) {
+		ok &= expect(names.contains(lump), "a map placing a mod monster ships the WAD that defines it", lump + QStringLiteral(" in ") + names.join(QLatin1Char(' ')));
+	}
+	ok &= expect(plan.canPublish() && hasProblem(plan, QStringLiteral("unresolved"), false), "a sound lump nothing provides is an advisory", problemKinds(plan));
+	ok &= expect(requiredBy(plan, QStringLiteral("FIMPA1"), QStringLiteral("monsters.wad:DECORATE")) && requiredBy(plan, QStringLiteral("FBALA0"), QStringLiteral("monsters.wad:IMPBALL"))
+			&& requiredBy(plan, QStringLiteral("DSFISIT"), QStringLiteral("monsters.wad:SNDINFO")) && requiredBy(plan, QStringLiteral("DSFISIT"), QStringLiteral("monsters.wad:DECORATE"))
+			&& requiredBy(plan, QStringLiteral("D_FIRE"), QStringLiteral("monsters.wad:MAPINFO")),
+		"lumps name the DECORATE, SNDINFO and MAPINFO that use them");
+	const ReleaseScriptReference* sprite = scriptRow(plan, QStringLiteral("FIMP"));
+	ok &= expect(sprite && sprite->status == QStringLiteral("included") && sprite->paths.contains(QStringLiteral("FIMPA1")) && sprite->paths.contains(QStringLiteral("FIMPC1"))
+			&& !sprite->paths.contains(QStringLiteral("FBALA0")), "a sprite resolves to its frames", sprite ? sprite->paths.join(QLatin1Char(' ')) : QString());
+	ok &= expect(rowStatus(plan, QStringLiteral("imp/death")) == QStringLiteral("engine") && rowStatus(plan, QStringLiteral("FENCE")) == QStringLiteral("stock")
+			&& rowStatus(plan, QStringLiteral("fireimp/sight")) == QStringLiteral("included") && !scriptRow(plan, QStringLiteral("UNUS")),
+		"engine sounds, stock textures and unused classes are told apart");
+	plan = planRelease(request(root, ReleaseScope::Maps, {QStringLiteral("maps/plain.wad")}, stock));
+	ok &= expect(!entryPaths(plan).contains(QStringLiteral("FIMPA1")) && !entryPaths(plan).contains(QStringLiteral("DECORATE")) && plan.canPublish(),
+		"a map with only stock things leaves the monster WAD out", entryPaths(plan).join(QLatin1Char(' ')) + QStringLiteral(" / ") + problemKinds(plan));
+	plan = planRelease(request(root, ReleaseScope::Project, {}, stock));
+	ok &= expect(rowStatus(plan, QStringLiteral("UNUS")) == QStringLiteral("included") && hasProblem(plan, QStringLiteral("unresolved"), false) && plan.canPublish(),
+		"a whole project checks every class", problemKinds(plan));
+	return ok;
+}
+
 // The window and the CLI pick a project's installation the same way.
 bool runInstallationChoice()
 {
@@ -651,6 +972,10 @@ int main(int argc, char** argv)
 	ok &= runPublish(base);
 	ok &= runPublishDoomAndZip(base);
 	ok &= runInstallationChoice();
+	ok &= runScriptScanner(base);
+	ok &= runQuakeScripts(base);
+	ok &= runQuake3Menus(base);
+	ok &= runDoomScripts(base);
 	if (!ok) {
 		return EXIT_FAILURE;
 	}

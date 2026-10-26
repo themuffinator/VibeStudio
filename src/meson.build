@@ -154,7 +154,7 @@ install_headers('core/doom_preview_geometry.h', 'core/doom_preview_materials.h',
 install_headers('core/extra_image.h', subdir: 'vibestudio/core')
 
 install_headers('core/asset_formats.h', 'core/workspace_document.h', subdir: 'vibestudio/core')
-install_headers('core/game_asset_register.h', 'core/project_content.h', 'core/release_plan.h', 'core/release_notes.h', 'core/release_publish.h', subdir: 'vibestudio/core')
+install_headers('core/game_asset_register.h', 'core/project_content.h', 'core/release_plan.h', 'core/release_notes.h', 'core/release_publish.h', 'core/release_script_refs.h', subdir: 'vibestudio/core')
 install_headers('core/material_model.h', 'core/material_script.h', subdir: 'vibestudio/core')
 install_headers('core/material_classic.h', subdir: 'vibestudio/core')
 install_headers('core/material_eval.h', 'core/material_images.h', subdir: 'vibestudio/core')
@@ -340,6 +340,7 @@ core_sources = files(
   'core/release_plan.cpp',
   'core/release_notes.cpp',
   'core/release_publish.cpp',
+  'core/release_script_refs.cpp',
   'core/idtech_image.cpp',
   'core/level_editor_controls.cpp',
   'core/level_editor_familiar_controls.cpp',

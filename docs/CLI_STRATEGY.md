@@ -1303,8 +1303,12 @@ vibestudio --cli release history ./mymod --json
   it explicitly. JSON: `project`, `manifest`, `game`, `installation`, `stock` (`available`,
   `description`, `warnings`, `register`) and `plan` (entries with `path`, `role`, `bytes`,
   `requiredBy`, `replacesStock`, `loose`; `stock` references; `problems` with `kind` and `blocking`;
-  `maps` with their build state; `warnings`, `limitations`, `canPublish`, `stockChecked`, `files`,
-  `package`). Exit 4 when something blocks publishing.
+  `maps` with their build state; `scriptReferences`, the names that game code and scripts use,
+  with `kind`, `reference`, `language`, `script`, `line`, `owner`, `via`, `status` (`included`,
+  `stock`, `left-out`, `missing`, `unverified` or `engine`), `paths`, `stockSource`, `requiredBy`
+  and `occurrences`, and `scriptsRead`; `warnings`, `limitations`, `canPublish`, `stockChecked`,
+  `files`, `package`). Names that nothing provides are advisories, so they do not change the exit
+  code. Exit 4 when something blocks publishing.
 - [x] `release notes [<project>]`: the generated Markdown notes, or the readme with `--readme`.
   JSON adds `notes`, `readme`, `changes` and `compared` (the inventory diff with the previous
   release). Exit 4 when the plan cannot publish.

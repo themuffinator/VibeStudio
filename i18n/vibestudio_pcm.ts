@@ -81013,11 +81013,11 @@ Output: %2</source>
     <message>
         <location line="+2" />
         <location line="+23" />
-        <location line="+714" />
+        <location line="+731" />
         <source>Problems</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="-728" />
+        <location line="-745" />
         <source>Release contents by kind</source>
         <translation type="unfinished" /></message>
     <message>
@@ -81166,11 +81166,11 @@ Output: %2</source>
         <translation type="unfinished" /></message>
     <message>
         <location line="+2" />
-        <location line="+827" />
+        <location line="+844" />
         <source>Choose a folder for the release files</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="-825" />
+        <location line="-842" />
         <source>Choose…</source>
         <translation type="unfinished" /></message>
     <message>
@@ -81207,11 +81207,11 @@ Output: %2</source>
         <translation type="unfinished" /></message>
     <message>
         <location line="+3" />
-        <location line="+897" />
+        <location line="+914" />
         <source>Show Folder</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="-895" />
+        <location line="-912" />
         <source>Show the release folder</source>
         <translation type="unfinished" /></message>
     <message>
@@ -81232,11 +81232,11 @@ Output: %2</source>
         <translation type="unfinished" /></message>
     <message>
         <location line="+1" />
-        <location line="+783" />
+        <location line="+800" />
         <source>Write the package, readme, notes and archive, record the release and update the changelog (Ctrl+Enter).</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="-781" />
+        <location line="-798" />
         <source>Close</source>
         <translation type="unfinished" /></message>
     <message>
@@ -81424,15 +81424,15 @@ Output: %2</source>
         <translation type="unfinished" /></message>
     <message>
         <location line="+2" />
-        <location line="+47" />
+        <location line="+64" />
         <source>Blocking: %1</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="-47" />
+        <location line="-64" />
         <source>Problems: %1</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="+22" />
+        <location line="+25" />
         <source>Replaces the game's own file in %1.</source>
         <translation type="unfinished" /></message>
     <message>
@@ -81440,7 +81440,23 @@ Output: %2</source>
         <source>Ships beside the package, not inside it.</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="+11" />
+        <location line="+4" />
+        <source>Loaded by game code or scripts:</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+3" />
+        <source>%1, line %2</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+1" />
+        <source>%1, line %2, in %3</source>
+        <translation type="unfinished" /></message>
+    <message numerus="yes">
+        <location line="+4" />
+        <source>and %n more</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+13" />
         <source>The project holds an identical copy; the game's own is used.</source>
         <translation type="unfinished" /></message>
     <message>
@@ -82076,18 +82092,18 @@ Output: %2</source>
 <context>
     <name>VibeStudioReleasePlan</name>
     <message>
-        <location filename="../src/core/release_plan.cpp" line="+375" />
-        <location line="+1128" />
+        <location filename="../src/core/release_plan.cpp" line="+410" />
+        <location line="+1140" />
         <location line="+6" />
         <source>Checking maps</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="-1128" />
-        <location line="+858" />
+        <location line="-1140" />
+        <location line="+870" />
         <source>Checking models</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="-849" />
+        <location line="-861" />
         <source>Choose at least one item to release.</source>
         <translation type="unfinished" /></message>
     <message>
@@ -82143,11 +82159,7 @@ Output: %2</source>
         <source>The dependency check for %1 could not finish, so a file it needs may be missing from the release: %2</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="+3" />
-        <source>Checks what maps, models and shaders name directly: textures, shader images, models, skins, sounds and music. Files that game code chooses at run time are not followed; add them with the release's include patterns.</source>
-        <translation type="unfinished" /></message>
-    <message>
-        <location line="+36" />
+        <location line="+39" />
         <source>Map file not found: %1</source>
         <translation type="unfinished" /></message>
     <message>
@@ -82156,11 +82168,11 @@ Output: %2</source>
         <translation type="unfinished" /></message>
     <message>
         <location line="+20" />
-        <location line="+50" />
+        <location line="+51" />
         <source>%1 is a %2 map, but the release targets %3.</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="-41" />
+        <location line="-42" />
         <source>%1 has not been built. Build it, then package again.</source>
         <translation type="unfinished" /></message>
     <message>
@@ -82169,18 +82181,18 @@ Output: %2</source>
         <translation type="unfinished" /></message>
     <message>
         <location line="+15" />
-        <location line="+34" />
-        <location line="+145" />
-        <location line="+15" />
-        <location line="+193" />
+        <location line="+35" />
+        <location line="+139" />
+        <location line="+18" />
+        <location line="+207" />
         <source>Checking %1</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="-376" />
+        <location line="-387" />
         <source>%1 is not a readable BSP: %2</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="+78" />
+        <location line="+79" />
         <source>%1 has no levelshot (levelshots/%1.jpg); the map menu will show a placeholder.</source>
         <translation type="unfinished" /></message>
     <message>
@@ -82196,11 +82208,11 @@ Output: %2</source>
         <source>%1 holds no maps.</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="+50" />
+        <location line="+43" />
         <source>Unable to read %1 in %2: %3</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="+31" />
+        <location line="+34" />
         <source>%1 is neither defined by the project's WADs nor by the IWAD: %2</source>
         <translation type="unfinished" /></message>
     <message>
@@ -82208,7 +82220,7 @@ Output: %2</source>
         <source>%1 is not defined by the project's WADs. It is assumed to come with the IWAD; index the game's assets to check.</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="+133" />
+        <location line="+147" />
         <source>No models were found in %1.</source>
         <translation type="unfinished" /></message>
     <message>
@@ -82272,11 +82284,47 @@ Output: %2</source>
         <source>%1 file(s) matched the release's exclude patterns.</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="+2" />
-        <source>Files that game code loads by name (QuakeC, QVM or DECORATE) are shipped when they are in the project, but references to them are not checked.</source>
+        <location line="-778" />
+        <source>Checks what maps, models and shaders name directly: textures, shader images, models, skins, sounds and music, and the files that the project's QuakeC, DECORATE, ZScript and MAPINFO load for a map's entities. Paths that code builds at run time are not followed; add them with the release's include patterns.</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="+23" />
+        <location line="+781" />
+        <source>Files named in QuakeC, menus, configs, DECORATE, ZScript, SNDINFO and MAPINFO are checked. Compiled game code (QVM, DLL, progs.dat), ACS and paths that code builds at run time are not.</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+85" />
+        <source>Reading game code and scripts</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+8" />
+        <source>Not every game code or script file could be read, so a file one of them loads may be missing from the release: %1</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+373" />
+        <source>%1, line %2</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+46" />
+        <source>%1 names %2, which is in the project but left out of the release. Add it to the release's include patterns if players need it.</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+21" />
+        <source>%1 names %2, which is neither in the project nor in the game's own files. Searched: %3</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+4" />
+        <source>%1 names %2, which is not in the project. It is assumed to come with the game; index the game's assets to check.</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+11" />
+        <source>Checking game code and scripts</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+41" />
+        <source>%1 uses entity classes that the project's QuakeC defines (%2). The release ships the files they load, but players also need the mod's compiled game code; release the whole project to ship it.</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+102" />
         <source>%1 file(s) replace the game's own files of the same name. Every map players load will use these versions; rename them unless that is the intent.</source>
         <translation type="unfinished" /></message>
     <message>
@@ -82288,7 +82336,7 @@ Output: %2</source>
         <source>The game's own files are unknown, so nothing was checked against them. Index the game's assets on the Workspace page to leave stock files out and find missing ones.</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="+63" />
+        <location line="+87" />
         <source>Whole project</source>
         <translation type="unfinished" /></message>
     <message>
@@ -82352,7 +82400,7 @@ Output: %2</source>
         <source>Other</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="+202" />
+        <location line="+220" />
         <source>Requirement %1 has no path.</source>
         <translation type="unfinished" /></message>
     <message>
@@ -82384,7 +82432,7 @@ Output: %2</source>
         <source>%1: %2 (%3 files)</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="+158" />
+        <location line="+184" />
         <source>%1 %2 (%3): %4 in %5</source>
         <translation type="unfinished" /></message>
     <message numerus="yes">
@@ -82428,7 +82476,11 @@ Output: %2</source>
         <source>  beside the package</source>
         <translation type="unfinished" /></message>
     <message>
-        <location line="+11" />
+        <location line="+18" />
+        <source>Names in game code and scripts (%1 read): %2 in the release, %3 from the game, %4 not found or left out, %5 left to the engine.</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+12" />
         <source>Ready to publish.</source>
         <translation type="unfinished" /></message>
     <message>
@@ -82530,6 +82582,33 @@ Output: %2</source>
     <message>
         <location line="+1" />
         <source>Package: %1 (%2 bytes, SHA-256 %3)</source>
+        <translation type="unfinished" /></message>
+</context>
+<context>
+    <name>VibeStudioReleaseScripts</name>
+    <message>
+        <location filename="../src/core/release_script_refs.cpp" line="+720" />
+        <source>Game code and scripts name more than %1 files; the rest were not checked.</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+1028" />
+        <source>The project has more than %1 scripts; the rest were not read.</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+7" />
+        <source>%1 is too large to read for file names (over %2 MiB).</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+6" />
+        <source>The project's scripts are over %1 MiB in all; the rest were not read.</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+10" />
+        <source>%1 could not be read: %2</source>
+        <translation type="unfinished" /></message>
+    <message>
+        <location line="+24" />
+        <source>%1 includes scripts more than %2 levels deep; the deeper ones were not read.</source>
         <translation type="unfinished" /></message>
 </context>
 <context>

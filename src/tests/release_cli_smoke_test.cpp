@@ -1,7 +1,8 @@
 // The `release` and `install register` CLI families end to end, run as a
 // separate process against generated installations and projects (no game
-// data): indexing, checking, exporting, planning, notes, the changelog,
-// publishing, history, the catalog, and their usage errors and exit codes.
+// data): indexing, checking, exporting, planning (with the files game code
+// and scripts load), notes, the changelog, publishing, history, the catalog,
+// and their usage errors and exit codes.
 
 #include "tests/release_test_fixtures.h"
 
@@ -143,6 +144,44 @@ int main(int argc, char** argv)
 	Run textPlan = run(QStringList {QStringLiteral("release"), QStringLiteral("plan"), project} + map + QStringList {QStringLiteral("--installation"), id});
 	expect(textPlan.exitCode == 0 && textPlan.out.contains(QStringLiteral("Ready to publish")) && textPlan.out.contains(QStringLiteral("thepit.pk3")),
 		"the plan reads as text", describe(textPlan));
+
+	// Files that game code and scripts load: a QuakeC monster on a map, and a
+	// whole project's menus and configs.
+	const auto scriptRow = [](const QJsonObject& plan, const QString& reference) {
+		for (const QJsonValue& value : plan.value(QStringLiteral("scriptReferences")).toArray()) {
+			if (value.toObject().value(QStringLiteral("reference")).toString() == reference) {
+				return value.toObject();
+			}
+		}
+		return QJsonObject();
+	};
+	const QString qcProject = QDir(temp.path()).filePath(QStringLiteral("qcmod"));
+	expect(fixtures::makeQuakeCProject(qcProject), "the QuakeC project is written");
+	Run qc = run({QStringLiteral("release"), QStringLiteral("plan"), qcProject, QStringLiteral("--map"), QStringLiteral("maps/fiend.map"), QStringLiteral("--no-stock"), QStringLiteral("--json")});
+	const QJsonObject qcPlan = qc.json.value(QStringLiteral("plan")).toObject();
+	const QJsonObject fiend = scriptRow(qcPlan, QStringLiteral("progs/fiend.mdl"));
+	expect(qc.exitCode == 0 && qcPlan.value(QStringLiteral("files")).toInt() == 4 && fiend.value(QStringLiteral("status")).toString() == QStringLiteral("included")
+			&& fiend.value(QStringLiteral("script")).toString() == QStringLiteral("qc/fiend.qc") && fiend.value(QStringLiteral("line")).toInt() == 23
+			&& fiend.value(QStringLiteral("owner")).toString() == QStringLiteral("monster_fiend")
+			&& scriptRow(qcPlan, QStringLiteral("fiend/gone.wav")).value(QStringLiteral("status")).toString() == QStringLiteral("unverified"),
+		"a map plan ships what its QuakeC monster precaches and reports where", describe(qc));
+	const QString menuProject = QDir(temp.path()).filePath(QStringLiteral("menumod"));
+	expect(fixtures::writeManifest(menuProject, QStringLiteral("quake3"), QJsonObject {{QStringLiteral("packageName"), QStringLiteral("menumod")}})
+			&& fixtures::addQuake3MenuScripts(menuProject), "the menu project is written");
+	Run menus = run({QStringLiteral("release"), QStringLiteral("plan"), menuProject, QStringLiteral("--installation"), id, QStringLiteral("--json")});
+	const QJsonObject menuPlan = menus.json.value(QStringLiteral("plan")).toObject();
+	const QJsonObject background = scriptRow(menuPlan, QStringLiteral("ui/assets/mybg.tga"));
+	const QJsonObject barrel = scriptRow(menuPlan, QStringLiteral("models/mapobjects/barrel.md3"));
+	bool advisory = false;
+	for (const QJsonValue& value : menuPlan.value(QStringLiteral("problems")).toArray()) {
+		advisory = advisory || (value.toObject().value(QStringLiteral("kind")).toString() == QStringLiteral("unresolved") && !value.toObject().value(QStringLiteral("blocking")).toBool());
+	}
+	expect(menus.exitCode == 0 && background.value(QStringLiteral("status")).toString() == QStringLiteral("included")
+			&& background.value(QStringLiteral("script")).toString() == QStringLiteral("ui/mymain.menu") && background.value(QStringLiteral("line")).toInt() == 11
+			&& barrel.value(QStringLiteral("status")).toString() == QStringLiteral("stock") && !barrel.value(QStringLiteral("stockSource")).toString().isEmpty() && advisory,
+		"a project plan reports what its menus and configs load, and what nothing provides, as JSON", describe(menus));
+	Run menuText = run({QStringLiteral("release"), QStringLiteral("plan"), menuProject, QStringLiteral("--installation"), id});
+	expect(menuText.exitCode == 0 && menuText.out.contains(QStringLiteral("Names in game code and scripts")), "the text plan summarises the script references", describe(menuText));
 
 	// The map's dependency check knows the game's files too.
 	Run dependencies = run({QStringLiteral("map"), QStringLiteral("dependencies"), QDir(project).filePath(QStringLiteral("maps/arena1.map")), QStringLiteral("--package"), project,

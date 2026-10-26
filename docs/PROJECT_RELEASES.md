@@ -21,6 +21,7 @@ are listed under [Limits](#limits).
 | Asset index | `src/core/game_asset_register.*` | Reads an installation's stock packages into a register of files (path, size, CRC-32), Quake III shader declarations and Doom-family names; saves, loads, checks freshness |
 | Project content | `src/core/project_content.*` | `ProjectContentReader` presents project folders as a package; `LayeredPackageReader` stacks the project, package folders and an optional open package |
 | Planning | `src/core/release_plan.*` | Catalogue of releasable items, the plan (what ships, what the game provides, what blocks), per-game rules, stock context |
+| Script references | `src/core/release_script_refs.*` | Reads QuakeC, Quake III menus and configs, DECORATE, ZScript, SNDINFO and MAPINFO as text for the files they name; finds what a map's entity classes reach |
 | Notes | `src/core/release_notes.*` | Keep a Changelog reading and writing, version bumps, release records, inventory diffs, generated notes and readme |
 | Publishing | `src/core/release_publish.*` | Writes the package, readme, notes and archive, records the release and updates the changelog |
 | Dependencies | `src/core/level_dependencies.*` | Map and model reference resolution, now aware of the game's own files (`LevelDependencyStatus::Stock`) |
@@ -147,18 +148,80 @@ do; both are project-relative globs with `/` separators.
   scripts. The map is read with `inspectLevelDependencies` (Quake textures are
   embedded in the BSP, so Quake maps skip texture references), and every
   resolved texture, shader script, shader image, model, skin, sound and the
-  worldspawn music follows. Sky shaders bring their sky boxes. A map without a
-  build blocks publishing; one older than its source is an advisory.
+  worldspawn music follows. Sky shaders bring their sky boxes. The files that
+  the map's entity classes load in the project's code follow too (see
+  [Game code and scripts](#game-code-and-scripts)). A map without a build
+  blocks publishing; one older than its source is an advisory.
 - **Models.** Each model's skins, shader scripts and the images they use,
   through `inspectModelMaterialDependencies`.
 - **Textures.** Each folder's images, and the shader scripts that declare
   shaders in it.
-- **Whole project.** Every content file the game does not already have.
+- **Whole project.** Every content file the game does not already have, and
+  a check of every name in the project's code and scripts.
 
 For the Doom family the release is one PWAD: each project WAD with maps is
 checked against its IWAD's names, then the project's WADs are merged in name
 order, each keeping its own lumps in directory order so every map's lumps stay
 together. Files that are not lumps ship beside the WAD.
+
+### Game code and scripts
+
+`scanScriptReferences` reads the project's scripts once per plan, as text; it
+never runs them. It keeps only string literals in known places that look like
+game paths (relative, printable ASCII, no `..`, wildcards, `%` or `$`) or Doom
+names, with the script, the line, and the QuakeC function, actor class or
+MAPINFO map each sits in:
+
+| Source | Found as | What counts |
+|---|---|---|
+| QuakeC | `*.qc`, `*.qh` | `precache_model`, `precache_sound`, `precache_file` (and the `2` variants), `precache_pic`, the model of `setmodel`, the sound of `sound`, `ambientsound` and `pointsound`; sounds under `sound/`. Old- and new-style function definitions are units, with the functions each calls |
+| Quake III menus | `*.menu`, `ui/*.txt` | `background`, `cursor`, `gradientBar`, `asset_shader` and `setbackground` (image files with `.tga`, `.jpg` and `.png` tried, then a shader of that name), `asset_model`, `cinematic` (`video/` for a bare name), `menuEnterSound`, `menuExitSound`, `menuBuzzSound`, `itemFocusSound`, `focusSound`, `soundLoop`, `play` and `playlooped`, `loadMenu`, `#include`, and the commands `exec` runs |
+| Configs | `*.cfg`, `*.rc` | `exec` (with `.cfg` added), `play` and `playvol` (under `sound/`, or the whole path for Quake III), Quake III's `music`, `map`-style commands for the Quake family, and the commands that `bind`, `alias` and `set` store |
+| DECORATE, ZScript | Root `decorate.*`, `zscript.*` files and `DECORATE`, `ZSCRIPT` lumps, with their `#include`s | Actor headers (parent, `replaces`, DECORATE editor number), sound properties (any ending in `Sound`), `Inventory.Icon`, sound and music calls, `TexMan.CheckForTexture`, the sprites of `States`, and every name that may be another class |
+| SNDINFO | Root `sndinfo.*` files and `SNDINFO` lumps | Logical name to lump or file, `$random`, `$alias` and `$playersound` |
+| MAPINFO | Root `mapinfo.*`, `zmapinfo.*` files and `MAPINFO`, `ZMAPINFO` lumps, with `include`s | `music`, `intermusic`, `titlemusic`, `finalemusic`, `exitmusic`, `sky1`, `sky2`, `titlepatch`, `enterpic`, `exitpic`, `titlepage` and `finalepage`, in the old and new formats, per map, default map and game info; `DoomEdNums` |
+
+Reading is bounded: 8 MiB per script, 96 MiB and 4,096 scripts in all,
+200,000 names and includes 16 deep. Past a bound the scan stops with a
+warning and the plan records an `incomplete` advisory. Planning progress
+covers the scan, and cancelling the plan stops it between scripts.
+
+A name resolves to the first of its candidate paths in the project (with any
+extra layer), then in the game's index. Doom names resolve to lumps in the
+project's WADs (the last loaded WAD shadows the others; a sprite matches every
+frame of its four-letter prefix), then to files of that name in the PK3
+folders (`sounds/`, `music/`, `sprites/`, `graphics/`, `patches/`,
+`textures/`), then to `TEXTURE1` and `TEXTURE2` names for skies, then to the
+index's Doom names. A logical sound plays what its SNDINFO definitions name,
+through `$random` and `$alias`; one the project does not define is the
+engine's own and is not checked.
+
+- **Whole project.** Every name is checked. A file the release ships names the
+  script in its `requiredBy`; a name the game provides is a stock reference
+  whose `requiredBy` is the script; a project file the release leaves out (by
+  an exclude pattern, or as a source) is a `left-out` advisory; a name nothing
+  provides is an `unresolved` advisory, or `unverified` without an index.
+- **Maps.** Only what the map's entities reach is followed. For the Quake
+  family, each entity class that the project's QuakeC defines as a function
+  is followed with every project function it calls, up to eight calls deep
+  and 1,024 functions. For the Doom family, each thing type maps to a class
+  through MAPINFO `DoomEdNums`, then DECORATE editor numbers, then the
+  standard Doom and Doom II classes; a class that `replaces` it is spawned
+  instead; parents, classes it names and their sounds' SNDINFO definitions
+  follow, and the map's MAPINFO block and the default map. The files found
+  ship, the WADs whose lumps they are ship whole or merge into the release,
+  and the scripts that define the classes (with the scripts that include
+  them) ship too. `precache_file`, includes and config commands are left to
+  whole-project releases. A map whose QuakeC classes bring files warns that
+  the mod's compiled code does not ship with a map.
+
+The plan keeps one row per name and script in `scriptReferences`, with the
+kind (`sound`, `music`, `model`, `image`, `video`, `sprite`, `graphic`,
+`texture`, `script`, `map`, `file`), the language, script, line, owner, what
+named it (`via`), the status (`included`, `stock`, `left-out`, `missing`,
+`unverified`, `engine`), the paths or lumps it resolved to, the stock source,
+the maps it was followed for, and how often the script names it. The text plan
+ends with a count of each status.
 
 ### Stock, overrides and identical copies
 
@@ -179,9 +242,11 @@ Every candidate file is checked against the merged register:
 Problems carry a kind, the reference and what needs it. Blocking kinds stop
 **Publish**: `empty`, `format` (for example a WAD for a Quake game),
 `missing`, `ambiguous`, `unreadable`, `unsafe`, `unbuilt-map` and
-`outside-project`. Advisories do not: `unverified`, `stale-map` and some
-`incomplete` scans. Warnings explain choices, such as a Quake map released as a
-numbered PAK, which would clash with other releases.
+`outside-project`. Advisories do not: `unverified`, `stale-map`, some
+`incomplete` scans, and the names in game code and scripts that nothing
+provides (`unresolved`) or that the release leaves out (`left-out`). Warnings
+explain choices, such as a Quake map released as a numbered PAK, which would
+clash with other releases.
 
 ### Package formats
 
@@ -260,6 +325,7 @@ itself. `--dry-run` reports the same paths without writing.
 | **Index Assets** | `install register build <installation>` |
 | The installation's index state | `install register info <installation>` |
 | **From the Game** tab | `install register check <installation> <path>`, `release plan --json` (`stock`) |
+| A file's tooltip in **Included**: the scripts that load it | `release plan --json` (`scriptReferences`) |
 | The item list | `release catalog <project>` |
 | The review | `release plan <project> [--map|--model|--texture <item>]` |
 | **Notes** and **Readme** tabs | `release notes <project> [--readme]` |
@@ -274,9 +340,14 @@ as a build server.
 
 ## Limits
 
-- Releases follow references that maps, models and shader scripts make.
-  Files that game code, QuakeC, console scripts or menus load by name are not
-  found and need `release.include` patterns.
+- Game code and scripts are read as text for names written out in full.
+  Compiled game code (QVM, DLL, `progs.dat`), Quake II and Quake III game code
+  in C, ACS, Doom 3-era scripts, and names that code builds while the game
+  runs are not followed and need `release.include` patterns. A map release
+  follows its entities' QuakeC and ZDoom classes but never ships compiled game
+  code. An actor that `replaces` a stock class is followed for Doom and Doom
+  II's monsters, weapons, ammunition, pickups, keys and barrel; replacing
+  another stock class (decorations, Heretic, Hexen) is not.
 - Doom 3-era games, Return to Castle Wolfenstein and other idTech 3 games
   have no standard package list; index them with `--package` or the
   profile's base packages. Their planner rules are those of Quake III.
@@ -293,9 +364,9 @@ as a build server.
 | Test | Covers |
 |---|---|
 | `game-asset-register-smoke` | Discovery, building, WAD directory order, shader declarations, saving, loading, freshness and explicit packages |
-| `release-smoke` | Catalogue, plans for every scope in Quake III, Quake and Doom projects, stock, identical copies, overrides, problems, notes, changelog round trips, records, diffs and publishing |
-| `release-cli-smoke` | Every `release` and `install register` command, exit codes, exported indexes, dry runs, a second release's diff, and `map dependencies --installation` |
-| `release-dialog-ui-smoke` | The window: review, recording a change, switching scope, publishing, the next version, indexing from the notice, accessible names; in dark, light, high-contrast, 150 and 200% text and right-to-left |
+| `release-smoke` | Catalogue, plans for every scope in Quake III, Quake and Doom projects, stock, identical copies, overrides, problems, notes, changelog round trips, records, diffs and publishing; each script language as text, bounds and cancellation, a Quake map placing a QuakeC monster, Quake III menus and configs in a whole project, and Doom maps with and without a DECORATE monster from a resource WAD |
+| `release-cli-smoke` | Every `release` and `install register` command, exit codes, exported indexes, dry runs, a second release's diff, `map dependencies --installation`, and `scriptReferences` for a QuakeC map and a project's menus |
+| `release-dialog-ui-smoke` | The window: review, recording a change, switching scope, the script behind a file in **Included**, publishing, the next version, indexing from the notice, accessible names; in dark, light, high-contrast, 150 and 200% text and right-to-left |
 | `project-manifest-smoke` | Schema 2 fields, defaults, unknown keys kept, health checks |
 
 The fixtures in `src/tests/release_test_fixtures.h` generate every byte of the

@@ -1655,14 +1655,15 @@ built by the tests.
 
 ## Project Releases And The Game Asset Index (2026-10-08)
 
-The game asset index, release planning, release notes and publishing
-(`src/core/game_asset_register.*`, `src/core/project_content.*`,
-`src/core/release_plan.*`, `src/core/release_notes.*`,
+The game asset index, release planning, the script reference scanner, release
+notes and publishing (`src/core/game_asset_register.*`,
+`src/core/project_content.*`, `src/core/release_plan.*`,
+`src/core/release_script_refs.*`, `src/core/release_notes.*`,
 `src/core/release_publish.*`, `src/cli/release.*`,
 `src/app/release_dialog.*`, `src/app/release_actions.cpp`) are original
 VibeStudio code. The references below supplied file formats, conventions and
 engine behaviour only; no upstream code, text or game data is copied, and the
-tests generate every package they index. Packages are read and written with
+tests generate every package and script they read. Packages are read and written with
 VibeStudio's existing PAK, WAD and ZIP/PK3 code, credited under
 [Compression and archive formats](#compression-and-archive-formats).
 
@@ -1676,6 +1677,11 @@ VibeStudio's existing PAK, WAD and ZIP/PK3 code, credited under
 | [Quake III Arena GPL source](https://github.com/id-Software/Quake-III-Arena/tree/dbe4ddb10315479fc00086f08e25d968b4b43c49) (`code/qcommon/files.c`, `code/q3_ui/ui_gameinfo.c`, `code/botlib`) | PK3 load order by name; `.arena` scripts and `levelshots/`; `.aas` bot files beside the BSP | `dbe4ddb10315479fc00086f08e25d968b4b43c49`, read 2026-10-08 | GPL-2.0-or-later; behaviour only |
 | q3map2 in [NetRadiant Custom](https://github.com/Garux/netradiant-custom/tree/68ecbed64b7be78741878c730279b5471d978c7c) (VibeMap3's upstream) | External lightmaps in `maps/<map>/lm_*.tga` and the generated `scripts/q3map2_<map>.shader`, which VibeMap3 keeps | `68ecbed64b7be78741878c730279b5471d978c7c`, read 2026-10-08 | GPL-2.0-or-later; behaviour only |
 | [ericw-tools](https://github.com/ericwa/ericw-tools) (VibeMap2's upstream) | `.lit` and `.lux` lighting files beside Quake BSPs, which VibeMap2 keeps | `f80b1e216a415581aea7475cb52b16b8c4859084`, read 2026-10-08 | GPL-2.0-or-later; behaviour only |
+| [Quake GPL source](https://github.com/id-Software/Quake) (`WinQuake/pr_cmds.c`, `WinQuake/snd_mem.c`) | The QuakeC builtins that load a file by name (`precache_model`, `precache_sound`, `precache_file` and registered Quake's `2` variants, `setmodel`, `sound`, `ambientsound`) and the `sound/` folder sounds load from (`src/core/release_script_refs.cpp`) | Read 2026-10-09 | GPL-2.0-or-later; names and behaviour only |
+| [Quake III Arena GPL source](https://github.com/id-Software/Quake-III-Arena/tree/dbe4ddb10315479fc00086f08e25d968b4b43c49) (`code/ui/ui_shared.c`, `code/ui/ui_main.c`, `code/client/cl_cin.c`, `code/qcommon/cmd.c`, `code/client/snd_dma.c`, `code/renderer/tr_image.c`) | The menu keywords whose values are files, `loadMenu`, cinematics under `video/`, `exec` adding `.cfg`, the `play` and `music` commands, and a `.jpg` loaded in place of a missing `.tga` | `dbe4ddb10315479fc00086f08e25d968b4b43c49`, read 2026-10-09 | GPL-2.0-or-later; names and behaviour only |
+| [ioquake3](https://github.com/ioquake/ioq3) (`code/client/snd_codec.c`) | A sound loaded in another format when the named file is missing, which is why `.ogg` and `.wav` are both tried | Read 2026-10-09 | GPL-2.0-or-later; behaviour only |
+| [ZDoom wiki: DECORATE](https://zdoom.org/wiki/DECORATE), [ZScript](https://zdoom.org/wiki/ZScript), [SNDINFO](https://zdoom.org/wiki/SNDINFO), [MAPINFO](https://zdoom.org/wiki/MAPINFO) | Actor and class headers, `replaces`, sound properties and state sprites; logical sound names, `$random` and `$alias`; MAPINFO's map keys, `include` and `DoomEdNums`, old and new formats | Read 2026-10-09 | Facts from GFDL text |
+| [Doom Wiki thing types](https://doomwiki.org/wiki/Thing_types) with the class names of the [ZDoom wiki's standard editor numbers](https://zdoom.org/wiki/Standard_editor_numbers) | The editor numbers of Doom and Doom II's monsters, weapons, ammunition, pickups, keys and barrel, so an actor that replaces one is followed from a map's things | Read 2026-10-09 | Facts from CC BY-SA and GFDL text; numbers and names only |
 
 ## AI Integration References
 - [OpenAI API documentation](https://platform.openai.com/docs/quickstart), planned as the first optional general-purpose provider reference for prompt-based and agentic automation experiments.

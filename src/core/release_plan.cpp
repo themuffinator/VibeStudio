@@ -6,7 +6,10 @@
 #include "core/game_installation.h"
 #include "core/level_build_workspace.h"
 #include "core/level_map.h"
+#include "core/map_assets.h"
+#include "core/material_classic.h"
 #include "core/model_mesh.h"
+#include "core/release_script_refs.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -202,6 +205,11 @@ QString roleForPath(const QString& virtualPath)
 		|| ext == QStringLiteral("qvm") || ext == QStringLiteral("dll") || ext == QStringLiteral("so") || ext == QStringLiteral("dylib")) {
 		return QStringLiteral("code");
 	}
+	// Menu art lives beside the menus that load it.
+	if (lower.startsWith(QStringLiteral("ui/"))
+		&& (ext == QStringLiteral("tga") || ext == QStringLiteral("jpg") || ext == QStringLiteral("jpeg") || ext == QStringLiteral("png"))) {
+		return QStringLiteral("texture");
+	}
 	if (ext == QStringLiteral("cfg") || ext == QStringLiteral("rc") || ext == QStringLiteral("menu") || ext == QStringLiteral("deh")
 		|| ext == QStringLiteral("bex") || ext == QStringLiteral("def") || ext == QStringLiteral("ent") || lower.startsWith(QStringLiteral("scripts/"))
 		|| lower.startsWith(QStringLiteral("ui/"))) {
@@ -226,6 +234,33 @@ QString roleForDependency(const LevelDependency& dependency)
 		return path.startsWith(QStringLiteral("music/")) ? QStringLiteral("music") : QStringLiteral("sound");
 	}
 	return QStringLiteral("texture");
+}
+
+// The role of a file that game code or a script names, from what names it.
+QString roleForScriptTarget(const QString& kind, const QString& virtualPath)
+{
+	if (kind == QStringLiteral("sound")) {
+		return virtualPath.startsWith(QStringLiteral("music/"), Qt::CaseInsensitive) ? QStringLiteral("music") : QStringLiteral("sound");
+	}
+	if (kind == QStringLiteral("music")) {
+		return QStringLiteral("music");
+	}
+	if (kind == QStringLiteral("image") || kind == QStringLiteral("sprite") || kind == QStringLiteral("graphic") || kind == QStringLiteral("texture")) {
+		return QStringLiteral("texture");
+	}
+	if (kind == QStringLiteral("script")) {
+		return QStringLiteral("script");
+	}
+	return roleForPath(virtualPath);
+}
+
+// Names in game code and scripts a map release follows: what its entities
+// and MAPINFO entries load at run time. precache_file lists what a whole game
+// ships, and configs and includes belong to the project, so they are left to
+// whole-project releases.
+bool followedForMaps(const QString& kind)
+{
+	return kind != QStringLiteral("file") && kind != QStringLiteral("map") && kind != QStringLiteral("script");
 }
 
 bool isImageExtension(const QString& ext)
@@ -759,7 +794,7 @@ private:
 					.arg(requiredBy, report.warnings.isEmpty() ? QString() : report.warnings.first()), {requiredBy}, false);
 		}
 		appendUnique(&m_plan.limitations, QCoreApplication::translate("VibeStudioReleasePlan",
-			"Checks what maps, models and shaders name directly: textures, shader images, models, skins, sounds and music. Files that game code chooses at run time are not followed; add them with the release's include patterns."));
+			"Checks what maps, models and shaders name directly: textures, shader images, models, skins, sounds and music, and the files that the project's QuakeC, DECORATE, ZScript and MAPINFO load for a map's entities. Paths that code builds at run time are not followed; add them with the release's include patterns."));
 	}
 
 	QString findCompiledMap(const QString& mapPath) const
@@ -876,6 +911,7 @@ private:
 		}, options);
 		absorbDependencies(report, name, options.quakeTexturesEmbedded);
 		planMapExtras(document, name, target.isEmpty() ? m_plan.gameKey : target);
+		planMapScripts(document, name);
 	}
 
 	void planCompiledMap(const QString& bspPath, const QString& sourceName)
@@ -910,6 +946,7 @@ private:
 		}, options);
 		absorbDependencies(report, name, options.quakeTexturesEmbedded);
 		planMapExtras(document, name, target.isEmpty() ? m_plan.gameKey : target);
+		planMapScripts(document, name);
 	}
 
 	// The BSP and the files the engine loads next to it.
@@ -1025,20 +1062,12 @@ private:
 		// own goes last so it shadows the others, as the engine loads PWADs.
 		QVector<LayeredPackageReader::Layer> layers;
 		QHash<QString, QString> layerFiles;
-		for (const PackageEntry& entry : m_content->entries()) {
-			if (suffixOf(entry.virtualPath) != QStringLiteral("wad")) {
+		for (const ProjectWad& wad : projectWads()) {
+			if (wad.absolutePath.compare(QDir::cleanPath(path), Qt::CaseInsensitive) == 0) {
 				continue;
 			}
-			const QString absolute = m_content->absolutePathFor(entry.virtualPath);
-			if (QDir::cleanPath(absolute).compare(QDir::cleanPath(path), Qt::CaseInsensitive) == 0) {
-				continue;
-			}
-			auto archive = std::make_shared<PackageArchive>();
-			if (!archive->load(absolute) || (archive->wadMagic() != QStringLiteral("PWAD") && archive->wadMagic() != QStringLiteral("IWAD"))) {
-				continue;
-			}
-			layers << LayeredPackageReader::Layer {entry.virtualPath, entry.virtualPath, archive};
-			layerFiles.insert(entry.virtualPath, absolute);
+			layers << LayeredPackageReader::Layer {wad.virtualPath, wad.virtualPath, wad.archive};
+			layerFiles.insert(wad.virtualPath, wad.absolutePath);
 		}
 		auto mapArchive = std::make_shared<PackageArchive>();
 		if (!mapArchive->load(path, &error)) {
@@ -1050,6 +1079,7 @@ private:
 		layerFiles.insert(mapLayer, path);
 		const LayeredPackageReader resources(layers);
 		QSet<QString> neededWads {mapLayer};
+		QHash<QString, QSet<int>> thingTypes;
 		for (const QString& mapName : mapNames) {
 			if (!tick(QCoreApplication::translate("VibeStudioReleasePlan", "Checking %1").arg(mapName), 0, 1)) {
 				return;
@@ -1062,6 +1092,9 @@ private:
 			if (!loadLevelMap(load, &document, &error)) {
 				addProblem(QStringLiteral("unreadable"), mapName, QCoreApplication::translate("VibeStudioReleasePlan", "Unable to read %1 in %2: %3").arg(mapName, label, error), {mapName}, true);
 				continue;
+			}
+			for (const LevelMapDoomThing& thing : document.doomThings) {
+				thingTypes[mapName].insert(thing.type);
 			}
 			LevelDependencyOptions options;
 			options.stock = m_request.stock;
@@ -1105,6 +1138,16 @@ private:
 				return;
 			}
 		}
+		// The actor classes the maps' things spawn, and their MAPINFO entries,
+		// need the WADs that define them and hold their sprites and sounds.
+		if (m_request.scope == ReleaseScope::Maps) {
+			for (const QString& mapName : mapNames) {
+				planDoomScripts(mapName, thingTypes.value(mapName), &neededWads);
+				if (m_plan.cancelled) {
+					return;
+				}
+			}
+		}
 		// Ship the needed WADs: as lumps in a WAD release, as files otherwise.
 		QStringList ordered = QStringList(neededWads.cbegin(), neededWads.cend());
 		std::sort(ordered.begin(), ordered.end(), [&](const QString& left, const QString& right) {
@@ -1113,6 +1156,9 @@ private:
 			return left.compare(right, Qt::CaseInsensitive) < 0;
 		});
 		for (const QString& wad : std::as_const(ordered)) {
+			if (!layerFiles.contains(wad)) {
+				continue;
+			}
 			if (lumpMode()) {
 				addWadLumps(layerFiles.value(wad), wad, map.name);
 			} else {
@@ -1139,6 +1185,7 @@ private:
 		}
 		const int lumpSource = int(m_plan.lumpSources.size());
 		m_plan.lumpSources << archive;
+		m_lumpSourceByPath.insert(folded(QDir::cleanPath(path)), lumpSource);
 		const QVector<PackageEntry> entries = archive->entries();
 		// Listings sort by name; the WAD's own order is its source ordinals,
 		// and the release keeps that order so namespaces and maps hold together.
@@ -1526,11 +1573,680 @@ private:
 		if (excluded > 0) {
 			m_plan.limitations << QCoreApplication::translate("VibeStudioReleasePlan", "%1 file(s) matched the release's exclude patterns.").arg(excluded);
 		}
-		m_plan.limitations << QCoreApplication::translate("VibeStudioReleasePlan", "Files that game code loads by name (QuakeC, QVM or DECORATE) are shipped when they are in the project, but references to them are not checked.");
+		planProjectScripts();
+		m_plan.limitations << QCoreApplication::translate("VibeStudioReleasePlan",
+			"Files named in QuakeC, menus, configs, DECORATE, ZScript, SNDINFO and MAPINFO are checked. Compiled game code (QVM, DLL, progs.dat), ACS and paths that code builds at run time are not.");
+	}
+
+	// --- Game code and scripts -------------------------------------------------
+
+	struct ProjectWad {
+		QString virtualPath;
+		QString absolutePath;
+		std::shared_ptr<PackageArchive> archive;
+		QVector<PackageEntry> entries;
+		// Upper-case lump names to entry indexes, markers left out.
+		QHash<QString, QVector<qsizetype>> lumps;
+	};
+
+	// Something a script reference resolved to in the project.
+	struct ScriptTarget {
+		qsizetype readerIndex = -1;
+		// A lump: an index into m_projectWads and that WAD's entries.
+		int wad = -1;
+		qsizetype lump = -1;
+		QString path;
+	};
+
+	struct ScriptResolution {
+		QVector<ScriptTarget> project;
+		QString stockPath;
+		QString stockSource;
+		bool engine = false;
+		QStringList searched;
+	};
+
+	bool doomFamily() const
+	{
+		return m_plan.gameKey == QStringLiteral("doom") || m_plan.gameKey == QStringLiteral("heretic-hexen");
+	}
+
+	// The project's Doom-family WADs, opened once per plan.
+	const QVector<ProjectWad>& projectWads()
+	{
+		if (m_projectWadsLoaded || !m_content) {
+			return m_projectWads;
+		}
+		m_projectWadsLoaded = true;
+		for (const PackageEntry& entry : m_content->entries()) {
+			if (suffixOf(entry.virtualPath) != QStringLiteral("wad")) {
+				continue;
+			}
+			const QString absolute = m_content->absolutePathFor(entry.virtualPath);
+			auto archive = std::make_shared<PackageArchive>();
+			if (!archive->load(absolute) || (archive->wadMagic() != QStringLiteral("PWAD") && archive->wadMagic() != QStringLiteral("IWAD"))) {
+				continue;
+			}
+			ProjectWad wad;
+			wad.virtualPath = entry.virtualPath;
+			wad.absolutePath = QDir::cleanPath(absolute);
+			wad.archive = archive;
+			wad.entries = archive->entries();
+			for (qsizetype i = 0; i < wad.entries.size(); ++i) {
+				if (wad.entries[i].kind == PackageEntryKind::File && wad.entries[i].typeHint != QStringLiteral("wad-marker")) {
+					wad.lumps[wad.entries[i].virtualPath.toUpper()] << i;
+				}
+			}
+			m_projectWads << wad;
+		}
+		return m_projectWads;
+	}
+
+	// Every script in the project, read once per plan.
+	const ScriptReferenceScan& scriptScan()
+	{
+		if (m_scriptsScanned) {
+			return m_scripts;
+		}
+		m_scriptsScanned = true;
+		QVector<ScriptWadSource> wads;
+		if (doomFamily()) {
+			for (const ProjectWad& wad : projectWads()) {
+				wads << ScriptWadSource {wad.virtualPath, wad.archive};
+			}
+		}
+		ScriptReferenceScanOptions options;
+		options.gameKey = m_plan.gameKey;
+		options.isCancelled = [this]() { return m_plan.cancelled; };
+		options.progress = [this](int completed, int total) {
+			return tick(QCoreApplication::translate("VibeStudioReleasePlan", "Reading game code and scripts"), completed, total);
+		};
+		m_scripts = scanScriptReferences(*m_reader, wads, options);
+		m_plan.scriptsRead = int(m_scripts.scripts.size());
+		if (m_scripts.cancelled) {
+			m_plan.cancelled = true;
+			m_plan.complete = false;
+		} else if (!m_scripts.complete) {
+			addProblem(QStringLiteral("incomplete"), QString(), QCoreApplication::translate("VibeStudioReleasePlan",
+				"Not every game code or script file could be read, so a file one of them loads may be missing from the release: %1").arg(m_scripts.warnings.value(0)), {}, false);
+		}
+		return m_scripts;
+	}
+
+	// Project files by their name without its extension (sounds/DSFISIT.ogg
+	// for DSFISIT), for Doom names that PK3 layouts keep as files.
+	QVector<qsizetype> projectFilesNamed(const QString& stem, const QStringList& folders, bool prefix)
+	{
+		if (!m_filesIndexed) {
+			m_filesIndexed = true;
+			const QVector<PackageEntry> entries = m_reader->entries();
+			for (qsizetype i = 0; i < entries.size(); ++i) {
+				if (entries[i].kind == PackageEntryKind::File) {
+					m_filesByStem[QFileInfo(entries[i].virtualPath).completeBaseName().toCaseFolded()] << i;
+				}
+			}
+		}
+		const QVector<PackageEntry> entries = m_reader->entries();
+		const auto inFolder = [&](qsizetype index) {
+			const QString parent = packageVirtualPathParent(entries[index].virtualPath).toLower();
+			for (const QString& folder : folders) {
+				if (folder.isEmpty() ? parent.isEmpty() : (parent + QLatin1Char('/')).startsWith(folder)) {
+					return true;
+				}
+			}
+			return false;
+		};
+		QVector<qsizetype> found;
+		const QString key = stem.toCaseFolded();
+		if (!prefix) {
+			for (const qsizetype index : m_filesByStem.value(key)) {
+				if (inFolder(index)) {
+					found << index;
+				}
+			}
+			return found;
+		}
+		for (auto it = m_filesByStem.cbegin(); it != m_filesByStem.cend(); ++it) {
+			if (!it.key().startsWith(key)) {
+				continue;
+			}
+			for (const qsizetype index : it.value()) {
+				if (inFolder(index)) {
+					found << index;
+				}
+			}
+		}
+		std::sort(found.begin(), found.end());
+		return found;
+	}
+
+	// Lumps of that name in the project's WADs, from the last loaded WAD, as
+	// it shadows the others; sprite prefixes match every frame in every WAD.
+	QVector<ScriptTarget> projectLumps(const QString& name, bool spritePrefix)
+	{
+		QVector<ScriptTarget> found;
+		const QVector<ProjectWad>& wads = projectWads();
+		const QString upper = name.toUpper();
+		for (int w = int(wads.size()) - 1; w >= 0; --w) {
+			const ProjectWad& wad = wads[w];
+			if (!spritePrefix) {
+				const auto it = wad.lumps.constFind(upper);
+				if (it != wad.lumps.cend()) {
+					found << ScriptTarget {-1, w, it->last(), upper};
+					return found;
+				}
+				continue;
+			}
+			for (auto it = wad.lumps.cbegin(); it != wad.lumps.cend(); ++it) {
+				if (it.key().startsWith(upper) && it.key().size() > upper.size()) {
+					for (const qsizetype lump : it.value()) {
+						if (wad.entries[lump].typeHint == QStringLiteral("wad-sprite")) {
+							found << ScriptTarget {-1, w, lump, it.key()};
+						}
+					}
+				}
+			}
+		}
+		std::sort(found.begin(), found.end(), [](const ScriptTarget& left, const ScriptTarget& right) {
+			return left.wad != right.wad ? left.wad < right.wad : left.lump < right.lump;
+		});
+		return found;
+	}
+
+	// The project shader script declaring a Quake III shader, or -1.
+	qsizetype projectShaderScript(const QString& shaderName)
+	{
+		if (!m_shadersIndexed) {
+			m_shadersIndexed = true;
+			const QVector<PackageEntry> entries = m_reader->entries();
+			for (qsizetype i = 0; i < entries.size(); ++i) {
+				const QString lower = entries[i].virtualPath.toLower();
+				if (!lower.startsWith(QStringLiteral("scripts/")) || !lower.endsWith(QStringLiteral(".shader")) || entries[i].sizeBytes > quint64(kMaximumScriptBytes)) {
+					continue;
+				}
+				QByteArray bytes;
+				QString error;
+				if (!m_reader->readEntryAt(i, &bytes, &error, kMaximumScriptBytes)) {
+					continue;
+				}
+				for (const QString& name : collectShaderScriptNames(bytes)) {
+					m_projectShaders.insert(folded(name), i);
+				}
+			}
+		}
+		return m_projectShaders.value(folded(shaderName), -1);
+	}
+
+	// A Doom texture a project WAD's TEXTURE1 or TEXTURE2 defines: that lump.
+	QVector<ScriptTarget> projectTextureTable(const QString& name)
+	{
+		const QVector<ProjectWad>& wads = projectWads();
+		for (int w = int(wads.size()) - 1; w >= 0; --w) {
+			const ProjectWad& wad = wads[w];
+			if (!wad.lumps.contains(QStringLiteral("TEXTURE1")) && !wad.lumps.contains(QStringLiteral("TEXTURE2"))) {
+				continue;
+			}
+			if (!m_textureCatalogs.contains(w)) {
+				m_textureCatalogs.insert(w, readDoomMaterialCatalog(*wad.archive));
+			}
+			const DoomMaterialCatalog& catalog = m_textureCatalogs[w];
+			const int index = catalog.textureIndex(name);
+			if (index < 0) {
+				continue;
+			}
+			const QString table = catalog.textures[index].lump.isEmpty() ? QStringLiteral("TEXTURE1") : catalog.textures[index].lump.toUpper();
+			const auto lump = wad.lumps.constFind(table);
+			if (lump != wad.lumps.cend()) {
+				return {ScriptTarget {-1, w, lump->last(), table}};
+			}
+		}
+		return {};
+	}
+
+	// A Doom name in the game's own WADs.
+	bool stockDoomName(const QString& kind, const QString& name, bool spritePrefix, QString* path, QString* source) const
+	{
+		if (!m_stock) {
+			return false;
+		}
+		const QString upper = name.toUpper();
+		if (spritePrefix) {
+			for (const GameAssetRegisterName& entry : m_stock->doomNames.value(QStringLiteral("sprite"))) {
+				if (entry.name.startsWith(upper, Qt::CaseInsensitive)) {
+					*path = entry.name;
+					*source = m_stock->sourceLabel(entry.source);
+					return true;
+				}
+			}
+			return false;
+		}
+		QStringList namespaces;
+		if (kind == QStringLiteral("sound")) {
+			namespaces << QStringLiteral("sound");
+		} else if (kind == QStringLiteral("music")) {
+			namespaces << QStringLiteral("music");
+		} else if (kind == QStringLiteral("texture")) {
+			namespaces << QStringLiteral("texture") << QStringLiteral("patch") << QStringLiteral("flat");
+		} else if (kind == QStringLiteral("graphic")) {
+			namespaces << QStringLiteral("patch") << QStringLiteral("sprite") << QStringLiteral("flat");
+		}
+		for (const QString& ns : std::as_const(namespaces)) {
+			const int index = m_stock->doomNameSource(ns, upper);
+			if (index >= 0) {
+				*path = upper;
+				*source = m_stock->sourceLabel(index);
+				return true;
+			}
+		}
+		if (const GameAssetRegisterFile* file = m_stock->file(upper)) {
+			*path = file->path;
+			*source = m_stock->sourceLabel(file->source);
+			return true;
+		}
+		return false;
+	}
+
+	// Where a script reference points: project files or lumps, the game's own
+	// files, or nowhere. Logical sounds are resolved through their SNDINFO
+	// targets by the caller.
+	ScriptResolution resolveScript(const ScriptAssetReference& reference)
+	{
+		ScriptResolution result;
+		if (!reference.candidates.isEmpty()) {
+			result.searched = reference.candidates;
+			for (const QString& candidate : reference.candidates) {
+				const qsizetype index = m_reader->indexOf(candidate);
+				if (index >= 0) {
+					result.project << ScriptTarget {index, -1, -1, m_reader->entries().at(index).virtualPath};
+					return result;
+				}
+			}
+			if (m_stock) {
+				for (const QString& candidate : reference.candidates) {
+					if (const GameAssetRegisterFile* file = m_stock->file(candidate)) {
+						result.stockPath = file->path;
+						result.stockSource = m_stock->sourceLabel(file->source);
+						return result;
+					}
+				}
+			}
+			// Quake III loads a shader of that name before any image.
+			if (!reference.shaderName.isEmpty()) {
+				const qsizetype script = projectShaderScript(reference.shaderName);
+				if (script >= 0) {
+					result.project << ScriptTarget {script, -1, -1, m_reader->entries().at(script).virtualPath};
+					return result;
+				}
+				if (m_stock && m_stock->hasShader(reference.shaderName)) {
+					const GameAssetRegisterFile* declaring = m_stock->shaderScript(reference.shaderName);
+					result.stockPath = declaring ? declaring->path : reference.shaderName;
+					result.stockSource = declaring ? m_stock->sourceLabel(declaring->source) : QString();
+					return result;
+				}
+			}
+			return result;
+		}
+		if (reference.lumpName.isEmpty()) {
+			return result;
+		}
+		const QString& kind = reference.kind;
+		const bool sprite = kind == QStringLiteral("sprite");
+		result.searched << reference.lumpName;
+		result.project = projectLumps(reference.lumpName, sprite);
+		QStringList folders;
+		if (sprite) {
+			folders << QStringLiteral("sprites/");
+		} else if (kind == QStringLiteral("sound")) {
+			folders << QStringLiteral("sounds/");
+		} else if (kind == QStringLiteral("music")) {
+			folders << QStringLiteral("music/");
+		} else if (kind == QStringLiteral("texture")) {
+			folders << QStringLiteral("textures/") << QStringLiteral("patches/");
+		} else if (kind == QStringLiteral("graphic")) {
+			folders << QStringLiteral("graphics/") << QStringLiteral("sprites/") << QStringLiteral("patches/") << QStringLiteral("textures/") << QString();
+		} else {
+			folders << QString();
+		}
+		if (result.project.isEmpty() || sprite) {
+			for (const qsizetype index : projectFilesNamed(reference.lumpName, folders, sprite)) {
+				result.project << ScriptTarget {index, -1, -1, m_reader->entries().at(index).virtualPath};
+			}
+		}
+		if (result.project.isEmpty() && kind == QStringLiteral("texture")) {
+			result.project = projectTextureTable(reference.lumpName);
+		}
+		if (result.project.isEmpty()) {
+			stockDoomName(kind, reference.lumpName, sprite, &result.stockPath, &result.stockSource);
+		}
+		return result;
+	}
+
+	// The plan's row for a script reference: one per name, script and kind.
+	int scriptRow(int index, const QString& requiredBy, bool* created)
+	{
+		*created = false;
+		const auto known = m_referenceRow.constFind(index);
+		if (known != m_referenceRow.cend()) {
+			appendUnique(&m_plan.scriptReferences[*known].requiredBy, requiredBy);
+			return *known;
+		}
+		const ScriptAssetReference& reference = m_scripts.references.at(index);
+		const QString key = reference.language + QLatin1Char('|') + reference.kind + QLatin1Char('|') + folded(reference.reference) + QLatin1Char('|') + folded(reference.script);
+		const auto existing = m_scriptRowIndex.constFind(key);
+		if (existing != m_scriptRowIndex.cend()) {
+			m_referenceRow.insert(index, *existing);
+			ReleaseScriptReference& row = m_plan.scriptReferences[*existing];
+			++row.occurrences;
+			appendUnique(&row.requiredBy, requiredBy);
+			return *existing;
+		}
+		ReleaseScriptReference row;
+		row.kind = reference.kind;
+		row.reference = reference.reference;
+		row.language = reference.language;
+		row.script = reference.script;
+		row.line = reference.line;
+		row.owner = reference.owner;
+		row.via = reference.via;
+		row.requiredBy << requiredBy;
+		m_plan.scriptReferences.push_back(row);
+		const int rowIndex = int(m_plan.scriptReferences.size() - 1);
+		m_scriptRowIndex.insert(key, rowIndex);
+		m_referenceRow.insert(index, rowIndex);
+		*created = true;
+		return rowIndex;
+	}
+
+	// Takes one script reference into the plan. A map release ships what the
+	// project holds (`ship`); a whole project already ships it, so only how
+	// the release treats it is recorded. Returns the plan row.
+	int absorbScriptReference(int index, const QString& requiredBy, bool ship, QSet<QString>* neededWads)
+	{
+		bool created = false;
+		const int rowIndex = scriptRow(index, requiredBy, &created);
+		if (!created) {
+			return rowIndex;
+		}
+		const ScriptAssetReference reference = m_scripts.references.at(index);
+		if (!reference.soundName.isEmpty()) {
+			absorbLogicalSound(rowIndex, reference, requiredBy, ship, neededWads);
+		} else {
+			applyScriptResolution(rowIndex, reference, resolveScript(reference), ship, neededWads);
+		}
+		return rowIndex;
+	}
+
+	// A ZDoom logical sound: what its SNDINFO definitions play, or a lump or
+	// file of that name, or else one of the engine's own sounds.
+	void absorbLogicalSound(int rowIndex, const ScriptAssetReference& reference, const QString& requiredBy, bool ship, QSet<QString>* neededWads)
+	{
+		const QVector<int> targets = scriptSoundTargets(m_scripts, reference.soundName);
+		if (targets.isEmpty()) {
+			ScriptAssetReference direct = reference;
+			direct.soundName.clear();
+			QString path;
+			if (reference.soundName.contains(QLatin1Char('/')) && reference.soundName.contains(QLatin1Char('.'))) {
+				direct.candidates << reference.soundName;
+			} else if (reference.soundName.size() <= 8 && !reference.soundName.contains(QLatin1Char('/'))) {
+				direct.lumpName = reference.soundName.toUpper();
+			}
+			const ScriptResolution resolution = direct.candidates.isEmpty() && direct.lumpName.isEmpty() ? ScriptResolution() : resolveScript(direct);
+			if (resolution.project.isEmpty() && resolution.stockPath.isEmpty()) {
+				// Not defined by the project: the engine's own SNDINFO has it, or nothing does.
+				m_plan.scriptReferences[rowIndex].status = QStringLiteral("engine");
+				return;
+			}
+			applyScriptResolution(rowIndex, direct, resolution, ship, neededWads);
+			return;
+		}
+		bool included = false;
+		bool stock = false;
+		for (const int target : targets) {
+			const int targetRow = absorbScriptReference(target, requiredBy, ship, neededWads);
+			const ReleaseScriptReference& played = m_plan.scriptReferences[targetRow];
+			included = included || played.status == QStringLiteral("included");
+			stock = stock || played.status == QStringLiteral("stock");
+			ReleaseScriptReference& row = m_plan.scriptReferences[rowIndex];
+			for (const QString& path : played.paths) {
+				appendUnique(&row.paths, path);
+			}
+			if (row.stockSource.isEmpty()) {
+				row.stockSource = played.stockSource;
+			}
+			// The code that plays the sound needs the files too.
+			for (const ScriptTarget& found : m_rowTargets.value(targetRow)) {
+				noteScriptTarget(found, reference.script, rowIndex);
+			}
+		}
+		ReleaseScriptReference& row = m_plan.scriptReferences[rowIndex];
+		row.status = included ? QStringLiteral("included") : stock ? QStringLiteral("stock") : m_stock ? QStringLiteral("missing") : QStringLiteral("unverified");
+	}
+
+	// Adds `label` to what needs a shipped file: the entry now, or a WAD lump
+	// once the WAD has been merged.
+	void noteScriptTarget(const ScriptTarget& target, const QString& label, int rowIndex)
+	{
+		if (target.wad >= 0) {
+			const ProjectWad& wad = m_projectWads[target.wad];
+			m_scriptLumps.push_back({wad.absolutePath, wad.virtualPath, wad.entries[target.lump].sourceOrdinal, label, rowIndex});
+			return;
+		}
+		const auto existing = m_entryIndex.constFind(folded(target.path));
+		if (existing != m_entryIndex.cend() && *existing >= 0) {
+			appendUnique(&m_plan.entries[*existing].requiredBy, label);
+		}
+	}
+
+	void applyScriptResolution(int rowIndex, const ScriptAssetReference& reference, const ScriptResolution& resolution, bool ship, QSet<QString>* neededWads)
+	{
+		const QString label = reference.script;
+		const QString where = QCoreApplication::translate("VibeStudioReleasePlan", "%1, line %2").arg(label).arg(reference.line);
+		if (!resolution.project.isEmpty()) {
+			bool shipped = false;
+			bool stock = false;
+			bool leftOut = false;
+			QVector<ScriptTarget> kept;
+			for (const ScriptTarget& target : resolution.project) {
+				appendUnique(&m_plan.scriptReferences[rowIndex].paths, target.path);
+				if (target.wad >= 0) {
+					// A lump ships with its WAD: whole, or merged into a WAD release.
+					if (ship && neededWads) {
+						neededWads->insert(m_projectWads[target.wad].virtualPath);
+					}
+					shipped = true;
+					kept << target;
+					noteScriptTarget(target, label, rowIndex);
+					continue;
+				}
+				const QString key = folded(target.path);
+				if (ship && m_entryIndex.constFind(key) == m_entryIndex.cend()) {
+					const int added = addReaderEntry(target.readerIndex, roleForScriptTarget(reference.kind, target.path), label);
+					if (added >= 0 && lumpMode()) {
+						m_plan.entries[added].loose = true;
+					}
+				}
+				const auto existing = m_entryIndex.constFind(key);
+				if (existing == m_entryIndex.cend()) {
+					leftOut = true;
+				} else if (*existing >= 0) {
+					appendUnique(&m_plan.entries[*existing].requiredBy, label);
+					shipped = true;
+					kept << target;
+				} else {
+					// An identical copy of the game's own file stays out.
+					stock = true;
+					for (ReleaseReference& provided : m_plan.stock) {
+						if (provided.identicalCopy && folded(provided.path) == key) {
+							appendUnique(&provided.requiredBy, label);
+						}
+					}
+				}
+			}
+			m_rowTargets.insert(rowIndex, kept);
+			ReleaseScriptReference& row = m_plan.scriptReferences[rowIndex];
+			row.status = shipped ? QStringLiteral("included") : stock ? QStringLiteral("stock") : QStringLiteral("left-out");
+			if (leftOut && !shipped && !stock) {
+				addProblem(QStringLiteral("left-out"), reference.reference, QCoreApplication::translate("VibeStudioReleasePlan",
+					"%1 names %2, which is in the project but left out of the release. Add it to the release's include patterns if players need it.")
+					.arg(where, reference.reference), {label}, false);
+			}
+			return;
+		}
+		ReleaseScriptReference& row = m_plan.scriptReferences[rowIndex];
+		if (!resolution.stockPath.isEmpty()) {
+			row.status = QStringLiteral("stock");
+			row.paths << resolution.stockPath;
+			row.stockSource = resolution.stockSource;
+			addStockReference(reference.kind, reference.reference, resolution.stockPath, resolution.stockSource, {label}, false);
+			return;
+		}
+		if (resolution.engine) {
+			row.status = QStringLiteral("engine");
+			return;
+		}
+		const QString searched = resolution.searched.join(QStringLiteral(", "));
+		if (m_stock) {
+			row.status = QStringLiteral("missing");
+			addProblem(QStringLiteral("unresolved"), reference.reference, QCoreApplication::translate("VibeStudioReleasePlan",
+				"%1 names %2, which is neither in the project nor in the game's own files. Searched: %3").arg(where, reference.reference, searched), {label}, false);
+		} else {
+			row.status = QStringLiteral("unverified");
+			addProblem(QStringLiteral("unverified"), reference.reference, QCoreApplication::translate("VibeStudioReleasePlan",
+				"%1 names %2, which is not in the project. It is assumed to come with the game; index the game's assets to check.").arg(where, reference.reference), {label}, false);
+		}
+	}
+
+	// A whole project ships its files already: every name in its code and
+	// scripts is checked against what ships and what the game has.
+	void planProjectScripts()
+	{
+		const ScriptReferenceScan& scan = scriptScan();
+		for (qsizetype i = 0; i < scan.references.size() && !m_plan.cancelled; ++i) {
+			if (i % 256 == 0 && !tick(QCoreApplication::translate("VibeStudioReleasePlan", "Checking game code and scripts"), int(i), int(scan.references.size()))) {
+				return;
+			}
+			absorbScriptReference(int(i), QStringLiteral("project"), false, nullptr);
+		}
+	}
+
+	// A Quake-family map: the spawn functions of its entity classes that the
+	// project's QuakeC defines, and what they and the functions they call load.
+	void planMapScripts(const LevelMapDocument& document, const QString& name)
+	{
+		if (m_request.scope != ReleaseScope::Maps || m_plan.cancelled) {
+			return;
+		}
+		QStringList classes;
+		for (const LevelMapEntity& entity : document.entities) {
+			appendUnique(&classes, entity.className.trimmed());
+		}
+		const ScriptReferenceScan& scan = scriptScan();
+		if (m_plan.cancelled || scan.units.isEmpty()) {
+			return;
+		}
+		const ScriptReachable reach = scriptReferencesForEntityClasses(scan, classes);
+		bool shipped = false;
+		for (const int index : reach.references) {
+			if (!followedForMaps(scan.references.at(index).kind)) {
+				continue;
+			}
+			const int row = absorbScriptReference(index, name, true, nullptr);
+			shipped = shipped || m_plan.scriptReferences[row].status == QStringLiteral("included");
+		}
+		if (!shipped) {
+			return;
+		}
+		QStringList defined;
+		for (const QString& className : std::as_const(classes)) {
+			if (scan.unit(QStringLiteral("function"), className)) {
+				defined << className;
+			}
+		}
+		const QString shown = defined.size() > 4 ? QStringList(defined.mid(0, 4)).join(QStringLiteral(", ")) + QStringLiteral(", ...") : defined.join(QStringLiteral(", "));
+		appendUnique(&m_plan.warnings, QCoreApplication::translate("VibeStudioReleasePlan",
+			"%1 uses entity classes that the project's QuakeC defines (%2). The release ships the files they load, but players also need the mod's compiled game code; release the whole project to ship it.")
+			.arg(name, shown));
+	}
+
+	// A Doom-family map: the classes its things spawn, the WADs and files
+	// that define them, what they load, and the map's MAPINFO entries.
+	void planDoomScripts(const QString& mapName, const QSet<int>& types, QSet<QString>* neededWads)
+	{
+		const ScriptReferenceScan& scan = scriptScan();
+		if (m_plan.cancelled || (scan.units.isEmpty() && scan.editorNumbers.isEmpty())) {
+			return;
+		}
+		const ScriptReachable reach = scriptReferencesForDoomThings(scan, types, {mapName});
+		for (const int index : reach.references) {
+			if (followedForMaps(scan.references.at(index).kind)) {
+				absorbScriptReference(index, mapName, true, neededWads);
+			}
+		}
+		// The scripts themselves: a WAD's lumps ship with the WAD, loose
+		// scripts beside it.
+		for (const QString& label : reach.scripts) {
+			const ScriptSource* source = scan.source(label);
+			if (!source) {
+				continue;
+			}
+			if (!source->wad.isEmpty()) {
+				neededWads->insert(source->wad);
+				continue;
+			}
+			const qsizetype index = m_reader->indexOf(label);
+			if (index >= 0) {
+				const int added = addReaderEntry(index, QStringLiteral("script"), mapName);
+				if (added >= 0 && lumpMode()) {
+					m_plan.entries[added].loose = true;
+				}
+			}
+		}
+	}
+
+	// Names lumps found by scripts as needed by those scripts, once the WADs
+	// have shipped; a lump left out as the game's own makes its row stock.
+	void finishScriptLumps()
+	{
+		if (m_scriptLumps.isEmpty()) {
+			return;
+		}
+		QHash<QPair<int, qint64>, int> lumpEntries;
+		QHash<int, QVector<PackageEntry>> sourceEntries;
+		for (qsizetype i = 0; i < m_plan.entries.size(); ++i) {
+			const ReleaseEntry& entry = m_plan.entries[i];
+			if (entry.lumpSource < 0) {
+				continue;
+			}
+			if (!sourceEntries.contains(entry.lumpSource)) {
+				sourceEntries.insert(entry.lumpSource, m_plan.lumpSources[entry.lumpSource]->entries());
+			}
+			const QVector<PackageEntry>& entries = sourceEntries[entry.lumpSource];
+			if (entry.layerIndex >= 0 && entry.layerIndex < entries.size()) {
+				lumpEntries.insert({entry.lumpSource, entries[entry.layerIndex].sourceOrdinal}, int(i));
+			}
+		}
+		for (const ScriptLump& lump : std::as_const(m_scriptLumps)) {
+			if (lumpMode()) {
+				const int source = m_lumpSourceByPath.value(folded(lump.wadPath), -1);
+				const int entry = lumpEntries.value({source, lump.ordinal}, -1);
+				if (entry >= 0) {
+					appendUnique(&m_plan.entries[entry].requiredBy, lump.label);
+				} else if (source >= 0 && m_plan.scriptReferences[lump.row].status == QStringLiteral("included")) {
+					m_plan.scriptReferences[lump.row].status = QStringLiteral("stock");
+				}
+				continue;
+			}
+			// Other formats ship the WAD whole.
+			const auto existing = m_entryIndex.constFind(folded(lump.wadVirtualPath));
+			if (existing != m_entryIndex.cend() && *existing >= 0) {
+				appendUnique(&m_plan.entries[*existing].requiredBy, lump.label);
+			}
+		}
 	}
 
 	ReleasePlan finish()
 	{
+		finishScriptLumps();
 		if (!lumpMode()) {
 			std::sort(m_plan.entries.begin(), m_plan.entries.end(), [](const ReleaseEntry& left, const ReleaseEntry& right) {
 				return left.virtualPath.compare(right.virtualPath, Qt::CaseInsensitive) < 0;
@@ -1562,6 +2278,16 @@ private:
 		return m_plan;
 	}
 
+	// A lump that a script reference found, named in its entry's requiredBy
+	// once the WAD's lumps are in the plan.
+	struct ScriptLump {
+		QString wadPath;
+		QString wadVirtualPath;
+		qint64 ordinal = -1;
+		QString label;
+		int row = -1;
+	};
+
 	const ReleaseRequest& m_request;
 	const GameAssetRegister* m_stock = nullptr;
 	ReleasePlan m_plan;
@@ -1572,6 +2298,20 @@ private:
 	QHash<QString, int> m_entryIndex;
 	QHash<QString, int> m_stockIndex;
 	QHash<QString, int> m_problemIndex;
+	QVector<ProjectWad> m_projectWads;
+	bool m_projectWadsLoaded = false;
+	ScriptReferenceScan m_scripts;
+	bool m_scriptsScanned = false;
+	QHash<QString, QVector<qsizetype>> m_filesByStem;
+	bool m_filesIndexed = false;
+	QHash<QString, qsizetype> m_projectShaders;
+	bool m_shadersIndexed = false;
+	QHash<int, DoomMaterialCatalog> m_textureCatalogs;
+	QHash<QString, int> m_scriptRowIndex;
+	QHash<int, int> m_referenceRow;
+	QHash<int, QVector<ScriptTarget>> m_rowTargets;
+	QVector<ScriptLump> m_scriptLumps;
+	QHash<QString, int> m_lumpSourceByPath;
 };
 
 } // namespace
@@ -1692,6 +2432,24 @@ const ReleaseEntry* ReleasePlan::entry(const QString& virtualPath) const
 		}
 	}
 	return nullptr;
+}
+
+QHash<QString, QVector<int>> ReleasePlan::scriptSourceIndex() const
+{
+	QHash<QString, QVector<int>> index;
+	for (qsizetype i = 0; i < scriptReferences.size(); ++i) {
+		const ReleaseScriptReference& reference = scriptReferences[i];
+		if (reference.status != QStringLiteral("included")) {
+			continue;
+		}
+		for (const QString& path : reference.paths) {
+			QVector<int>& rows = index[path.toCaseFolded()];
+			if (!rows.contains(int(i))) {
+				rows << int(i);
+			}
+		}
+	}
+	return index;
 }
 
 ReleasePlan planRelease(const ReleaseRequest& request)
@@ -2092,6 +2850,30 @@ QJsonObject releasePlanJson(const ReleasePlan& plan)
 	for (const ReleaseCompositionRow& row : plan.composition()) {
 		composition.append(QJsonObject {{QStringLiteral("role"), row.role}, {QStringLiteral("files"), row.count}, {QStringLiteral("bytes"), double(row.bytes)}});
 	}
+	QJsonArray scriptReferences;
+	for (const ReleaseScriptReference& reference : plan.scriptReferences) {
+		QJsonObject object {
+			{QStringLiteral("kind"), reference.kind},
+			{QStringLiteral("reference"), reference.reference},
+			{QStringLiteral("language"), reference.language},
+			{QStringLiteral("script"), reference.script},
+			{QStringLiteral("line"), reference.line},
+			{QStringLiteral("status"), reference.status},
+			{QStringLiteral("paths"), jsonStrings(reference.paths)},
+			{QStringLiteral("requiredBy"), jsonStrings(reference.requiredBy)},
+			{QStringLiteral("occurrences"), reference.occurrences},
+		};
+		if (!reference.owner.isEmpty()) {
+			object.insert(QStringLiteral("owner"), reference.owner);
+		}
+		if (!reference.via.isEmpty()) {
+			object.insert(QStringLiteral("via"), reference.via);
+		}
+		if (!reference.stockSource.isEmpty()) {
+			object.insert(QStringLiteral("stockSource"), reference.stockSource);
+		}
+		scriptReferences.append(object);
+	}
 	return {
 		{QStringLiteral("schemaVersion"), 1},
 		{QStringLiteral("game"), plan.gameKey},
@@ -2118,6 +2900,8 @@ QJsonObject releasePlanJson(const ReleasePlan& plan)
 		{QStringLiteral("problems"), problems},
 		{QStringLiteral("maps"), maps},
 		{QStringLiteral("composition"), composition},
+		{QStringLiteral("scriptReferences"), scriptReferences},
+		{QStringLiteral("scriptsRead"), plan.scriptsRead},
 		{QStringLiteral("warnings"), jsonStrings(plan.warnings)},
 		{QStringLiteral("limitations"), jsonStrings(plan.limitations)},
 	};
@@ -2145,6 +2929,25 @@ QString releasePlanText(const ReleasePlan& plan)
 		lines << QStringLiteral("  + %1  [%2]%3%4").arg(entry.virtualPath, entry.role,
 			entry.replacesStock ? QCoreApplication::translate("VibeStudioReleasePlan", "  replaces the game's file") : QString(),
 			entry.loose ? QCoreApplication::translate("VibeStudioReleasePlan", "  beside the package") : QString());
+	}
+	if (!plan.scriptReferences.isEmpty()) {
+		int included = 0;
+		int stock = 0;
+		int notFound = 0;
+		int engine = 0;
+		for (const ReleaseScriptReference& reference : plan.scriptReferences) {
+			if (reference.status == QStringLiteral("included")) {
+				++included;
+			} else if (reference.status == QStringLiteral("stock")) {
+				++stock;
+			} else if (reference.status == QStringLiteral("engine")) {
+				++engine;
+			} else {
+				++notFound;
+			}
+		}
+		lines << QCoreApplication::translate("VibeStudioReleasePlan", "Names in game code and scripts (%1 read): %2 in the release, %3 from the game, %4 not found or left out, %5 left to the engine.")
+					 .arg(plan.scriptsRead).arg(included).arg(stock).arg(notFound).arg(engine);
 	}
 	for (const ReleaseProblem& problem : plan.problems) {
 		lines << QStringLiteral("%1 %2").arg(problem.blocking ? QStringLiteral("!") : QStringLiteral("~"), problem.message);

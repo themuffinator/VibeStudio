@@ -1671,6 +1671,10 @@ The current scaffold contains:
   `src/core/release_publish.*`: release planning against the asset index, the
   changelog, release records and generated notes, and publishing. See
   [Project releases](PROJECT_RELEASES.md).
+- `src/core/release_script_refs.*`: a bounded, cancellable text scan of a
+  project's QuakeC, Quake III menus and configs, and DECORATE, ZScript,
+  SNDINFO and MAPINFO for the files they name, with what a map's entity
+  classes reach. Nothing is run.
 - `src/core/studio_settings.*`: Qt settings facade for shell state, recent
   projects, recent activity history, accessibility/localization preferences,
   setup progress, editor profile selection, game installations, compiler
@@ -2566,8 +2570,11 @@ call the same functions. See [opening a player](MODEL_ASSEMBLY.md#opening-a-quak
 
 `core/release_plan` reads the project through `ProjectContentReader` layers,
 classifies every file, follows map references with `inspectLevelDependencies`
-and model materials with `inspectModelMaterialDependencies`, and checks each
-candidate against the merged game asset index from `prepareReleaseStock`.
+and model materials with `inspectModelMaterialDependencies`, follows the files
+that game code and scripts name with `core/release_script_refs` (every name
+for a whole project, what a map's entity classes and MAPINFO entry reach for a
+map), and checks each candidate against the merged game asset index from
+`prepareReleaseStock`.
 `core/release_notes` owns Keep a Changelog parsing that prints unchanged text
 back byte for byte, release records under `.vibestudio/releases`, inventory
 diffs and the generated notes and readme. `core/release_publish` writes the

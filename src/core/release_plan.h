@@ -7,8 +7,9 @@
 // package layer such as the open draft. It finds what each selected item needs
 // with the shared dependency resolver, adds the files a game loads beside a
 // map (compiled BSP, lighting, levelshot, arena script, bot navigation,
-// external lightmaps, sky images), and sorts every file against the game asset
-// register:
+// external lightmaps, sky images), follows the files that game code and
+// scripts name (release_script_refs.h), and sorts every file against the game
+// asset register:
 //   - included: the project's own content;
 //   - provided by the game, or by a declared requirement: left out;
 //   - replaces a game file: included, with a warning;
@@ -22,6 +23,7 @@
 #include "core/project_manifest.h"
 
 #include <QDateTime>
+#include <QHash>
 #include <QJsonObject>
 #include <QStringList>
 #include <QVector>
@@ -86,9 +88,41 @@ struct ReleaseReference {
 	bool identicalCopy = false;
 };
 
+// A file that game code or a script names, and what the release made of it.
+struct ReleaseScriptReference {
+	// sound, music, model, image, video, sprite, graphic, texture, script,
+	// map or file.
+	QString kind;
+	// As written: "weapons/rocket1i.wav", "fireimp/sight", "FIMP".
+	QString reference;
+	// quakec, menu, config, decorate, zscript, sndinfo or mapinfo.
+	QString language;
+	// The script's project path, or "<wad>:<LUMP>".
+	QString script;
+	int line = 0;
+	// The QuakeC function, actor class or MAPINFO map it sits in.
+	QString owner;
+	// What names it: "precache_sound", "background", "SeeSound"...
+	QString via;
+	// included: the release ships it; stock: the game or a requirement
+	// provides it; left-out: the project has it but the release leaves it
+	// out; missing: neither the project nor the game has it; unverified: the
+	// project lacks it and the game's files are unknown; engine: a name the
+	// engine itself defines, not checked.
+	QString status;
+	// What it resolved to: game paths, lump names, or a shader script.
+	QStringList paths;
+	QString stockSource;
+	// The maps it was followed for, or "project".
+	QStringList requiredBy;
+	// How often the script names it.
+	int occurrences = 1;
+};
+
 struct ReleaseProblem {
 	// missing, ambiguous, unreadable, unsafe, unbuilt-map, stale-map,
-	// outside-project, unverified, incomplete, empty, format
+	// outside-project, unverified, incomplete, empty, format; for names in
+	// game code and scripts, unresolved and left-out (both advisories)
 	QString kind;
 	QString reference;
 	QString message;
@@ -132,6 +166,11 @@ struct ReleasePlan {
 	QVector<ReleaseReference> stock;
 	QVector<ReleaseProblem> problems;
 	QVector<ReleaseMapInfo> maps;
+	// Files that game code and scripts name: every one for a whole project,
+	// those a map's entity classes and MAPINFO entries reach for maps.
+	QVector<ReleaseScriptReference> scriptReferences;
+	// Scripts read for them.
+	int scriptsRead = 0;
 	QStringList warnings;
 	QStringList limitations;
 	quint64 totalBytes = 0;
@@ -152,6 +191,10 @@ struct ReleasePlan {
 	[[nodiscard]] bool canPublish() const;
 	[[nodiscard]] QVector<ReleaseCompositionRow> composition() const;
 	[[nodiscard]] const ReleaseEntry* entry(const QString& virtualPath) const;
+	// Shipped script references by what they resolved to: keys are paths (or
+	// lump names) as QString::toCaseFolded() gives them, values index
+	// scriptReferences.
+	[[nodiscard]] QHash<QString, QVector<int>> scriptSourceIndex() const;
 };
 
 struct ReleaseRequest {

@@ -1041,6 +1041,9 @@ void ReleaseDialog::applyPlan(const std::shared_ptr<PlanOutcome>& outcome)
 	m_chart->setSlices(slices);
 
 	m_included->clear();
+	// Where game code and scripts load each file, for its tooltip.
+	const QHash<QString, QVector<int>> scriptSources = m_plan.scriptSourceIndex();
+	constexpr int shownSources = 3;
 	for (const ReleaseEntry& entry : std::as_const(m_plan.entries)) {
 		auto* item = new QTreeWidgetItem({entry.virtualPath, releaseRoleDisplayName(entry.role), humanSize(entry.sizeBytes), entry.requiredBy.join(QStringLiteral(", "))});
 		QString tip = entry.sourcePath.isEmpty() ? entry.note : nativePath(entry.sourcePath);
@@ -1051,7 +1054,21 @@ void ReleaseDialog::applyPlan(const std::shared_ptr<PlanOutcome>& outcome)
 			item->setIcon(0, studioIcon(QStringLiteral("file"), StudioIconTone::Muted));
 			tip += QLatin1Char('\n') + tr("Ships beside the package, not inside it.");
 		}
+		const QVector<int> sources = scriptSources.value(entry.virtualPath.toCaseFolded());
+		if (!sources.isEmpty()) {
+			tip += QLatin1Char('\n') + tr("Loaded by game code or scripts:");
+			for (qsizetype i = 0; i < std::min<qsizetype>(sources.size(), shownSources); ++i) {
+				const ReleaseScriptReference& source = m_plan.scriptReferences.at(sources.at(i));
+				tip += QStringLiteral("\n  ") + (source.owner.isEmpty() ? tr("%1, line %2").arg(source.script).arg(source.line)
+																		: tr("%1, line %2, in %3").arg(source.script).arg(source.line).arg(source.owner));
+			}
+			if (sources.size() > shownSources) {
+				const int more = int(sources.size()) - shownSources;
+				tip += QStringLiteral("\n  ") + tr("and %n more", nullptr, more);
+			}
+		}
 		item->setToolTip(0, tip);
+		item->setData(0, Qt::AccessibleDescriptionRole, tip);
 		item->setTextAlignment(2, Qt::AlignTrailing | Qt::AlignVCenter);
 		m_included->addTopLevelItem(item);
 	}

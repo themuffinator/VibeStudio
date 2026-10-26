@@ -115,7 +115,7 @@ exact limits.
 | Textures | No sprite animation editing or pressure-sensitive painting. A canvas holds at most 4,194,304 pixels (2048 × 2048). |
 | Audio | Linux builds cannot play or record audio. |
 | Packages | Renaming or deleting files does not update references to them in scripts, shaders or metadata. |
-| Releases | A release finds what maps, models and shader scripts name; files that game code or scripts load by name must be added with include patterns. Telling the game's files from yours needs the game indexed first. Not yet tried with real game installations. |
+| Releases | A release finds what maps, models and shader scripts name, and what QuakeC, Quake III menus and configs, and DECORATE, ZScript, SNDINFO and MAPINFO name in full. Files that compiled game code loads, or whose names a script builds while the game runs, must be added with include patterns. Telling the game's files from yours needs the game indexed first. Not yet tried with real game installations. |
 | Code | Language-server support is an early client that some servers will not work with. |
 | Materials and shaders | The preview is an approximation on a single shape, without map lightmaps or Doom 3 fragment programs beyond the light interaction; videos show a placeholder. Return to Castle Wolfenstein, Enemy Territory and Jedi Knight shader keywords are read with a warning, but only Enemy Territory's implicit images are drawn. Not yet tried on real game packages. |
 | Build and launch | VibeStudio does not include the compiler programs; you point it at your own. Its own VibeMap2 and VibeMap3 compilers have not yet been tested end to end inside VibeStudio. |

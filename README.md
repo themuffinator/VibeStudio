@@ -278,7 +278,11 @@ Releases follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 (CC BY 3.0) for version bumps and the [/idgames archive](https://www.doomworld.com/idgames/)'s
 text file fields for readmes; package load orders and companion files follow
 the Quake, Quake II and Quake III GPL sources and the compilers' upstreams,
-q3map2 and ericw-tools, read 2026-10-08. Formats and behaviour only. See
+q3map2 and ericw-tools, read 2026-10-08. The files that game code and scripts
+load follow Quake's QuakeC builtins, Quake III's menu and console code,
+ioquake3's sound loading, the ZDoom wiki's DECORATE, ZScript, SNDINFO and
+MAPINFO pages and the Doom Wiki's thing types, read 2026-10-09. Formats and
+behaviour only. See
 [Project Releases And The Game Asset Index](docs/CREDITS.md#project-releases-and-the-game-asset-index-2026-10-08).
 
 Placed MD3 compiler appearances follow NetRadiant Custom's

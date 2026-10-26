@@ -216,9 +216,14 @@ game's own files were not checked, or the **From the game** chip shows nothing:
 
 ## A release is missing a file
 
-A release gathers what your maps, models and shader scripts name. Sounds, models or textures that
-game code, QuakeC or scripts load by name are not found that way: add them with `release.include`
-patterns in the project manifest. See [Package and release](releases.md#choose-what-ships).
+A release gathers what your maps, models and shader scripts name, and what your QuakeC, Quake III
+menus and configs, and DECORATE, ZScript, SNDINFO and MAPINFO name in full. A map release takes only
+what the map's own entities and MAPINFO entry use; release the whole project to ship everything.
+
+Files that compiled game code (QVM, DLL, `progs.dat`) or ACS loads, Quake II and Quake III game code
+written in C, and files whose names a script builds while the game runs are not found: add them with
+`release.include` patterns in the project manifest. The **Problems** list names files that a script
+uses but nothing provides. See [Package and release](releases.md#files-that-game-code-and-scripts-load).
 
 ## A package will not open
 

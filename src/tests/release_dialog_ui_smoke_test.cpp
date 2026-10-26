@@ -1,7 +1,8 @@
 // Package and Release as a widget: the dialog plans a map release against a
 // generated Quake III installation and project, shows what ships and what the
-// game provides, records a changelog entry, switches scope, publishes, offers
-// the next version, and asks to index a game whose assets are unknown. Every
+// game provides, records a changelog entry, switches scope (naming the menu
+// that loads a file in a whole-project review), publishes, offers the next
+// version, and asks to index a game whose assets are unknown. Every
 // control a keyboard reaches has an accessible name. RELEASE_TEST_LOOK,
 // RELEASE_TEST_SCALE and RELEASE_TEST_RTL run the same checks in other looks;
 // VIBESTUDIO_TEST_SNAPSHOTS=<dir> saves pictures of the states.
@@ -222,6 +223,22 @@ int main(int argc, char** argv)
 	expect(waitIdle(dialog), "the texture review finishes");
 	expect(column(included).contains(QStringLiteral("scripts/mymod.shader")) && column(included).contains(QStringLiteral("textures/mymod/unused.tga")),
 		"a texture release ships the folder and its shaders", column(included).join(QLatin1Char(' ')));
+
+	// A whole project says which script loads each file it names.
+	expect(fixtures::addQuake3MenuScripts(project), "the menu scripts are written");
+	scope->setCurrentIndex(scope->findData(QStringLiteral("project")));
+	expect(waitIdle(dialog), "the project review finishes");
+	QTreeWidgetItem* background = nullptr;
+	for (int i = 0; i < included->topLevelItemCount(); ++i) {
+		if (included->topLevelItem(i)->text(0) == QStringLiteral("ui/assets/mybg.tga")) {
+			background = included->topLevelItem(i);
+		}
+	}
+	const QString backgroundTip = background ? background->toolTip(0) : QString();
+	expect(background && backgroundTip.contains(QStringLiteral("ui/mymain.menu, line 11")) && background->text(3).contains(QStringLiteral("ui/mymain.menu"))
+			&& background->data(0, Qt::AccessibleDescriptionRole).toString() == backgroundTip,
+		"the Included list says which menu loads a file, to the eye and to screen readers", backgroundTip);
+	snapshot(dialog, QStringLiteral("release-project-scripts"));
 	scope->setCurrentIndex(scope->findData(QStringLiteral("maps")));
 	expect(items->count() == 1 && items->item(0)->checkState() == Qt::Checked, "the map is still ticked after a visit to another scope");
 	expect(waitIdle(dialog) && included->topLevelItemCount() == 10, "back to the map", column(included).join(QLatin1Char(' ')));

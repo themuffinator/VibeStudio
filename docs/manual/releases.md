@@ -10,8 +10,11 @@ next one can say what changed.
 > **Status: Partial.** Planning, release notes and publishing work for Quake, Quake II, Quake III
 > Arena, Doom, Heretic and Hexen projects, with automated tests built from generated files. They have
 > not been tried with real game installations or real projects yet. A release finds the files that
-> maps, models and shader scripts name; files that game code or scripts load by name must be added by
-> hand (see [Choose what ships](#choose-what-ships)). Doom 3-era games are not indexed automatically.
+> maps, models and shader scripts name, and those that QuakeC, Quake III menus and configs, and
+> DECORATE, ZScript, SNDINFO and MAPINFO name in full (see
+> [Files that game code and scripts load](#files-that-game-code-and-scripts-load)). Files that
+> compiled game code loads, or whose names a script builds while the game runs, must be added by
+> hand. Doom 3-era games are not indexed automatically.
 
 ## Before you start
 
@@ -42,6 +45,9 @@ It includes:
   navigation (`.aas`), external lightmaps, the level shot and the `.arena` script;
 - every custom texture, shader script, model, skin, sound and music track the map uses, and the
   images inside those shaders and model skins;
+- the files the map's custom monsters and items load: the models and sounds a QuakeC spawn function
+  precaches, or a DECORATE or ZScript actor's sprites and sounds, with the WAD or script that
+  defines the actor (see [Files that game code and scripts load](#files-that-game-code-and-scripts-load));
 - for Doom-family maps, the map's lumps and the custom textures, flats, patches, sprites, sounds and
   music it needs, merged into one WAD.
 
@@ -77,18 +83,52 @@ The review beside the options updates as you change them:
 - Chips count **Included** files, files **From the game**, files that **Replace** the game's own, and
   **Problems**. Select a chip to open its list.
 - **Contents by kind** charts the release by maps, textures, shaders, models, sounds and other files.
-- **Included** lists every file with its kind, size and the map or model that needs it. A warning
-  icon marks a file that replaces one of the game's; a muted icon marks a file that ships beside the
-  package, such as native game code, which engines cannot load from a package.
+- **Included** lists every file with its kind, size and the map, model or script that needs it. A
+  warning icon marks a file that replaces one of the game's; a muted icon marks a file that ships
+  beside the package, such as native game code, which engines cannot load from a package. A file's
+  tooltip, which screen readers read as its description, names the scripts that load it and the
+  line in each.
 - **From the Game** lists the references the game provides and which of its packages holds each.
 - **Problems** lists what blocks publishing first, such as a missing texture or a map that has not
-  been built, then advisories. Activate an unbuilt or out-of-date map to open it on the Build page.
+  been built, then advisories, such as a sound that a script names but neither the project nor the
+  game has. Activate an unbuilt or out-of-date map to open it on the Build page.
 - **Details** is the whole plan as text.
+
+## Files that game code and scripts load
+
+Maps and models are not the only things that name files. VibeStudio also reads the project's game
+code and scripts as text, without running them, and follows the file names written out in them:
+
+| Source | What it follows |
+| --- | --- |
+| QuakeC (`.qc`, `.qh`) | `precache_model`, `precache_sound` and `precache_file`, and the models and sounds passed to `setmodel`, `sound` and `ambientsound` |
+| Quake III menus (`.menu`, and `ui/menus.txt`) | Backgrounds, cursors, models, cinematics and menu sounds, the sounds actions play, the menus `loadMenu` loads, `#include` files, and the configs actions run |
+| Configs (`.cfg`, `quake.rc`) | `exec` chains, the sounds `play` plays, Quake III's `music`, maps that `map` starts, and the commands bound to keys or kept in aliases |
+| DECORATE and ZScript | Each actor's sprites, sounds and icon, the actors it fires, drops or spawns, and `#include` files |
+| SNDINFO | The lump or file each sound name plays, including `$random` and `$alias` |
+| MAPINFO and ZMAPINFO | Each map's music and sky, title and intermission pictures, `DoomEdNums` and `include` files |
+
+What happens to the files they name depends on what you release:
+
+- **Whole project.** The project's files ship anyway. The review names the script behind each one
+  in **Included**, lists names the game provides under **From the Game**, and lists names that
+  nothing provides, or that the release leaves out, under **Problems** as advisories.
+- **Maps.** The map's own entities decide. A monster or item that the project's QuakeC defines
+  brings the files its spawn function, and the functions it calls, precache. A Doom thing whose
+  editor number belongs to a DECORATE or ZScript actor, or a standard Doom monster or item that such
+  an actor replaces, brings the actor's sprites and sounds, the actors it fires or drops, and the WAD
+  or script that defines them. The map's MAPINFO entry brings its music and sky. A map whose
+  entities need the mod's compiled QuakeC says so in the review: release the whole project to ship
+  `progs.dat` with it.
+
+A ZDoom sound name that the project's SNDINFO does not define is taken to be one of the engine's
+own and is not checked.
 
 ## Choose what ships
 
-Some files cannot be found by reading maps and models, such as sounds that game code plays or
-textures a script picks at run time. The project's release settings handle them:
+Some files still cannot be found by reading the project: those that compiled game code (QVM, DLL,
+`progs.dat`) or ACS loads, Quake II and Quake III game code written in C, and any file whose name a
+script builds while the game runs. The project's release settings handle them:
 
 - **Include sources** ships the `.map` files and source art too.
 - In the project manifest, `release.include` lists patterns that always ship, and `release.exclude`
@@ -250,7 +290,9 @@ vibestudio --cli release publish ./mymod --release-version 1.1.0 --output ./out/
 Use `--model` or `--texture` instead of `--map` for models and texture folders, and nothing for the
 whole project. `--installation <id>` picks the installation, `--register <file>` uses an exported
 index instead, for example on a build server without the game, and `--no-stock` skips the game
-check. `release plan` and `install register info` exit with code 4 when something needs attention.
+check. With `--json`, `release plan` lists each name that game code and scripts use under
+`scriptReferences`, with the script, the line and what the name resolved to. `release plan` and
+`install register info` exit with code 4 when something needs attention.
 `release publish` writes nothing with `--dry-run`, and `--no-archive`, `--no-readme`, `--no-notes`,
 `--no-record` and `--no-changelog` leave those files out.
 
